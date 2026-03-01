@@ -1,8 +1,9 @@
+import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { query } from './connection';
 
-async function migrate(): Promise<void> {
+export async function runMigrations(): Promise<void> {
   // Ensure tracking table exists
   await query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -33,10 +34,11 @@ async function migrate(): Promise<void> {
   }
 
   console.log('[migrate] done');
-  process.exit(0);
 }
 
-migrate().catch((err) => {
-  console.error('[migrate] error', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  runMigrations().catch((err) => {
+    console.error('[migrate] error', err);
+    process.exit(1);
+  });
+}

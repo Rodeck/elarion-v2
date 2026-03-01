@@ -48,6 +48,17 @@ export function dispatch(session: AuthenticatedSession, raw: string): void {
 
   const type = typeof msg.type === 'string' ? msg.type : null;
 
+  // Reject non-auth messages from pre-auth sessions (connected with empty token)
+  const AUTH_TYPES = new Set(['auth.login', 'auth.register']);
+  if (!session.accountId && type && !AUTH_TYPES.has(type)) {
+    log('warn', 'dispatcher', 'unauthenticated_message', { type });
+    sendToSession(session, 'server.error', {
+      code: 'UNAUTHENTICATED',
+      message: 'You must authenticate before sending this message.',
+    });
+    return;
+  }
+
   if (!type) {
     log('warn', 'dispatcher', 'missing_type', { accountId: session.accountId });
     sendToSession(session, 'server.error', {

@@ -55,22 +55,27 @@ export function startWebSocketServer(): void {
 
   const wss = new ws.WebSocketServer({ noServer: true });
 
-  // Handle HTTP upgrade — validate JWT before accepting the WebSocket connection
+  // Handle HTTP upgrade — validate JWT before accepting the WebSocket connection.
+  // Empty token is allowed for pre-auth sessions (login/register flow).
   server.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
     const token = url.searchParams.get('token') ?? '';
 
+    const accept = (accountId: string, characterId: string | null): void => {
+      wss.handleUpgrade(req, socket, head, (client) => {
+        const session: AuthenticatedSession = { accountId, characterId, socket: client };
+        wss.emit('connection', client, req, session);
+      });
+    };
+
+    if (!token) {
+      // Pre-auth connection — accountId is empty until auth.login/register succeeds
+      accept('', null);
+      return;
+    }
+
     verifyToken(token)
-      .then((claims) => {
-        wss.handleUpgrade(req, socket, head, (client) => {
-          const session: AuthenticatedSession = {
-            accountId: claims.accountId,
-            characterId: claims.characterId ?? null,
-            socket: client,
-          };
-          wss.emit('connection', client, req, session);
-        });
-      })
+      .then((claims) => accept(claims.accountId, claims.characterId ?? null))
       .catch(() => {
         log('warn', 'ws', 'upgrade_rejected', { reason: 'invalid_jwt' });
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
