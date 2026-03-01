@@ -89,6 +89,11 @@ export function startWebSocketServer(): void {
     worldStateHandler = m.sendWorldState;
   }).catch(() => null);
 
+  let disconnectHandler: ((session: AuthenticatedSession) => void) | null = null;
+  import('./disconnect-handler').then((m) => {
+    disconnectHandler = m.onClientDisconnect;
+  }).catch(() => null);
+
   wss.on('connection', (client: ws.WebSocket, _req: http.IncomingMessage, session: AuthenticatedSession) => {
     sessions.set(client, session);
     log('info', 'ws', 'client_connected', {
@@ -107,6 +112,7 @@ export function startWebSocketServer(): void {
 
     client.on('close', (code) => {
       sessions.delete(client);
+      disconnectHandler?.(session);
       log('info', 'ws', 'client_disconnected', {
         accountId: session.accountId,
         code,

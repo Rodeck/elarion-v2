@@ -1,4 +1,7 @@
 import { findByAccountId, findClassById } from '../../db/queries/characters';
+import { addPlayer } from '../../game/world/zone-registry';
+import { broadcastPlayerEntered } from '../../game/world/zone-broadcasts';
+import { onClientReconnect } from '../disconnect-handler';
 import { log } from '../../logger';
 import { sendToSession } from '../server';
 import type { AuthenticatedSession } from '../server';
@@ -27,6 +30,20 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
   }
 
   const cls = await findClassById(character.class_id);
+
+  // Register the player in the zone registry and notify others in the zone
+  const playerState = {
+    characterId: character.id,
+    name: character.name,
+    classId: character.class_id,
+    level: character.level,
+    posX: character.pos_x,
+    posY: character.pos_y,
+    socket: session.socket,
+  };
+  addPlayer(character.zone_id, playerState);
+  onClientReconnect(character.id); // cancel any pending disconnect grace timer
+  broadcastPlayerEntered(character.zone_id, playerState);
 
   const players = getZonePlayers
     ? getZonePlayers(character.zone_id).map((p) => ({

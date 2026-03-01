@@ -83,6 +83,9 @@ export async function handlePlayerMove(session: AuthenticatedSession, payload: u
     return;
   }
 
+  const fromX = state.posX;
+  const fromY = state.posY;
+
   // Apply move
   movePlayer(session.characterId, targetX, targetY);
 
@@ -94,7 +97,7 @@ export async function handlePlayerMove(session: AuthenticatedSession, payload: u
     });
   });
 
-  // Broadcast to all players in zone
+  // Broadcast to all players in zone (including the mover for client confirmation)
   broadcastToZone(zoneId, 'player.moved', {
     character_id: session.characterId,
     pos_x: targetX,
@@ -103,7 +106,7 @@ export async function handlePlayerMove(session: AuthenticatedSession, payload: u
 
   log('debug', 'movement', 'moved', {
     characterId: session.characterId,
-    from: { x: state.posX, y: state.posY },
+    from: { x: fromX, y: fromY },
     to: { x: targetX, y: targetY },
   });
 }

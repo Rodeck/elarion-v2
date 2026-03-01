@@ -83,6 +83,10 @@ export class CombatLog {
     }
   }
 
+  appendError(message: string): void {
+    this.addLine(`⚠ ${message}`, 'var(--color-combat-dmg)');
+  }
+
   private addLine(text: string, color: string): void {
     this.lines.push(text);
     if (this.lines.length > MAX_LINES) this.lines.shift();

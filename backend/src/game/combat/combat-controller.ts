@@ -52,10 +52,14 @@ export async function handleCombatStart(session: AuthenticatedSession, payload: 
     return;
   }
 
-  // Adjacency check
-  const dx = Math.abs(character.pos_x - monster.posX);
-  const dy = Math.abs(character.pos_y - monster.posY);
-  if (dx + dy > 1) {
+  // Adjacency check — use in-memory zone-registry position, which is always
+  // current. The DB position lags because movement persists it asynchronously.
+  const playerState = getPlayerState(session.characterId);
+  const playerX = playerState?.state.posX ?? character.pos_x;
+  const playerY = playerState?.state.posY ?? character.pos_y;
+  const dx = Math.abs(playerX - monster.posX);
+  const dy = Math.abs(playerY - monster.posY);
+  if (Math.max(dx, dy) > 1) {
     sendToSession(session, 'server.error', {
       code: 'MONSTER_NOT_ADJACENT',
       message: 'Move closer to the monster before attacking.',

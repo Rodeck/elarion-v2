@@ -135,6 +135,10 @@ export class GameScene extends Phaser.Scene {
       this.monsterSprites.delete(payload.instance_id);
     });
 
+    this.client.on<{ code: string; message: string }>('server.error', (payload) => {
+      this.combatLog.appendError(payload.message);
+    });
+
     this.client.on<CombatStartedPayload>('combat.started', () => {
       this.inCombat = true;
     });
