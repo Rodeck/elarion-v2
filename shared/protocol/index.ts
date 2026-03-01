@@ -1,0 +1,278 @@
+// Elarion WebSocket Protocol v1
+// Single source of truth for all message types shared between backend and frontend.
+
+// ---------------------------------------------------------------------------
+// Envelope
+// ---------------------------------------------------------------------------
+
+export interface WsMessage<T> {
+  type: string;
+  v: 1;
+  payload: T;
+}
+
+// ---------------------------------------------------------------------------
+// Shared sub-types
+// ---------------------------------------------------------------------------
+
+export interface CharacterData {
+  id: string;
+  name: string;
+  class_id: number;
+  class_name: string;
+  level: number;
+  experience: number;
+  max_hp: number;
+  current_hp: number;
+  attack_power: number;
+  defence: number;
+  zone_id: number;
+  pos_x: number;
+  pos_y: number;
+}
+
+export interface PlayerSummary {
+  id: string;
+  name: string;
+  class_id: number;
+  level: number;
+  pos_x: number;
+  pos_y: number;
+}
+
+export interface MonsterInstance {
+  instance_id: string;
+  template_id: number;
+  name: string;
+  max_hp: number;
+  current_hp: number;
+  pos_x: number;
+  pos_y: number;
+  in_combat: boolean;
+}
+
+export interface ItemGained {
+  item_id: number;
+  name: string;
+  type: string;
+  quantity: number;
+}
+
+// ---------------------------------------------------------------------------
+// Client → Server payloads
+// ---------------------------------------------------------------------------
+
+export interface AuthRegisterPayload {
+  username: string;
+  password: string;
+}
+
+export interface AuthLoginPayload {
+  username: string;
+  password: string;
+}
+
+export interface CharacterCreatePayload {
+  name: string;
+  class_id: number;
+}
+
+export interface PlayerMovePayload {
+  direction: 'n' | 's' | 'e' | 'w';
+}
+
+export interface CombatStartPayload {
+  monster_instance_id: string;
+}
+
+export interface ChatSendPayload {
+  channel: 'local' | 'global';
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// Client → Server message types
+// ---------------------------------------------------------------------------
+
+export type AuthRegisterMessage    = WsMessage<AuthRegisterPayload>;
+export type AuthLoginMessage       = WsMessage<AuthLoginPayload>;
+export type CharacterCreateMessage = WsMessage<CharacterCreatePayload>;
+export type PlayerMoveMessage      = WsMessage<PlayerMovePayload>;
+export type CombatStartMessage     = WsMessage<CombatStartPayload>;
+export type ChatSendMessage        = WsMessage<ChatSendPayload>;
+
+// ---------------------------------------------------------------------------
+// Server → Client payloads
+// ---------------------------------------------------------------------------
+
+export interface AuthSuccessPayload {
+  token: string;
+  has_character: boolean;
+}
+
+export interface AuthErrorPayload {
+  code: 'USERNAME_TAKEN' | 'INVALID_CREDENTIALS' | 'USERNAME_INVALID' | 'PASSWORD_TOO_SHORT';
+  message: string;
+}
+
+export interface CharacterCreatedPayload {
+  character: CharacterData;
+}
+
+export interface WorldStatePayload {
+  zone_id: number;
+  zone_name: string;
+  my_character: CharacterData;
+  players: PlayerSummary[];
+  monsters: MonsterInstance[];
+}
+
+export interface PlayerMovedPayload {
+  character_id: string;
+  pos_x: number;
+  pos_y: number;
+}
+
+export interface PlayerMoveRejectedPayload {
+  pos_x: number;
+  pos_y: number;
+  reason: 'BLOCKED_TILE' | 'ZONE_BOUNDARY' | 'IN_COMBAT' | 'RATE_LIMITED';
+}
+
+export interface PlayerEnteredZonePayload {
+  character: PlayerSummary;
+}
+
+export interface PlayerLeftZonePayload {
+  character_id: string;
+}
+
+export interface CombatStartedPayload {
+  combat_id: string;
+  monster: {
+    instance_id: string;
+    name: string;
+    max_hp: number;
+    current_hp: number;
+    attack_power: number;
+    defence: number;
+  };
+}
+
+export interface CombatRoundPayload {
+  combat_id: string;
+  round_number: number;
+  attacker: 'player' | 'monster';
+  attacker_name: string;
+  action: 'attack' | 'critical' | 'miss';
+  damage: number;
+  player_hp_after: number;
+  monster_hp_after: number;
+}
+
+export interface CombatEndedPayload {
+  combat_id: string;
+  outcome: 'victory' | 'defeat';
+  xp_gained: number;
+  items_gained: ItemGained[];
+}
+
+export interface CharacterLevelledUpPayload {
+  new_level: number;
+  new_max_hp: number;
+  new_attack_power: number;
+  new_defence: number;
+  new_experience: number;
+}
+
+export interface MonsterSpawnedPayload {
+  instance_id: string;
+  template_id: number;
+  name: string;
+  max_hp: number;
+  pos_x: number;
+  pos_y: number;
+}
+
+export interface MonsterDespawnedPayload {
+  instance_id: string;
+}
+
+export interface ChatMessagePayload {
+  channel: 'local' | 'global';
+  sender_name: string;
+  message: string;
+  timestamp: string;
+}
+
+export interface ServerRateLimitedPayload {
+  action: 'player.move' | 'chat.send' | 'combat.start';
+  retry_after_ms: number;
+}
+
+export interface ServerErrorPayload {
+  code:
+    | 'PROTOCOL_VERSION'
+    | 'NOT_AUTHENTICATED'
+    | 'CHARACTER_EXISTS'
+    | 'CHARACTER_REQUIRED'
+    | 'MONSTER_NOT_FOUND'
+    | 'MONSTER_NOT_ADJACENT'
+    | 'ALREADY_IN_COMBAT'
+    | 'DUPLICATE_COMBAT'
+    | 'INTERNAL_ERROR';
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// Server → Client message types
+// ---------------------------------------------------------------------------
+
+export type AuthSuccessMessage         = WsMessage<AuthSuccessPayload>;
+export type AuthErrorMessage           = WsMessage<AuthErrorPayload>;
+export type CharacterCreatedMessage    = WsMessage<CharacterCreatedPayload>;
+export type WorldStateMessage          = WsMessage<WorldStatePayload>;
+export type PlayerMovedMessage         = WsMessage<PlayerMovedPayload>;
+export type PlayerMoveRejectedMessage  = WsMessage<PlayerMoveRejectedPayload>;
+export type PlayerEnteredZoneMessage   = WsMessage<PlayerEnteredZonePayload>;
+export type PlayerLeftZoneMessage      = WsMessage<PlayerLeftZonePayload>;
+export type CombatStartedMessage       = WsMessage<CombatStartedPayload>;
+export type CombatRoundMessage         = WsMessage<CombatRoundPayload>;
+export type CombatEndedMessage         = WsMessage<CombatEndedPayload>;
+export type CharacterLevelledUpMessage = WsMessage<CharacterLevelledUpPayload>;
+export type MonsterSpawnedMessage      = WsMessage<MonsterSpawnedPayload>;
+export type MonsterDespawnedMessage    = WsMessage<MonsterDespawnedPayload>;
+export type ChatMessageMessage         = WsMessage<ChatMessagePayload>;
+export type ServerRateLimitedMessage   = WsMessage<ServerRateLimitedPayload>;
+export type ServerErrorMessage         = WsMessage<ServerErrorPayload>;
+
+// ---------------------------------------------------------------------------
+// Discriminated union helpers (useful for switch-based dispatch)
+// ---------------------------------------------------------------------------
+
+export type AnyServerMessage =
+  | AuthSuccessMessage
+  | AuthErrorMessage
+  | CharacterCreatedMessage
+  | WorldStateMessage
+  | PlayerMovedMessage
+  | PlayerMoveRejectedMessage
+  | PlayerEnteredZoneMessage
+  | PlayerLeftZoneMessage
+  | CombatStartedMessage
+  | CombatRoundMessage
+  | CombatEndedMessage
+  | CharacterLevelledUpMessage
+  | MonsterSpawnedMessage
+  | MonsterDespawnedMessage
+  | ChatMessageMessage
+  | ServerRateLimitedMessage
+  | ServerErrorMessage;
+
+export type AnyClientMessage =
+  | AuthRegisterMessage
+  | AuthLoginMessage
+  | CharacterCreateMessage
+  | PlayerMoveMessage
+  | CombatStartMessage
+  | ChatSendMessage;
