@@ -4,21 +4,54 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Elarion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles/tokens.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #0a1a0a;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
+    html, body {
+      height: 100%;
+      background: #0f0d0a;
       overflow: hidden;
     }
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+    #top-bar {
+      height: 15vh;
+      min-height: 80px;
+      max-height: 120px;
+      background: #1a1814;
+      border-bottom: 1px solid #5c4d3d;
+      flex-shrink: 0;
+      display: flex;
+      align-items: stretch;
+    }
+    #game {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      position: relative;
+      background: #0f0d0a;
+    }
     #game canvas { display: block; }
+    #bottom-bar {
+      height: 20vh;
+      min-height: 100px;
+      max-height: 200px;
+      background: #1a1814;
+      border-top: 1px solid #5c4d3d;
+      flex-shrink: 0;
+      display: flex;
+    }
   </style>
 </head>
 <body>
+  <div id="top-bar"></div>
   <div id="game"></div>
+  <div id="bottom-bar"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

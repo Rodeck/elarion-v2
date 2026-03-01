@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.color-hex.com)",
+      "WebFetch(domain:www.schemecolor.com)",
+      "WebFetch(domain:polydin.com)",
+      "WebFetch(domain:fonts.google.com)",
+      "WebFetch(domain:ronenness.github.io)",
+      "WebFetch(domain:www.galaydegames.com)",
+      "WebFetch(domain:gameaccessibilityguidelines.com)",
+      "WebFetch(domain:www.oreateai.com)",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:playbooks.com)",
+      "Bash(powershell.exe:*)",
+      "Bash(npx tsc:*)",
+      "mcp__ide__getDiagnostics"
+    ]
+  }
+}

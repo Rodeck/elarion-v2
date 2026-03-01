@@ -17,30 +17,26 @@ export class ChatBox {
   private rateLimitNotice: HTMLDivElement;
   private client: WSClient;
 
-  constructor(client: WSClient) {
+  constructor(client: WSClient, container: HTMLElement = document.body) {
     this.client = client;
 
     this.panel = document.createElement('div');
     this.panel.style.cssText = `
-      position: fixed;
-      bottom: 10px;
-      left: 10px;
-      width: 320px;
-      height: 200px;
-      background: rgba(0,0,0,0.8);
-      border: 1px solid #446644;
-      border-radius: 4px;
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+      background: rgba(26, 24, 20, 0.95);
+      border-right: 1px solid var(--color-gold-subtle);
       display: flex;
       flex-direction: column;
-      font-family: monospace;
-      font-size: 12px;
-      color: #cccccc;
-      z-index: 200;
+      font-family: var(--font-body);
+      font-size: var(--type-body);
+      color: var(--color-text-primary);
     `;
 
     // Tabs
     const tabBar = document.createElement('div');
-    tabBar.style.cssText = 'display:flex; border-bottom: 1px solid #446644;';
+    tabBar.style.cssText = 'display:flex; border-bottom: 1px solid var(--color-gold-subtle);';
 
     this.localTab = this.createTab('Local', 'local', tabBar);
     this.globalTab = this.createTab('Global', 'global', tabBar);
@@ -56,8 +52,9 @@ export class ChatBox {
     // Rate limit notice
     this.rateLimitNotice = document.createElement('div');
     this.rateLimitNotice.style.cssText = `
-      color: #ff8888;
-      font-size: 11px;
+      color: var(--color-combat-dmg);
+      font-size: var(--type-small);
+      font-family: var(--font-display);
       padding: 2px 8px;
       display: none;
     `;
@@ -65,7 +62,7 @@ export class ChatBox {
 
     // Input row
     const inputRow = document.createElement('div');
-    inputRow.style.cssText = 'display:flex; border-top: 1px solid #446644; padding: 4px;';
+    inputRow.style.cssText = 'display:flex; border-top: 1px solid var(--color-gold-subtle); padding: 4px; gap: 4px;';
 
     this.input = document.createElement('input');
     this.input.type = 'text';
@@ -73,13 +70,18 @@ export class ChatBox {
     this.input.maxLength = 256;
     this.input.style.cssText = `
       flex: 1;
-      background: #1a2a1a;
-      color: #e8d5a3;
-      border: none;
+      background: var(--color-bg-inset);
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-gold-subtle);
+      border-radius: 2px;
       outline: none;
-      font-size: 12px;
-      padding: 2px 4px;
+      font-family: var(--font-body);
+      font-size: var(--type-body);
+      padding: 3px 6px;
+      transition: border-color 0.2s;
     `;
+    this.input.addEventListener('focus', () => { this.input.style.borderColor = 'var(--color-gold-primary)'; });
+    this.input.addEventListener('blur',  () => { this.input.style.borderColor = 'var(--color-gold-subtle)'; });
     this.input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') this.sendMessage();
     });
@@ -87,13 +89,15 @@ export class ChatBox {
     this.sendBtn = document.createElement('button');
     this.sendBtn.textContent = 'Send';
     this.sendBtn.style.cssText = `
-      background: #446644;
-      color: #ffffff;
-      border: none;
-      padding: 2px 8px;
+      background: var(--color-bg-panel-alt);
+      color: var(--color-gold-primary);
+      border: 1px solid var(--color-gold-dim);
+      border-radius: 2px;
+      padding: 2px 10px;
       cursor: pointer;
-      font-size: 11px;
-      margin-left: 4px;
+      font-family: var(--font-display);
+      font-size: var(--type-small);
+      letter-spacing: 1px;
     `;
     this.sendBtn.addEventListener('click', () => this.sendMessage());
 
@@ -101,7 +105,7 @@ export class ChatBox {
     inputRow.appendChild(this.sendBtn);
     this.panel.appendChild(inputRow);
 
-    document.body.appendChild(this.panel);
+    container.appendChild(this.panel);
 
     this.setActiveTab('local');
   }
@@ -113,10 +117,15 @@ export class ChatBox {
       flex: 1;
       background: none;
       border: none;
-      color: #aaaaaa;
+      border-bottom: 2px solid transparent;
+      color: var(--color-text-muted);
       cursor: pointer;
-      padding: 4px 8px;
-      font-size: 12px;
+      padding: 5px 8px;
+      font-family: var(--font-display);
+      font-size: var(--type-small);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: color 0.15s;
     `;
     btn.textContent = label;
     btn.addEventListener('click', () => this.setActiveTab(channel));
@@ -129,7 +138,9 @@ export class ChatBox {
     div.style.cssText = `
       flex: 1;
       overflow-y: auto;
-      padding: 4px 8px;
+      padding: 5px 8px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--color-gold-subtle) transparent;
     `;
     return div;
   }
@@ -142,17 +153,17 @@ export class ChatBox {
 
     if (channel === 'local') {
       this.localUnread = 0;
-      this.localTab.style.color = '#e8d5a3';
-      this.localTab.style.borderBottom = '2px solid #88cc88';
-      this.globalTab.style.color = '#aaaaaa';
-      this.globalTab.style.borderBottom = 'none';
+      this.localTab.style.color = 'var(--color-gold-primary)';
+      this.localTab.style.borderBottom = '2px solid var(--color-gold-primary)';
+      this.globalTab.style.color = 'var(--color-text-muted)';
+      this.globalTab.style.borderBottom = '2px solid transparent';
       this.localTab.textContent = 'Local';
     } else {
       this.globalUnread = 0;
-      this.globalTab.style.color = '#e8d5a3';
-      this.globalTab.style.borderBottom = '2px solid #88cc88';
-      this.localTab.style.color = '#aaaaaa';
-      this.localTab.style.borderBottom = 'none';
+      this.globalTab.style.color = 'var(--color-gold-primary)';
+      this.globalTab.style.borderBottom = '2px solid var(--color-gold-primary)';
+      this.localTab.style.color = 'var(--color-text-muted)';
+      this.localTab.style.borderBottom = '2px solid transparent';
       this.globalTab.textContent = 'Global';
     }
   }
@@ -161,9 +172,10 @@ export class ChatBox {
     const list = channel === 'local' ? this.localList : this.globalList;
     const time = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+    const msgColor = channel === 'global' ? 'var(--color-chat-global)' : 'var(--color-chat-local)';
     const line = document.createElement('div');
-    line.style.cssText = 'margin-bottom: 2px; word-wrap: break-word;';
-    line.innerHTML = `<span style="color:#888">[${time}]</span> <span style="color:#88cc88">${this.escapeHtml(senderName)}</span>: ${this.escapeHtml(message)}`;
+    line.style.cssText = 'margin-bottom: 3px; word-wrap: break-word; line-height: 1.4;';
+    line.innerHTML = `<span style="color:var(--color-text-muted);font-size:var(--type-small)">[${time}]</span> <span style="color:${msgColor};font-weight:600">${this.escapeHtml(senderName)}</span>: ${this.escapeHtml(message)}`;
     list.appendChild(line);
 
     // Keep last 100 messages
@@ -175,9 +187,11 @@ export class ChatBox {
       if (channel === 'local') {
         this.localUnread++;
         this.localTab.textContent = `Local (${this.localUnread})`;
+        this.localTab.style.color = 'var(--color-gold-bright)';
       } else {
         this.globalUnread++;
         this.globalTab.textContent = `Global (${this.globalUnread})`;
+        this.globalTab.style.color = 'var(--color-gold-bright)';
       }
     }
   }

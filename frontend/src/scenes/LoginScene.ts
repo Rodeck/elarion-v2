@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { WSClient } from '../network/WSClient';
+import { Colors, Fonts } from '../styles/phaser-tokens';
 import type { AuthSuccessPayload, AuthErrorPayload } from '@elarion/protocol';
 
 type Tab = 'login' | 'register';
@@ -9,6 +10,10 @@ export class LoginScene extends Phaser.Scene {
   private errorText!: Phaser.GameObjects.Text;
   private usernameInput!: HTMLInputElement;
   private passwordInput!: HTMLInputElement;
+  private loginTabUnderline!: Phaser.GameObjects.Rectangle;
+  private registerTabUnderline!: Phaser.GameObjects.Rectangle;
+  private loginTabText!: Phaser.GameObjects.Text;
+  private registerTabText!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: 'LoginScene' });
@@ -19,61 +24,130 @@ export class LoginScene extends Phaser.Scene {
     const cx = width / 2;
     const cy = height / 2;
 
+    // Background
+    this.cameras.main.setBackgroundColor(Colors.bgDeepest);
+
+    // Panel background
+    const panelW = 340;
+    const panelH = 320;
+    const panel = this.add.graphics();
+    panel.fillStyle(Colors.bgPanel, 0.95);
+    panel.fillRoundedRect(cx - panelW / 2, cy - panelH / 2 - 20, panelW, panelH, 3);
+    panel.lineStyle(1, Colors.goldDim, 1.0);
+    panel.strokeRoundedRect(cx - panelW / 2, cy - panelH / 2 - 20, panelW, panelH, 3);
+    panel.lineStyle(1, Colors.goldBright, 0.07);
+    panel.lineBetween(cx - panelW / 2 + 4, cy - panelH / 2 - 19, cx + panelW / 2 - 4, cy - panelH / 2 - 19);
+
     // Title
-    this.add.text(cx, cy - 140, 'ELARION', {
-      fontSize: '40px',
-      color: '#e8d5a3',
-      fontFamily: 'serif',
+    this.add.text(cx, cy - 130, 'ELARION', {
+      fontFamily: Fonts.display,
+      fontSize: '42px',
+      color: Colors.goldBrightStr,
+      fontStyle: 'bold',
     }).setOrigin(0.5);
 
-    // Tab buttons
-    const loginTabBtn = this.add.text(cx - 70, cy - 80, 'Login', {
-      fontSize: '18px',
-      color: '#ffffff',
-      backgroundColor: '#336633',
-      padding: { x: 12, y: 6 },
+    // Tabs
+    this.loginTabText = this.add.text(cx - 60, cy - 80, 'LOGIN', {
+      fontFamily: Fonts.display,
+      fontSize: '12px',
+      color: Colors.goldPrimaryStr,
+      fontStyle: 'bold',
     }).setOrigin(0.5).setInteractive({ cursor: 'pointer' });
 
-    const registerTabBtn = this.add.text(cx + 70, cy - 80, 'Register', {
-      fontSize: '18px',
-      color: '#aaaaaa',
-      padding: { x: 12, y: 6 },
+    this.registerTabText = this.add.text(cx + 60, cy - 80, 'REGISTER', {
+      fontFamily: Fonts.display,
+      fontSize: '12px',
+      color: Colors.textMuted,
     }).setOrigin(0.5).setInteractive({ cursor: 'pointer' });
 
-    loginTabBtn.on('pointerdown', () => {
-      this.activeTab = 'login';
-      loginTabBtn.setStyle({ color: '#ffffff', backgroundColor: '#336633' });
-      registerTabBtn.setStyle({ color: '#aaaaaa', backgroundColor: undefined });
-      this.clearError();
-    });
+    // Tab underlines
+    this.loginTabUnderline = this.add.rectangle(cx - 60, cy - 70, 52, 2, Colors.goldPrimary).setOrigin(0.5, 0);
+    this.registerTabUnderline = this.add.rectangle(cx + 60, cy - 70, 66, 2, Colors.goldPrimary, 0).setOrigin(0.5, 0);
 
-    registerTabBtn.on('pointerdown', () => {
-      this.activeTab = 'register';
-      registerTabBtn.setStyle({ color: '#ffffff', backgroundColor: '#336633' });
-      loginTabBtn.setStyle({ color: '#aaaaaa', backgroundColor: undefined });
-      this.clearError();
-    });
+    // Divider
+    const divider = this.add.graphics();
+    divider.lineStyle(1, Colors.goldSubtle, 0.6);
+    divider.lineBetween(cx - panelW / 2 + 16, cy - 68, cx + panelW / 2 - 16, cy - 68);
 
-    // HTML inputs overlaid on canvas
-    this.usernameInput = this.createInput('text', 'Username', cx, cy - 30);
-    this.passwordInput = this.createInput('password', 'Password', cx, cy + 20);
+    // Input labels
+    this.add.text(cx - 110, cy - 54, 'Username', {
+      fontFamily: Fonts.display,
+      fontSize: '11px',
+      color: Colors.textSecondary,
+    }).setOrigin(0, 0.5);
+
+    this.add.text(cx - 110, cy - 4, 'Password', {
+      fontFamily: Fonts.display,
+      fontSize: '11px',
+      color: Colors.textSecondary,
+    }).setOrigin(0, 0.5);
+
+    // HTML inputs
+    this.usernameInput = this.createInput('text', 'Enter username', cx, cy - 29);
+    this.passwordInput = this.createInput('password', 'Enter password', cx, cy + 22);
 
     // Submit button
-    const submitBtn = this.add.text(cx, cy + 80, 'Submit', {
-      fontSize: '20px',
-      color: '#ffffff',
-      backgroundColor: '#446644',
-      padding: { x: 24, y: 10 },
-    }).setOrigin(0.5).setInteractive({ cursor: 'pointer' });
+    const btnW = 160;
+    const btnH = 36;
+    const btnX = cx - btnW / 2;
+    const btnY = cy + 60;
 
-    submitBtn.on('pointerdown', () => void this.submit());
+    const btnBg = this.add.graphics();
+    const drawBtn = (hover: boolean) => {
+      btnBg.clear();
+      btnBg.fillStyle(hover ? Colors.bgPanelAlt : Colors.bgPanel, 1.0);
+      btnBg.fillRoundedRect(btnX, btnY, btnW, btnH, 3);
+      btnBg.lineStyle(1, hover ? Colors.goldBright : Colors.goldPrimary, 1.0);
+      btnBg.strokeRoundedRect(btnX, btnY, btnW, btnH, 3);
+    };
+    drawBtn(false);
+
+    const btnLabel = this.add.text(cx, btnY + btnH / 2, 'ENTER', {
+      fontFamily: Fonts.display,
+      fontSize: '13px',
+      color: Colors.goldPrimaryStr,
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    const btnHitArea = this.add.rectangle(cx, btnY + btnH / 2, btnW, btnH)
+      .setOrigin(0.5)
+      .setInteractive({ cursor: 'pointer' });
+
+    btnHitArea.on('pointerover',  () => drawBtn(true));
+    btnHitArea.on('pointerout',   () => drawBtn(false));
+    btnHitArea.on('pointerdown',  () => void this.submit());
 
     // Error text
-    this.errorText = this.add.text(cx, cy + 120, '', {
-      fontSize: '14px',
-      color: '#ff6666',
+    this.errorText = this.add.text(cx, cy + 118, '', {
+      fontFamily: Fonts.body,
+      fontSize: '12px',
+      color: '#e74c3c',
       wordWrap: { width: 300 },
     }).setOrigin(0.5);
+
+    // Tab events
+    this.loginTabText.on('pointerdown', () => this.switchTab('login'));
+    this.registerTabText.on('pointerdown', () => this.switchTab('register'));
+
+    void panel;
+    void divider;
+    void btnLabel;
+  }
+
+  private switchTab(tab: Tab): void {
+    this.activeTab = tab;
+    if (tab === 'login') {
+      this.loginTabText.setStyle({ color: Colors.goldPrimaryStr, fontStyle: 'bold' });
+      this.registerTabText.setStyle({ color: Colors.textMuted, fontStyle: 'normal' });
+      this.loginTabUnderline.setAlpha(1);
+      this.registerTabUnderline.setAlpha(0);
+    } else {
+      this.registerTabText.setStyle({ color: Colors.goldPrimaryStr, fontStyle: 'bold' });
+      this.loginTabText.setStyle({ color: Colors.textMuted, fontStyle: 'normal' });
+      this.registerTabUnderline.setAlpha(1);
+      this.loginTabUnderline.setAlpha(0);
+    }
+    this.clearError();
   }
 
   private createInput(type: string, placeholder: string, cx: number, cy: number): HTMLInputElement {
@@ -83,19 +157,26 @@ export class LoginScene extends Phaser.Scene {
     el.style.cssText = `
       position: absolute;
       width: 220px;
-      padding: 8px;
-      font-size: 16px;
-      background: #1a2a1a;
-      color: #e8d5a3;
-      border: 1px solid #446644;
+      padding: 8px 12px;
+      font-family: var(--font-body);
+      font-size: 14px;
+      background: var(--color-bg-inset);
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-gold-subtle);
+      border-radius: 2px;
       outline: none;
       box-sizing: border-box;
+      transition: border-color 0.2s;
     `;
+    el.addEventListener('focus', () => { el.style.borderColor = 'var(--color-gold-primary)'; });
+    el.addEventListener('blur',  () => { el.style.borderColor = 'var(--color-gold-subtle)'; });
 
     const canvas = this.game.canvas;
     const rect = canvas.getBoundingClientRect();
-    el.style.left = `${rect.left + cx - 110}px`;
-    el.style.top = `${rect.top + cy - 16}px`;
+    const scaleX = rect.width / this.scale.width;
+    const scaleY = rect.height / this.scale.height;
+    el.style.left = `${rect.left + (cx - 110) * scaleX}px`;
+    el.style.top  = `${rect.top  + (cy - 16) * scaleY}px`;
 
     document.body.appendChild(el);
     this.events.once('shutdown', () => el.remove());
@@ -119,7 +200,6 @@ export class LoginScene extends Phaser.Scene {
     await client.connect();
 
     client.on<AuthSuccessPayload>('auth.success', (payload) => {
-      // Store JWT for reconnect
       sessionStorage.setItem('elarion_token', payload.token);
       client.disconnect();
 
