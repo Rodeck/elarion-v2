@@ -4,11 +4,17 @@ import { LoginScene } from './scenes/LoginScene';
 import { CharacterCreateScene } from './scenes/CharacterCreateScene';
 import { GameScene } from './scenes/GameScene';
 
+const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: 800,
-  height: 600,
-  backgroundColor: '#1a2a1a',
+  width: 800 * dpr,
+  height: 600 * dpr,
+  zoom: 1 / dpr,
+  pixelArt: true,
+  antialias: false,
+  roundPixels: true,
+  backgroundColor: '#1a1814',
   parent: 'game',
   scene: [BootScene, LoginScene, CharacterCreateScene, GameScene],
   scale: {

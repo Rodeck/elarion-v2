@@ -1,85 +1,229 @@
-import Phaser from 'phaser';
-
 export class StatsBar {
-  private scene: Phaser.Scene;
-  private container: Phaser.GameObjects.Container;
-  private nameText: Phaser.GameObjects.Text;
-  private levelText: Phaser.GameObjects.Text;
-  private hpFill: Phaser.GameObjects.Rectangle;
-  private xpFill: Phaser.GameObjects.Rectangle;
-  private hpText: Phaser.GameObjects.Text;
-  private xpText: Phaser.GameObjects.Text;
+  private container: HTMLDivElement;
+  private nameEl: HTMLSpanElement;
+  private levelEl: HTMLSpanElement;
+  private hpFillEl: HTMLDivElement;
+  private hpTextEl: HTMLSpanElement;
+  private xpFillEl: HTMLDivElement;
+  private xpTextEl: HTMLSpanElement;
+  private maxHp = 1;
 
-  private readonly BAR_WIDTH = 200;
-  private readonly BAR_HEIGHT = 14;
-  private readonly PAD = 10;
+  constructor(
+    mountEl: HTMLElement,
+    name: string,
+    className: string,
+    level: number,
+    hp: number,
+    maxHp: number,
+    xp: number,
+    xpThreshold: number,
+  ) {
+    this.maxHp = maxHp;
 
-  constructor(scene: Phaser.Scene, name: string, className: string, level: number, hp: number, maxHp: number, xp: number, xpThreshold: number) {
-    this.scene = scene;
+    this.container = document.createElement('div');
+    this.container.style.cssText = `
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 28px;
+    `;
 
-    const x = this.PAD;
-    const y = this.PAD;
+    // Vertical separator helper
+    const sep = () => {
+      const d = document.createElement('div');
+      d.style.cssText = 'width: 1px; height: 48px; background: rgba(92,77,61,0.5); flex-shrink: 0;';
+      return d;
+    };
 
-    this.container = scene.add.container(x, y).setScrollFactor(0).setDepth(100);
+    // ── Name & Class ─────────────────────────────────────────────
+    const nameSection = document.createElement('div');
+    nameSection.style.cssText = 'flex-shrink: 0; min-width: 110px;';
 
-    // Background panel
-    const bg = scene.add.rectangle(0, 0, this.BAR_WIDTH + 20, 80, 0x000000, 0.7).setOrigin(0, 0);
-    this.container.add(bg);
+    this.nameEl = document.createElement('span');
+    this.nameEl.style.cssText = `
+      display: block;
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--color-gold-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 160px;
+    `;
+    this.nameEl.textContent = name;
 
-    // Character name + class
-    this.nameText = scene.add.text(10, 8, `${name} (${className})`, {
-      fontSize: '13px',
-      color: '#e8d5a3',
-    });
-    this.container.add(this.nameText);
+    const classEl = document.createElement('span');
+    classEl.style.cssText = `
+      display: block;
+      font-family: var(--font-display);
+      font-size: 11px;
+      color: var(--color-text-secondary);
+      margin-top: 2px;
+    `;
+    classEl.textContent = className;
 
-    // Level
-    this.levelText = scene.add.text(10, 22, `Level ${level}`, {
-      fontSize: '12px',
-      color: '#aaaaaa',
-    });
-    this.container.add(this.levelText);
+    nameSection.appendChild(this.nameEl);
+    nameSection.appendChild(classEl);
 
-    // HP bar
-    const hpBg = scene.add.rectangle(10, 40, this.BAR_WIDTH, this.BAR_HEIGHT, 0x440000).setOrigin(0, 0);
-    this.hpFill = scene.add.rectangle(10, 40, this.BAR_WIDTH, this.BAR_HEIGHT, 0xcc3333).setOrigin(0, 0);
-    this.hpText = scene.add.text(10 + this.BAR_WIDTH / 2, 40 + this.BAR_HEIGHT / 2, '', {
-      fontSize: '10px',
-      color: '#ffffff',
-    }).setOrigin(0.5);
-    this.container.add([hpBg, this.hpFill, this.hpText]);
+    // ── Level Badge ───────────────────────────────────────────────
+    const levelBadge = document.createElement('div');
+    levelBadge.style.cssText = `
+      flex-shrink: 0;
+      width: 48px;
+      height: 48px;
+      background: rgba(37,33,25,0.8);
+      border: 1px solid var(--color-gold-dim);
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    `;
 
-    // XP bar
-    const xpBg = scene.add.rectangle(10, 58, this.BAR_WIDTH, this.BAR_HEIGHT, 0x222244).setOrigin(0, 0);
-    this.xpFill = scene.add.rectangle(10, 58, 0, this.BAR_HEIGHT, 0x4466cc).setOrigin(0, 0);
-    this.xpText = scene.add.text(10 + this.BAR_WIDTH / 2, 58 + this.BAR_HEIGHT / 2, '', {
-      fontSize: '10px',
-      color: '#ffffff',
-    }).setOrigin(0.5);
-    this.container.add([xpBg, this.xpFill, this.xpText]);
+    const lvLabel = document.createElement('span');
+    lvLabel.style.cssText = `
+      font-family: var(--font-display);
+      font-size: 7px;
+      color: var(--color-text-muted);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    `;
+    lvLabel.textContent = 'LVL';
+
+    this.levelEl = document.createElement('span');
+    this.levelEl.style.cssText = `
+      font-family: var(--font-number);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--color-gold-bright);
+      line-height: 1;
+    `;
+    this.levelEl.textContent = String(level);
+
+    levelBadge.appendChild(lvLabel);
+    levelBadge.appendChild(this.levelEl);
+
+    // ── HP Bar ────────────────────────────────────────────────────
+    const { el: hpEl, fill: hpFill, valueText: hpText } = this.createBarSection(
+      'HP',
+      'var(--color-hp-high)',
+      'var(--color-hp-bg)',
+    );
+    this.hpFillEl = hpFill;
+    this.hpTextEl = hpText;
+
+    // ── XP Bar ────────────────────────────────────────────────────
+    const { el: xpEl, fill: xpFill, valueText: xpText } = this.createBarSection(
+      'XP',
+      'var(--color-xp-fill)',
+      'var(--color-xp-bg)',
+    );
+    this.xpFillEl = xpFill;
+    this.xpTextEl = xpText;
+
+    // ── Assemble ──────────────────────────────────────────────────
+    this.container.appendChild(nameSection);
+    this.container.appendChild(sep());
+    this.container.appendChild(levelBadge);
+    this.container.appendChild(sep());
+    this.container.appendChild(hpEl);
+    this.container.appendChild(sep());
+    this.container.appendChild(xpEl);
+
+    mountEl.appendChild(this.container);
 
     this.setHp(hp, maxHp);
     this.setXp(xp, xpThreshold);
-    this.setLevel(level);
+  }
+
+  private createBarSection(
+    label: string,
+    fillColor: string,
+    trackColor: string,
+  ): { el: HTMLDivElement; fill: HTMLDivElement; valueText: HTMLSpanElement } {
+    const el = document.createElement('div');
+    el.style.cssText = 'flex: 1; min-width: 100px; max-width: 280px;';
+
+    const header = document.createElement('div');
+    header.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 5px;
+    `;
+
+    const labelEl = document.createElement('span');
+    labelEl.style.cssText = `
+      font-family: var(--font-display);
+      font-size: 10px;
+      color: var(--color-text-muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    `;
+    labelEl.textContent = label;
+
+    const valueText = document.createElement('span');
+    valueText.style.cssText = `
+      font-family: var(--font-number);
+      font-size: 12px;
+      color: var(--color-text-secondary);
+    `;
+
+    header.appendChild(labelEl);
+    header.appendChild(valueText);
+
+    const track = document.createElement('div');
+    track.style.cssText = `
+      background: ${trackColor};
+      border: 1px solid rgba(92,77,61,0.5);
+      border-radius: 2px;
+      height: 10px;
+      overflow: hidden;
+    `;
+
+    const fill = document.createElement('div');
+    fill.style.cssText = `
+      height: 100%;
+      background: ${fillColor};
+      width: 0%;
+      transition: width 0.3s ease;
+    `;
+    track.appendChild(fill);
+
+    el.appendChild(header);
+    el.appendChild(track);
+
+    return { el, fill, valueText };
   }
 
   setHp(current: number, max: number): void {
+    this.maxHp = max;
     const ratio = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
-    this.hpFill.width = this.BAR_WIDTH * ratio;
-    this.hpText.setText(`${current} / ${max}`);
+    this.hpFillEl.style.width = `${Math.round(ratio * 100)}%`;
+    if (ratio > 0.6) {
+      this.hpFillEl.style.background = 'var(--color-hp-high)';
+    } else if (ratio > 0.3) {
+      this.hpFillEl.style.background = 'var(--color-hp-mid)';
+    } else {
+      this.hpFillEl.style.background = 'var(--color-hp-low)';
+    }
+    this.hpTextEl.textContent = `${current} / ${max}`;
   }
 
   setXp(current: number, threshold: number): void {
     const ratio = threshold > 0 ? Math.max(0, Math.min(1, current / threshold)) : 0;
-    this.xpFill.width = this.BAR_WIDTH * ratio;
-    this.xpText.setText(`XP: ${current} / ${threshold}`);
+    this.xpFillEl.style.width = `${Math.round(ratio * 100)}%`;
+    this.xpTextEl.textContent = `${current} / ${threshold}`;
   }
 
   setLevel(level: number): void {
-    this.levelText.setText(`Level ${level}`);
+    this.levelEl.textContent = String(level);
   }
 
   destroy(): void {
-    this.container.destroy();
+    this.container.remove();
   }
 }

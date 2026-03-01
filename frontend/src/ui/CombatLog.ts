@@ -4,64 +4,48 @@ export class CombatLog {
   private panel: HTMLDivElement;
   private messageList: HTMLDivElement;
   private lines: string[] = [];
-  private visible = false;
 
-  constructor() {
+  constructor(container: HTMLElement = document.body) {
     this.panel = document.createElement('div');
     this.panel.style.cssText = `
-      position: fixed;
-      bottom: 80px;
-      right: 10px;
-      width: 300px;
-      max-height: 200px;
-      background: rgba(0,0,0,0.75);
-      border: 1px solid #446644;
-      border-radius: 4px;
-      display: none;
+      width: clamp(160px, 35%, 340px);
+      height: 100%;
+      flex-shrink: 0;
+      background: rgba(20, 18, 14, 0.95);
+      display: flex;
       flex-direction: column;
-      font-family: monospace;
-      font-size: 11px;
-      color: #cccccc;
-      z-index: 200;
+      font-family: var(--font-body);
+      font-size: var(--type-body);
+      color: var(--color-text-primary);
     `;
 
     const header = document.createElement('div');
     header.style.cssText = `
-      padding: 4px 8px;
-      background: #1a2a1a;
-      color: #e8d5a3;
-      font-size: 12px;
-      border-bottom: 1px solid #446644;
+      padding: 5px 10px;
+      background: linear-gradient(to bottom, rgba(60,50,30,0.95), rgba(37,33,25,0.95));
+      color: var(--color-gold-primary);
+      font-family: var(--font-display);
+      font-size: var(--type-small);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid var(--color-gold-subtle);
       cursor: pointer;
+      flex-shrink: 0;
     `;
     header.textContent = 'Combat Log';
-    header.addEventListener('click', () => this.toggle());
 
     this.messageList = document.createElement('div');
     this.messageList.style.cssText = `
       overflow-y: auto;
-      padding: 6px;
+      padding: 6px 8px;
       flex: 1;
+      scrollbar-width: thin;
+      scrollbar-color: var(--color-gold-subtle) transparent;
     `;
 
     this.panel.appendChild(header);
     this.panel.appendChild(this.messageList);
-    document.body.appendChild(this.panel);
-  }
-
-  show(): void {
-    this.panel.style.display = 'flex';
-    this.visible = true;
-  }
-
-  hide(): void {
-    this.panel.style.display = 'none';
-    this.visible = false;
-  }
-
-  toggle(): void {
-    if (this.visible) this.hide();
-    else this.show();
+    container.appendChild(this.panel);
   }
 
   appendRound(
@@ -72,20 +56,30 @@ export class CombatLog {
     playerHpAfter: number,
     monsterHpAfter: number,
   ): void {
-    const actionStr = action === 'miss' ? 'misses' : action === 'critical' ? `crits for ${damage}` : `hits for ${damage}`;
+    let color: string;
+    let actionStr: string;
+    if (action === 'miss') {
+      actionStr = 'misses';
+      color = 'var(--color-combat-miss)';
+    } else if (action === 'critical') {
+      actionStr = `crits for ${damage}`;
+      color = 'var(--color-combat-crit)';
+    } else {
+      actionStr = `hits for ${damage}`;
+      color = attacker === 'player' ? 'var(--color-combat-dmg)' : 'var(--color-text-secondary)';
+    }
     const line = `Round ${roundNumber}: ${attacker} ${actionStr} dmg. HP ▸ Player: ${playerHpAfter} | Monster: ${monsterHpAfter}`;
-    this.addLine(line, '#dddddd');
-    this.show();
+    this.addLine(line, color);
   }
 
   appendSummary(outcome: 'victory' | 'defeat', xpGained: number, items: { name: string; quantity: number }[]): void {
-    const outcomeColor = outcome === 'victory' ? '#88ff88' : '#ff8888';
-    const outcomeStr = outcome === 'victory' ? '⚔ VICTORY' : '💀 DEFEAT';
-    this.addLine('─'.repeat(30), '#444444');
+    this.addLine('─'.repeat(28), 'var(--color-gold-subtle)');
+    const outcomeColor = outcome === 'victory' ? 'var(--color-combat-heal)' : 'var(--color-combat-dmg)';
+    const outcomeStr   = outcome === 'victory' ? '⚔ VICTORY' : '✦ DEFEAT';
     this.addLine(`${outcomeStr} — XP: ${xpGained}`, outcomeColor);
     if (items.length > 0) {
       const itemStr = items.map((i) => `${i.name} ×${i.quantity}`).join(', ');
-      this.addLine(`Items: ${itemStr}`, '#aaddff');
+      this.addLine(`Items: ${itemStr}`, 'var(--color-chat-global)');
     }
   }
 
@@ -94,11 +88,10 @@ export class CombatLog {
     if (this.lines.length > MAX_LINES) this.lines.shift();
 
     const el = document.createElement('div');
-    el.style.color = color;
+    el.style.cssText = `color: ${color}; font-style: italic; margin-bottom: 2px; line-height: 1.35;`;
     el.textContent = text;
     this.messageList.appendChild(el);
 
-    // Remove oldest visual entries if over limit
     while (this.messageList.children.length > MAX_LINES) {
       this.messageList.removeChild(this.messageList.firstChild!);
     }

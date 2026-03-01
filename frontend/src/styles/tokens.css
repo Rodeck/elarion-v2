@@ -1,0 +1,60 @@
+:root {
+  /* ── Backgrounds ─────────────────────────────────────────── */
+  --color-bg-deepest:   #0f0d0a;
+  --color-bg-base:      #1a1814;
+  --color-bg-panel:     #252119;
+  --color-bg-panel-alt: #2f2a21;
+  --color-bg-inset:     #1a1612;
+  --color-bg-overlay:   rgba(10, 8, 5, 0.82);
+
+  /* ── Text ────────────────────────────────────────────────── */
+  --color-text-primary:   #f5e6c8;
+  --color-text-secondary: #c8b89a;
+  --color-text-muted:     #9b8b72;
+  --color-text-disabled:  #5a5040;
+
+  /* ── Gold Accent ─────────────────────────────────────────── */
+  --color-gold-bright:  #f0c060;
+  --color-gold-primary: #d4a84b;
+  --color-gold-dim:     #8b7355;
+  --color-gold-subtle:  #5c4d3d;
+
+  /* ── HP Bar ──────────────────────────────────────────────── */
+  --color-hp-high: #c0392b;
+  --color-hp-mid:  #922b21;
+  --color-hp-low:  #7b241c;
+  --color-hp-bg:   #2c1010;
+
+  /* ── MP Bar ──────────────────────────────────────────────── */
+  --color-mp-high: #1f6fa6;
+  --color-mp-bg:   #0a1a2e;
+
+  /* ── XP Bar ──────────────────────────────────────────────── */
+  --color-xp-fill: #d4a84b;
+  --color-xp-bg:   #2a2010;
+
+  /* ── Chat ────────────────────────────────────────────────── */
+  --color-chat-local:  #f5e6c8;
+  --color-chat-global: #8ecae6;
+  --color-chat-system: #e9c46a;
+
+  /* ── Combat Log ──────────────────────────────────────────── */
+  --color-combat-dmg:  #e74c3c;
+  --color-combat-heal: #52b373;
+  --color-combat-miss: #9b8b72;
+  --color-combat-crit: #f0c060;
+
+  /* ── Typography ──────────────────────────────────────────── */
+  --font-display:   'Cinzel', 'Palatino Linotype', serif;
+  --font-body:      'Crimson Text', 'Georgia', serif;
+  --font-number:    'Rajdhani', 'Oswald', sans-serif;
+  --font-ui-number: 'Rajdhani', 'Oswald', sans-serif;
+
+  /* ── Type Scale ──────────────────────────────────────────── */
+  --type-title:   clamp(28px, 4vw, 48px);
+  --type-heading: clamp(18px, 2.5vw, 24px);
+  --type-label:   14px;
+  --type-value:   16px;
+  --type-body:    13px;
+  --type-small:   11px;
+}

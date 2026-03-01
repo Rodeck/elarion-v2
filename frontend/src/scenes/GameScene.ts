@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { WSClient } from '../network/WSClient';
 import { StatsBar } from '../ui/StatsBar';
+import { ChatBox } from '../ui/ChatBox';
+import { CombatLog } from '../ui/CombatLog';
 import type {
   WorldStatePayload,
   CharacterData,
@@ -26,6 +28,8 @@ export class GameScene extends Phaser.Scene {
   private myCharacter!: CharacterData;
   private playerSprite!: Phaser.GameObjects.Rectangle;
   private statsBar!: StatsBar;
+  private chatBox!: ChatBox;
+  private combatLog!: CombatLog;
 
   // Remote players: characterId → sprite
   private remotePlayers = new Map<string, Phaser.GameObjects.Container>();
@@ -52,12 +56,16 @@ export class GameScene extends Phaser.Scene {
     const wsHost = import.meta.env['VITE_WS_HOST'] ?? 'localhost:4000';
     this.client = new WSClient(`ws://${wsHost}/game?token=${this.token}`);
 
+    const bottomBar = document.getElementById('bottom-bar')!;
+    this.chatBox   = new ChatBox(this.client, bottomBar);
+    this.combatLog = new CombatLog(bottomBar);
+
     void this.client.connect().then(() => {
       this.registerHandlers();
     });
 
     // Camera and world bounds set after world.state arrives
-    this.cameras.main.setBackgroundColor('#1a3a1a');
+    this.cameras.main.setBackgroundColor('#1a1814');
   }
 
   private registerHandlers(): void {
@@ -136,10 +144,19 @@ export class GameScene extends Phaser.Scene {
         this.myCharacter.current_hp = payload.player_hp_after;
         this.statsBar.setHp(payload.player_hp_after, this.myCharacter.max_hp);
       }
+      this.combatLog.appendRound(
+        payload.round_number,
+        payload.attacker,
+        payload.action,
+        payload.damage,
+        payload.player_hp_after,
+        payload.monster_hp_after,
+      );
     });
 
-    this.client.on<CombatEndedPayload>('combat.ended', () => {
+    this.client.on<CombatEndedPayload>('combat.ended', (payload) => {
       this.inCombat = false;
+      this.combatLog.appendSummary(payload.outcome, payload.xp_gained, payload.items_gained ?? []);
     });
 
     this.client.on<CharacterLevelledUpPayload>('character.levelled_up', (payload) => {
@@ -157,8 +174,8 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    this.client.on<ChatMessagePayload>('chat.message', (_payload) => {
-      // Chat rendering will be added in US5
+    this.client.on<ChatMessagePayload>('chat.message', (payload) => {
+      this.chatBox.appendMessage(payload.channel as 'local' | 'global', payload.sender_name, payload.message, payload.timestamp);
     });
   }
 
@@ -197,8 +214,9 @@ export class GameScene extends Phaser.Scene {
     const c = this.myCharacter;
     const level = c.level;
     const xpThreshold = XP_THRESHOLDS[level - 1] ?? 9999;
+    const topBar = document.getElementById('top-bar')!;
     this.statsBar = new StatsBar(
-      this,
+      topBar,
       c.name,
       `Class ${c.class_id}`,
       level,
