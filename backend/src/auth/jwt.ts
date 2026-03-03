@@ -14,7 +14,7 @@ export async function signToken(accountId: string, characterId?: string): Promis
   const payload: JwtClaims = { accountId };
   if (characterId) payload.characterId = characterId;
 
-  return new SignJWT(payload as Record<string, unknown>)
+  return new SignJWT(payload as unknown as Record<string, unknown>)
     .setProtectedHeader({ alg: ALGORITHM })
     .setIssuedAt()
     .setExpirationTime(EXPIRY)

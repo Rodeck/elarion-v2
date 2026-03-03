@@ -1,0 +1,157 @@
+import {
+  CityMapData,
+  CityMapNode,
+  CityMapEdge,
+  CityMapBuilding,
+} from '@elarion/protocol';
+import {
+  getMapsByType,
+  getNodesForZone,
+  getEdgesForZone,
+  getBuildingsForZone,
+  getSpawnNodeForZone,
+  type MapZoneWithCounts,
+  type PathNode,
+  type PathEdge,
+  type Building,
+} from '../../db/queries/city-maps';
+import { log } from '../../logger';
+
+// ─── Cache ──────────────────────────────────────────────────────────────────
+
+export interface CityMapCache {
+  mapData: CityMapData;
+  adjacencyList: Map<number, number[]>;
+  imageFilename: string | null;
+  imageWidth: number;
+  imageHeight: number;
+}
+
+const cache = new Map<number, CityMapCache>();
+
+// ─── Transform helpers ──────────────────────────────────────────────────────
+
+function toProtocolNode(node: PathNode): CityMapNode {
+  return { id: node.id, x: node.x, y: node.y };
+}
+
+function toProtocolEdge(edge: PathEdge): CityMapEdge {
+  return { from_node_id: edge.from_node_id, to_node_id: edge.to_node_id };
+}
+
+function toProtocolBuilding(b: Building): CityMapBuilding {
+  const result: CityMapBuilding = {
+    id: b.id,
+    name: b.name,
+    node_id: b.node_id,
+    label_x: b.label_offset_x ?? 0,
+    label_y: b.label_offset_y ?? 0,
+  };
+
+  if (b.hotspot_type === 'rect' || b.hotspot_type === 'circle') {
+    result.hotspot = {
+      type: b.hotspot_type,
+      x: b.hotspot_x ?? 0,
+      y: b.hotspot_y ?? 0,
+      ...(b.hotspot_type === 'rect'
+        ? { w: b.hotspot_w ?? 0, h: b.hotspot_h ?? 0 }
+        : { r: b.hotspot_r ?? 0 }),
+    };
+  }
+
+  return result;
+}
+
+function buildAdjacencyList(edges: PathEdge[]): Map<number, number[]> {
+  const adj = new Map<number, number[]>();
+
+  for (const edge of edges) {
+    // from → to
+    let fromList = adj.get(edge.from_node_id);
+    if (!fromList) {
+      fromList = [];
+      adj.set(edge.from_node_id, fromList);
+    }
+    fromList.push(edge.to_node_id);
+
+    // to → from (bidirectional)
+    let toList = adj.get(edge.to_node_id);
+    if (!toList) {
+      toList = [];
+      adj.set(edge.to_node_id, toList);
+    }
+    toList.push(edge.from_node_id);
+  }
+
+  return adj;
+}
+
+// ─── Single-zone loader ─────────────────────────────────────────────────────
+
+async function loadSingleZone(zone: MapZoneWithCounts): Promise<void> {
+  const [nodes, edges, buildings, spawnNode] = await Promise.all([
+    getNodesForZone(zone.id),
+    getEdgesForZone(zone.id),
+    getBuildingsForZone(zone.id),
+    getSpawnNodeForZone(zone.id),
+  ]);
+
+  const mapData: CityMapData = {
+    image_url: zone.image_filename ? `/assets/maps/${zone.image_filename}` : '',
+    image_width: zone.image_width_px ?? 0,
+    image_height: zone.image_height_px ?? 0,
+    nodes: nodes.map(toProtocolNode),
+    edges: edges.map(toProtocolEdge),
+    buildings: buildings.map(toProtocolBuilding),
+    spawn_node_id: spawnNode?.id ?? 0,
+  };
+
+  const adjacencyList = buildAdjacencyList(edges);
+
+  cache.set(zone.id, {
+    mapData,
+    adjacencyList,
+    imageFilename: zone.image_filename,
+    imageWidth: zone.image_width_px ?? 0,
+    imageHeight: zone.image_height_px ?? 0,
+  });
+}
+
+// ─── Public API ─────────────────────────────────────────────────────────────
+
+export async function loadCityMaps(): Promise<void> {
+  const zones = await getMapsByType('city');
+
+  await Promise.all(zones.map((zone) => loadSingleZone(zone)));
+
+  log('info', 'city-map-loader', 'city_maps_loaded', {
+    count: zones.length,
+    zone_ids: zones.map((z) => z.id),
+  });
+}
+
+export function getCityMapData(zoneId: number): CityMapData | null {
+  return cache.get(zoneId)?.mapData ?? null;
+}
+
+export function getCityMapCache(zoneId: number): CityMapCache | null {
+  return cache.get(zoneId) ?? null;
+}
+
+export function getAdjacencyList(zoneId: number): Map<number, number[]> | null {
+  return cache.get(zoneId)?.adjacencyList ?? null;
+}
+
+export async function reloadCityMap(zoneId: number): Promise<void> {
+  const zones = await getMapsByType('city');
+  const zone = zones.find((z) => z.id === zoneId);
+
+  if (!zone) {
+    log('warn', 'city-map-loader', 'reload_zone_not_found', { zone_id: zoneId });
+    cache.delete(zoneId);
+    return;
+  }
+
+  await loadSingleZone(zone);
+  log('info', 'city-map-loader', 'city_map_reloaded', { zone_id: zoneId });
+}

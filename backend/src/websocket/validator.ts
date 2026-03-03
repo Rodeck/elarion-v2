@@ -36,6 +36,9 @@ const schemas: Record<string, Schema> = {
     channel: { type: 'string', required: true, enumValues: ['local', 'global'] },
     message: { type: 'string', required: true, minLength: 1, maxLength: 256 },
   },
+  'city.move': {
+    target_node_id: { type: 'number', required: true },
+  },
 };
 
 export interface ValidationResult {

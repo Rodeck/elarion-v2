@@ -28,7 +28,7 @@ export class RemotePlayer extends Phaser.GameObjects.Container {
     this.setDepth(9);
   }
 
-  moveTo(posX: number, posY: number): void {
+  moveToTile(posX: number, posY: number): void {
     this.setPosition(posX * TILE_SIZE + TILE_SIZE / 2, posY * TILE_SIZE + TILE_SIZE / 2);
   }
 }

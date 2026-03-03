@@ -14,7 +14,14 @@
       "WebFetch(domain:playbooks.com)",
       "Bash(powershell.exe:*)",
       "Bash(npx tsc:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(git fetch:*)",
+      "Bash(ls:*)",
+      "Bash(.specify/scripts/powershell/create-new-feature.ps1:*)",
+      "Bash(pwsh:*)",
+      "Bash(npm install:*)",
+      "Bash(docker exec:*)",
+      "Bash(node:*)"
     ]
   }
 }

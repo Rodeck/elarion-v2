@@ -21,7 +21,7 @@ export async function insertChatMessage(
      RETURNING *`,
     [senderId, channel, zoneId, message],
   );
-  return result.rows[0];
+  return result.rows[0]!;
 }
 
 export async function getRecentZoneMessages(zoneId: number, limit = 50): Promise<(ChatMessage & { sender_name: string })[]> {

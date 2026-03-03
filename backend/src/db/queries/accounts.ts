@@ -15,7 +15,7 @@ export async function insertAccount(username: string, passwordHash: string): Pro
      RETURNING id, username, password_hash, created_at, banned_at`,
     [username, passwordHash],
   );
-  return result.rows[0];
+  return result.rows[0]!;
 }
 
 export async function findByUsername(username: string): Promise<Account | null> {

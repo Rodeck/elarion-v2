@@ -14,9 +14,11 @@ import { handleCharacterCreate } from './game/world/character-create-handler';
 import { handlePlayerMove } from './game/world/movement-handler';
 import { handleCombatStart } from './game/combat/combat-controller';
 import { handleChatSend } from './game/chat/chat-handler';
+import { handleCityMove } from './game/world/city-movement-handler';
 import { sendWorldState, setZonePlayersGetter, setZoneMonstersGetter } from './websocket/handlers/world-state-handler';
 import { getZonePlayers } from './game/world/zone-registry';
 import { getZoneMonsters } from './game/world/monster-registry';
+import { loadCityMaps } from './game/world/city-map-loader';
 
 async function bootstrap(): Promise<void> {
   log('info', 'bootstrap', 'starting', { env: config.nodeEnv, port: config.wsPort });
@@ -33,6 +35,9 @@ async function bootstrap(): Promise<void> {
 
   // Load zone maps into memory
   await loadAllZones();
+
+  // Load city map data (nodes, edges, buildings, adjacency lists)
+  await loadCityMaps();
 
   // Spawn monster instances
   await spawnAllMonsters();
@@ -68,6 +73,7 @@ async function bootstrap(): Promise<void> {
   registerHandler('player.move', handlePlayerMove);
   registerHandler('combat.start', handleCombatStart);
   registerHandler('chat.send', handleChatSend);
+  registerHandler('city.move', handleCityMove);
 
   // Start WebSocket server (also sends world.state on connect)
   startWebSocketServer();

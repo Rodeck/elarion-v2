@@ -25,35 +25,13 @@ async function seedCharacterClasses(): Promise<void> {
 }
 
 async function seedMapZones(): Promise<void> {
-  await query(
-    `INSERT INTO map_zones (id, name, tmx_filename, width_tiles, height_tiles, spawn_x, spawn_y, min_level)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     ON CONFLICT (id) DO NOTHING`,
-    [1, 'Starter Plains', 'starter-plains.tmx', 20, 20, 5, 5, 1],
-  );
-  log('info', 'seed', 'map_zones_seeded', { count: 1 });
+  // Map zones are created via admin portal — no seeds needed
+  log('info', 'seed', 'map_zones_skipped', { reason: 'admin-managed' });
 }
 
 async function seedMonsters(): Promise<void> {
-  const monsters = [
-    { id: 1, name: 'Slime',     zone_id: 1, max_hp: 30,  attack_power: 5,  defence: 2,  xp_reward: 20,  respawn_seconds: 30, aggro_range: 2 },
-    { id: 2, name: 'Goblin',    zone_id: 1, max_hp: 50,  attack_power: 10, defence: 4,  xp_reward: 40,  respawn_seconds: 45, aggro_range: 3 },
-    { id: 3, name: 'Wolf',      zone_id: 1, max_hp: 70,  attack_power: 15, defence: 6,  xp_reward: 60,  respawn_seconds: 60, aggro_range: 4 },
-    { id: 4, name: 'Bandit',    zone_id: 1, max_hp: 90,  attack_power: 18, defence: 8,  xp_reward: 80,  respawn_seconds: 90, aggro_range: 3 },
-    { id: 5, name: 'Dark Elf',  zone_id: 1, max_hp: 110, attack_power: 22, defence: 10, xp_reward: 110, respawn_seconds: 120, aggro_range: 3 },
-  ];
-
-  for (const m of monsters) {
-    await query(
-      `INSERT INTO monsters
-         (id, name, zone_id, max_hp, attack_power, defence, xp_reward, loot_table, respawn_seconds, aggro_range)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       ON CONFLICT (id) DO NOTHING`,
-      [m.id, m.name, m.zone_id, m.max_hp, m.attack_power, m.defence,
-       m.xp_reward, '[]', m.respawn_seconds, m.aggro_range],
-    );
-  }
-  log('info', 'seed', 'monsters_seeded', { count: monsters.length });
+  // Monsters will be assigned to zones via admin portal
+  log('info', 'seed', 'monsters_skipped', { reason: 'admin-managed zones' });
 }
 
 async function seedItems(): Promise<void> {

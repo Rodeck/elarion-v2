@@ -1,5 +1,5 @@
 import { findByAccountId, insertCharacter, findClassById } from '../../db/queries/characters';
-import { getZone } from './zone-loader';
+import { getMapsByType } from '../../db/queries/city-maps';
 import { log } from '../../logger';
 import { sendToSession } from '../../websocket/server';
 import type { AuthenticatedSession } from '../../websocket/server';
@@ -7,7 +7,12 @@ import type { CharacterCreatePayload } from '@elarion/protocol';
 
 const VALID_CLASS_IDS = new Set([1, 2, 3]);
 const NAME_REGEX = /^[a-zA-Z0-9_]{3,32}$/;
-const STARTER_ZONE_ID = 1;
+
+async function getStarterZoneId(): Promise<number | null> {
+  const cityMaps = await getMapsByType('city');
+  if (cityMaps.length === 0) return null;
+  return cityMaps[0]!.id;
+}
 
 export async function handleCharacterCreate(session: AuthenticatedSession, payload: unknown): Promise<void> {
   const { name, class_id } = payload as CharacterCreatePayload;
@@ -62,9 +67,16 @@ export async function handleCharacterCreate(session: AuthenticatedSession, paylo
     return;
   }
 
-  const zone = getZone(STARTER_ZONE_ID);
-  const spawnX = zone?.spawnX ?? 5;
-  const spawnY = zone?.spawnY ?? 5;
+  // Find first available city map as starter zone
+  const starterZoneId = await getStarterZoneId();
+  if (starterZoneId === null) {
+    log('error', 'character', 'create_error', { reason: 'no_city_map_available' });
+    sendToSession(session, 'server.error', {
+      code: 'INTERNAL_ERROR',
+      message: 'No starter zone available. An admin must create a city map first.',
+    });
+    return;
+  }
 
   const character = await insertCharacter({
     account_id: session.accountId,
@@ -74,9 +86,9 @@ export async function handleCharacterCreate(session: AuthenticatedSession, paylo
     current_hp: cls.base_hp,
     attack_power: cls.base_attack,
     defence: cls.base_defence,
-    zone_id: STARTER_ZONE_ID,
-    pos_x: spawnX,
-    pos_y: spawnY,
+    zone_id: starterZoneId,
+    pos_x: 0,
+    pos_y: 0,
   });
 
   session.characterId = character.id;
@@ -85,6 +97,7 @@ export async function handleCharacterCreate(session: AuthenticatedSession, paylo
     accountId: session.accountId,
     characterId: character.id,
     name: character.name,
+    zone_id: starterZoneId,
   });
 
   sendToSession(session, 'character.created', {

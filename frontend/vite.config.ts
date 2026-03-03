@@ -9,6 +9,12 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    proxy: {
+      '/images': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     outDir: 'dist',
