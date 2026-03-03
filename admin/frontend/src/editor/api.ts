@@ -116,6 +116,30 @@ async function request<T>(
 }
 
 // ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+export async function login(username: string, password: string): Promise<string> {
+  const res = await fetch('/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = await res.json();
+      if (body.error) message = body.error;
+    } catch { /* use statusText */ }
+    throw new Error(message);
+  }
+
+  const { token } = await res.json() as { token: string };
+  return token;
+}
+
+// ---------------------------------------------------------------------------
 // Maps
 // ---------------------------------------------------------------------------
 

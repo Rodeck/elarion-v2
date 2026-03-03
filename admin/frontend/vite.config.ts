@@ -8,6 +8,10 @@ export default defineConfig({
         target: 'http://localhost:4001',
         changeOrigin: true,
       },
+      '/login': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
       '/images': {
         target: 'http://localhost:4001',
         changeOrigin: true,

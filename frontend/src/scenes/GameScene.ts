@@ -33,7 +33,7 @@ export class GameScene extends Phaser.Scene {
   private client!: WSClient;
   private token = '';
   private myCharacter!: CharacterData;
-  private playerSprite!: Phaser.GameObjects.Rectangle;
+  private playerSprite!: Phaser.GameObjects.Container;
   private statsBar!: StatsBar;
   private chatBox!: ChatBox;
   private combatLog!: CombatLog;
@@ -60,6 +60,7 @@ export class GameScene extends Phaser.Scene {
   private pendingBuildingId: number | null = null;
   private cityBuildingLabels: Phaser.GameObjects.Text[] = [];
   private cityHotspotGraphics: Phaser.GameObjects.Graphics | null = null;
+  private cityNodeMarkers: Phaser.GameObjects.Arc[] = [];
 
   constructor() {
     super({ key: 'GameScene' });
@@ -335,6 +336,9 @@ export class GameScene extends Phaser.Scene {
       // Render building name labels
       this.renderBuildingLabels(cityMap.nodes, cityMap.buildings);
 
+      // Render navigable node markers
+      this.renderCityNodeMarkers();
+
       // Set up click-to-move input
       this.setupCityInput();
     });
@@ -380,6 +384,52 @@ export class GameScene extends Phaser.Scene {
       ).setOrigin(0.5).setDepth(5);
 
       this.cityBuildingLabels.push(label);
+    }
+  }
+
+  private renderCityNodeMarkers(): void {
+    if (!this.cityMapData) return;
+
+    for (const node of this.cityMapData.nodes) {
+      // Visual: small gold dot
+      const marker = this.add.circle(node.x, node.y, 5, 0xd4a84b, 0.65).setDepth(2);
+      marker.setStrokeStyle(1, 0xf5e099, 0.8);
+
+      // Hit area is larger than the visual to make clicking comfortable
+      marker.setInteractive(
+        new Phaser.Geom.Circle(0, 0, 20),
+        Phaser.Geom.Circle.Contains,
+      );
+
+      marker.on('pointerover', () => {
+        this.input.setDefaultCursor('pointer');
+        this.tweens.killTweensOf(marker);
+        this.tweens.add({
+          targets: marker,
+          scaleX: 1.9,
+          scaleY: 1.9,
+          duration: 130,
+          ease: 'Sine.easeOut',
+        });
+        marker.setFillStyle(0xffe27a, 0.95);
+        marker.setStrokeStyle(1.5, 0xffffff, 0.9);
+      });
+
+      marker.on('pointerout', () => {
+        this.input.setDefaultCursor('default');
+        this.tweens.killTweensOf(marker);
+        this.tweens.add({
+          targets: marker,
+          scaleX: 1,
+          scaleY: 1,
+          duration: 130,
+          ease: 'Sine.easeOut',
+        });
+        marker.setFillStyle(0xd4a84b, 0.65);
+        marker.setStrokeStyle(1, 0xf5e099, 0.8);
+      });
+
+      this.cityNodeMarkers.push(marker);
     }
   }
 
@@ -569,7 +619,16 @@ export class GameScene extends Phaser.Scene {
       y = this.myCharacter.pos_y * TILE_SIZE + TILE_SIZE / 2;
     }
 
-    this.playerSprite = this.add.rectangle(x, y, 22, 22, 0x88cc88).setDepth(10);
+    const sprite = this.add.rectangle(0, 0, 22, 22, 0x88cc88);
+    const nameLabel = this.add.text(0, 14, this.myCharacter.name, {
+      fontFamily: 'Rajdhani, sans-serif',
+      fontSize: '12px',
+      color: '#ffffff',
+      stroke: '#0d0d0d',
+      strokeThickness: 4,
+    }).setOrigin(0.5, 0);
+
+    this.playerSprite = this.add.container(x, y, [sprite, nameLabel]).setDepth(10);
     this.cameras.main.startFollow(this.playerSprite);
   }
 

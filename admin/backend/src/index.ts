@@ -8,6 +8,7 @@ import { nodesRouter } from './routes/nodes';
 import { edgesRouter } from './routes/edges';
 import { buildingsRouter } from './routes/buildings';
 import { uploadRouter } from './routes/upload';
+import { authRouter } from './routes/auth';
 
 const app = express();
 
@@ -17,6 +18,9 @@ app.use(express.json());
 // Serve uploaded map images statically
 const imagesDir = path.resolve(__dirname, '../../../backend/assets/maps/images');
 app.use('/images', express.static(imagesDir));
+
+// Public auth routes (must be before requireAdmin middleware)
+app.use(authRouter);
 
 // All /api routes require admin authentication
 app.use('/api', requireAdmin);

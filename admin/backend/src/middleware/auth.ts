@@ -8,7 +8,7 @@ export const pool = new Pool({ connectionString: config.databaseUrl });
 declare global {
   namespace Express {
     interface Request {
-      account_id?: number;
+      account_id?: string;
       username?: string;
     }
   }

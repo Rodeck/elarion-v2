@@ -49,14 +49,16 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
   broadcastPlayerEntered(character.zone_id, playerState);
 
   const players = getZonePlayers
-    ? getZonePlayers(character.zone_id).map((p) => ({
-        id: p.characterId,
-        name: p.name,
-        class_id: p.classId,
-        level: p.level,
-        pos_x: p.posX,
-        pos_y: p.posY,
-      }))
+    ? getZonePlayers(character.zone_id)
+        .filter((p) => p.characterId !== character.id)
+        .map((p) => ({
+          id: p.characterId,
+          name: p.name,
+          class_id: p.classId,
+          level: p.level,
+          pos_x: p.posX,
+          pos_y: p.posY,
+        }))
     : [];
 
   const monsters = getZoneMonsters ? getZoneMonsters(character.zone_id) : [];

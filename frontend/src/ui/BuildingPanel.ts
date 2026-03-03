@@ -7,36 +7,8 @@ export class BuildingPanel {
     this.container = parent;
   }
 
-  show(buildingName: string): void {
-    this.hide(); // Close any existing panel
-
-    this.overlay = document.createElement('div');
-    this.overlay.className = 'building-panel-overlay';
-    this.overlay.innerHTML = `
-      <div class="building-panel">
-        <button class="building-panel__close">&times;</button>
-        <h2 class="building-panel__title">${this.escapeHtml(buildingName)}</h2>
-        <p class="building-panel__body">Building actions coming soon...</p>
-      </div>
-    `;
-
-    // Close on overlay click
-    this.overlay.addEventListener('click', (e) => {
-      if (e.target === this.overlay) this.hide();
-    });
-
-    // Close button
-    this.overlay.querySelector('.building-panel__close')!.addEventListener('click', () => {
-      this.hide();
-    });
-
-    // Escape key
-    this.handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') this.hide();
-    };
-    document.addEventListener('keydown', this.handleEscape);
-
-    this.container.appendChild(this.overlay);
+  show(_buildingName: string): void {
+    // Building interactions not yet implemented
   }
 
   hide(): void {

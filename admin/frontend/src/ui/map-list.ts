@@ -1,4 +1,4 @@
-import { listMaps, createMap, deleteMap, type MapSummary } from '../editor/api';
+import { listMaps, createMap, deleteMap, login, type MapSummary } from '../editor/api';
 
 export class MapListView {
   private container: HTMLElement;
@@ -40,34 +40,35 @@ export class MapListView {
     form.className = 'login-form';
     form.innerHTML = `
       <h2>Admin Login</h2>
-      <p>Enter your JWT token to access the map editor.</p>
-      <label for="token-input">JWT Token</label>
-      <textarea id="token-input" rows="3" placeholder="Paste your admin JWT token here..."></textarea>
+      <label for="username-input">Username</label>
+      <input id="username-input" type="text" autocomplete="username" placeholder="Username" required />
+      <label for="password-input">Password</label>
+      <input id="password-input" type="password" autocomplete="current-password" placeholder="Password" required />
       <button type="submit" class="btn btn--primary">Sign In</button>
       <p class="error" id="login-error" style="display:none"></p>
     `;
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const input = form.querySelector<HTMLTextAreaElement>('#token-input')!;
+      const usernameInput = form.querySelector<HTMLInputElement>('#username-input')!;
+      const passwordInput = form.querySelector<HTMLInputElement>('#password-input')!;
       const errorEl = form.querySelector<HTMLElement>('#login-error')!;
-      const token = input.value.replace(/\s+/g, '').trim();
+      const submitBtn = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
 
-      if (!token) {
-        errorEl.textContent = 'Token is required';
-        errorEl.style.display = 'block';
-        return;
-      }
-
-      localStorage.setItem('admin_token', token);
       errorEl.style.display = 'none';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Signing in…';
 
       try {
+        const token = await login(usernameInput.value.trim(), passwordInput.value);
+        localStorage.setItem('admin_token', token);
         await this.render();
-      } catch {
-        localStorage.removeItem('admin_token');
-        errorEl.textContent = 'Invalid token or not an admin account';
+      } catch (err) {
+        passwordInput.value = '';
+        errorEl.textContent = (err as Error).message;
         errorEl.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Sign In';
       }
     });
 
