@@ -2,10 +2,17 @@ import { Router, Request, Response } from 'express';
 import {
   getBuildingsForZone,
   getNodesForZone,
+  getMapById,
   createBuilding,
   updateBuilding,
   deleteBuilding,
+  getBuildingActions,
+  createBuildingAction,
+  updateBuildingAction,
+  deleteBuildingAction,
+  type TravelActionConfig,
 } from '../../../../backend/src/db/queries/city-maps';
+import { query } from '../../../../backend/src/db/connection';
 
 export const buildingsRouter = Router();
 
@@ -138,6 +145,7 @@ buildingsRouter.put('/:id/buildings/:buildingId', async (req: Request, res: Resp
 
   const {
     name,
+    description,
     node_id,
     label_offset_x,
     label_offset_y,
@@ -152,6 +160,7 @@ buildingsRouter.put('/:id/buildings/:buildingId', async (req: Request, res: Resp
   try {
     const building = await updateBuilding(buildingId, {
       name,
+      description,
       node_id,
       label_offset_x,
       label_offset_y,
@@ -209,6 +218,126 @@ buildingsRouter.delete('/:id/buildings/:buildingId', async (req: Request, res: R
       admin: req.username,
       error: String(err),
     });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── Building Actions sub-resource ──────────────────────────────────────────
+
+// GET /:id/buildings/:buildingId/actions
+buildingsRouter.get('/:id/buildings/:buildingId/actions', async (req: Request, res: Response) => {
+  const buildingId = parseInt(req.params.buildingId!, 10);
+  if (isNaN(buildingId)) return res.status(400).json({ error: 'Invalid building id' });
+
+  try {
+    const actions = await getBuildingActions(buildingId);
+    return res.json({ actions });
+  } catch (err) {
+    log('error', 'Failed to list building actions', { building_id: buildingId, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /:id/buildings/:buildingId/actions
+buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, res: Response) => {
+  const mapId = parseInt(req.params.id!, 10);
+  const buildingId = parseInt(req.params.buildingId!, 10);
+  if (isNaN(mapId) || isNaN(buildingId)) {
+    return res.status(400).json({ error: 'Invalid map id or building id' });
+  }
+
+  const { action_type, sort_order, config } = req.body as {
+    action_type: string;
+    sort_order?: number;
+    config: { target_zone_id: number; target_node_id: number };
+  };
+
+  if (action_type !== 'travel') {
+    return res.status(400).json({ error: 'action_type must be "travel"' });
+  }
+  if (!config || !Number.isInteger(config.target_zone_id) || !Number.isInteger(config.target_node_id)) {
+    return res.status(400).json({ error: 'config must include target_zone_id and target_node_id as integers' });
+  }
+
+  try {
+    // Validate destination zone
+    const targetZone = await getMapById(config.target_zone_id);
+    if (!targetZone) {
+      return res.status(400).json({ error: 'target_zone_id references a non-existent zone' });
+    }
+    // Validate destination node belongs to zone
+    const nodeRow = await query<{ id: number }>(
+      'SELECT id FROM path_nodes WHERE id = $1 AND zone_id = $2',
+      [config.target_node_id, config.target_zone_id],
+    );
+    if (nodeRow.rows.length === 0) {
+      return res.status(400).json({ error: 'target_node_id does not exist in target_zone_id' });
+    }
+
+    const travelConfig: TravelActionConfig = {
+      target_zone_id: config.target_zone_id,
+      target_node_id: config.target_node_id,
+    };
+    const action = await createBuildingAction(buildingId, 'travel', travelConfig, sort_order ?? 0);
+    log('info', 'Created building action', { building_id: buildingId, action_id: action.id, admin: req.username });
+    return res.status(201).json({ action });
+  } catch (err) {
+    log('error', 'Failed to create building action', { building_id: buildingId, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /:id/buildings/:buildingId/actions/:actionId
+buildingsRouter.put('/:id/buildings/:buildingId/actions/:actionId', async (req: Request, res: Response) => {
+  const buildingId = parseInt(req.params.buildingId!, 10);
+  const actionId = parseInt(req.params.actionId!, 10);
+  if (isNaN(buildingId) || isNaN(actionId)) {
+    return res.status(400).json({ error: 'Invalid building id or action id' });
+  }
+
+  const { sort_order, config } = req.body as {
+    sort_order?: number;
+    config?: { target_zone_id: number; target_node_id: number };
+  };
+
+  try {
+    if (config) {
+      const targetZone = await getMapById(config.target_zone_id);
+      if (!targetZone) return res.status(400).json({ error: 'target_zone_id references a non-existent zone' });
+      const nodeRow = await query<{ id: number }>(
+        'SELECT id FROM path_nodes WHERE id = $1 AND zone_id = $2',
+        [config.target_node_id, config.target_zone_id],
+      );
+      if (nodeRow.rows.length === 0) return res.status(400).json({ error: 'target_node_id does not exist in target_zone_id' });
+    }
+
+    const action = await updateBuildingAction(actionId, {
+      sort_order,
+      config: config ? { target_zone_id: config.target_zone_id, target_node_id: config.target_node_id } : undefined,
+    });
+    if (!action) return res.status(404).json({ error: 'Action not found' });
+    log('info', 'Updated building action', { building_id: buildingId, action_id: actionId, admin: req.username });
+    return res.json({ action });
+  } catch (err) {
+    log('error', 'Failed to update building action', { action_id: actionId, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /:id/buildings/:buildingId/actions/:actionId
+buildingsRouter.delete('/:id/buildings/:buildingId/actions/:actionId', async (req: Request, res: Response) => {
+  const buildingId = parseInt(req.params.buildingId!, 10);
+  const actionId = parseInt(req.params.actionId!, 10);
+  if (isNaN(buildingId) || isNaN(actionId)) {
+    return res.status(400).json({ error: 'Invalid building id or action id' });
+  }
+
+  try {
+    await deleteBuildingAction(actionId);
+    log('info', 'Deleted building action', { building_id: buildingId, action_id: actionId, admin: req.username });
+    return res.json({ success: true });
+  } catch (err) {
+    log('error', 'Failed to delete building action', { action_id: actionId, error: String(err) });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

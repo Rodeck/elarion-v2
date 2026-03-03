@@ -38,6 +38,7 @@ export interface Building {
   zone_id: number;
   node_id: number;
   name: string;
+  description: string | null;
   label_offset_x: number | null;
   label_offset_y: number | null;
   hotspot_type: string | null;
@@ -48,9 +49,24 @@ export interface Building {
   hotspot_r: number | null;
 }
 
+export interface BuildingAction {
+  id: number;
+  building_id: number;
+  action_type: 'travel';
+  sort_order: number;
+  config: TravelActionConfig;
+  created_at: string;
+}
+
+export interface TravelActionConfig {
+  target_zone_id: number;
+  target_node_id: number;
+}
+
 export interface CreateBuildingData {
   node_id: number;
   name: string;
+  description?: string | null;
   label_offset_x?: number;
   label_offset_y?: number;
   hotspot_type?: string | null;
@@ -282,6 +298,7 @@ export async function updateBuilding(
   const fieldMap: Record<string, string> = {
     node_id: 'node_id',
     name: 'name',
+    description: 'description',
     label_offset_x: 'label_offset_x',
     label_offset_y: 'label_offset_y',
     hotspot_type: 'hotspot_type',
@@ -312,5 +329,85 @@ export async function deleteBuilding(buildingId: number): Promise<void> {
   await query(
     `DELETE FROM buildings WHERE id = $1`,
     [buildingId],
+  );
+}
+
+export async function getBuildingById(buildingId: number): Promise<Building | null> {
+  const result = await query<Building>(
+    `SELECT * FROM buildings WHERE id = $1`,
+    [buildingId],
+  );
+  return result.rows[0] ?? null;
+}
+
+// ─── Building Actions ─────────────────────────────────────────────────────────
+
+export async function getBuildingActions(buildingId: number): Promise<BuildingAction[]> {
+  const result = await query<BuildingAction>(
+    `SELECT * FROM building_actions WHERE building_id = $1 ORDER BY sort_order, id`,
+    [buildingId],
+  );
+  return result.rows;
+}
+
+export async function getBuildingActionsForZone(zoneId: number): Promise<BuildingAction[]> {
+  const result = await query<BuildingAction>(
+    `SELECT ba.*
+     FROM building_actions ba
+     JOIN buildings b ON b.id = ba.building_id
+     WHERE b.zone_id = $1
+     ORDER BY ba.sort_order, ba.id`,
+    [zoneId],
+  );
+  return result.rows;
+}
+
+export async function createBuildingAction(
+  buildingId: number,
+  actionType: 'travel',
+  config: TravelActionConfig,
+  sortOrder: number = 0,
+): Promise<BuildingAction> {
+  const result = await query<BuildingAction>(
+    `INSERT INTO building_actions (building_id, action_type, config, sort_order)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [buildingId, actionType, JSON.stringify(config), sortOrder],
+  );
+  return result.rows[0]!;
+}
+
+export async function updateBuildingAction(
+  actionId: number,
+  data: { sort_order?: number; config?: TravelActionConfig },
+): Promise<BuildingAction | null> {
+  const fieldMap: Record<string, string> = {
+    sort_order: 'sort_order',
+    config: 'config',
+  };
+
+  const keys = (Object.keys(data) as (keyof typeof data)[]).filter((k) => data[k] !== undefined);
+  if (keys.length === 0) {
+    const result = await query<BuildingAction>(`SELECT * FROM building_actions WHERE id = $1`, [actionId]);
+    return result.rows[0] ?? null;
+  }
+
+  const setClauses = keys.map((k, i) => {
+    const col = fieldMap[k];
+    return k === 'config' ? `${col} = $${i + 2}::jsonb` : `${col} = $${i + 2}`;
+  }).join(', ');
+  const values = keys.map((k) => k === 'config' ? JSON.stringify(data[k]) : data[k]);
+
+  const result = await query<BuildingAction>(
+    `UPDATE building_actions SET ${setClauses} WHERE id = $1 RETURNING *`,
+    [actionId, ...values],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function deleteBuildingAction(actionId: number): Promise<void> {
+  await query(
+    `DELETE FROM building_actions WHERE id = $1`,
+    [actionId],
   );
 }

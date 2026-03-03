@@ -2,6 +2,7 @@ import { MapListView } from './ui/map-list';
 import { Toolbar } from './ui/toolbar';
 import { MapCanvas } from './editor/canvas';
 import { EditorModeManager } from './editor/modes';
+import { PropertiesPanel } from './ui/properties';
 import {
   getMap,
   createNode,
@@ -27,6 +28,7 @@ let mapListView: MapListView | null = null;
 let toolbar: Toolbar | null = null;
 let canvas: MapCanvas | null = null;
 let modeManager: EditorModeManager | null = null;
+let propertiesPanel: PropertiesPanel | null = null;
 let currentMapId: number | null = null;
 let currentMapData: MapFull | null = null;
 
@@ -225,9 +227,30 @@ async function showEditor(mapId: number): Promise<void> {
     }
   });
 
-  // Building selection (from building mode — mark a node as building)
+  // Building selection (from building mode — mark a node as building or edit existing)
   modeManager.setOnBuildingSelect((nodeId) => {
-    showBuildingCreateForm(nodeId);
+    if (!currentMapId || !canvas) return;
+    const existingBuilding = canvas.getBuildings().find((b) => b.node_id === nodeId);
+    if (existingBuilding) {
+      // Show properties panel for existing building
+      const propertiesPanelEl = document.getElementById('properties-panel');
+      if (propertiesPanelEl) {
+        if (!propertiesPanel) {
+          propertiesPanel = new PropertiesPanel(propertiesPanelEl);
+          propertiesPanel.setOnBuildingUpdate((buildingId, data) => {
+            canvas!.updateBuilding(buildingId, data);
+            pendingModifiedBuildingIds.add(buildingId);
+          });
+          propertiesPanel.setOnBuildingDelete((buildingId) => {
+            pendingDeletedBuildingIds.add(buildingId);
+            canvas!.removeBuilding(buildingId);
+          });
+        }
+        propertiesPanel.showBuilding(existingBuilding, currentMapId);
+      }
+    } else {
+      showBuildingCreateForm(nodeId);
+    }
   });
 
   // Initialize toolbar

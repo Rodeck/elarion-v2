@@ -39,6 +39,7 @@ export interface Building {
   zone_id: number;
   node_id: number;
   name: string;
+  description: string | null;
   label_offset_x: number | null;
   label_offset_y: number | null;
   hotspot_type: string | null;
@@ -47,6 +48,20 @@ export interface Building {
   hotspot_w: number | null;
   hotspot_h: number | null;
   hotspot_r: number | null;
+}
+
+export interface TravelActionConfig {
+  target_zone_id: number;
+  target_node_id: number;
+}
+
+export interface BuildingAction {
+  id: number;
+  building_id: number;
+  action_type: 'travel';
+  sort_order: number;
+  config: TravelActionConfig;
+  created_at: string;
 }
 
 export interface MapFull extends MapSummary {
@@ -301,6 +316,7 @@ export async function updateBuilding(
   data: Partial<{
     node_id: number;
     name: string;
+    description: string | null;
     label_offset_x: number;
     label_offset_y: number;
     hotspot_type: string;
@@ -325,6 +341,53 @@ export async function deleteBuilding(
   return request<void>(`${BASE}/${mapId}/buildings/${buildingId}`, {
     method: 'DELETE',
   });
+}
+
+// ---------------------------------------------------------------------------
+// Building Actions
+// ---------------------------------------------------------------------------
+
+export async function listBuildingActions(mapId: number, buildingId: number): Promise<BuildingAction[]> {
+  const res = await request<{ actions: BuildingAction[] }>(
+    `${BASE}/${mapId}/buildings/${buildingId}/actions`,
+  );
+  return res.actions;
+}
+
+export async function createBuildingAction(
+  mapId: number,
+  buildingId: number,
+  data: { action_type: 'travel'; sort_order?: number; config: TravelActionConfig },
+): Promise<BuildingAction> {
+  const res = await request<{ action: BuildingAction }>(
+    `${BASE}/${mapId}/buildings/${buildingId}/actions`,
+    { method: 'POST', body: JSON.stringify(data) },
+  );
+  return res.action;
+}
+
+export async function updateBuildingAction(
+  mapId: number,
+  buildingId: number,
+  actionId: number,
+  data: { sort_order?: number; config?: TravelActionConfig },
+): Promise<BuildingAction> {
+  const res = await request<{ action: BuildingAction }>(
+    `${BASE}/${mapId}/buildings/${buildingId}/actions/${actionId}`,
+    { method: 'PUT', body: JSON.stringify(data) },
+  );
+  return res.action;
+}
+
+export async function deleteBuildingAction(
+  mapId: number,
+  buildingId: number,
+  actionId: number,
+): Promise<void> {
+  return request<void>(
+    `${BASE}/${mapId}/buildings/${buildingId}/actions/${actionId}`,
+    { method: 'DELETE' },
+  );
 }
 
 // ---------------------------------------------------------------------------
