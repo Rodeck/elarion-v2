@@ -4,6 +4,10 @@ import { StatsBar } from '../ui/StatsBar';
 import { ChatBox } from '../ui/ChatBox';
 import { CombatLog } from '../ui/CombatLog';
 import { BuildingPanel } from '../ui/BuildingPanel';
+import { AnimatedSprite } from '../entities/AnimatedSprite';
+import { getSprite } from '../entities/SpriteRegistry';
+import { DIR4_TO_DIR8 } from '../types/sprite';
+import type { Direction4, Direction8 } from '../types/sprite';
 import type {
   WorldStatePayload,
   CharacterData,
@@ -33,7 +37,7 @@ export class GameScene extends Phaser.Scene {
   private client!: WSClient;
   private token = '';
   private myCharacter!: CharacterData;
-  private playerSprite!: Phaser.GameObjects.Container;
+  private playerAnimSprite!: AnimatedSprite;
   private statsBar!: StatsBar;
   private chatBox!: ChatBox;
   private combatLog!: CombatLog;
@@ -51,6 +55,10 @@ export class GameScene extends Phaser.Scene {
 
   // Combat
   private inCombat = false;
+
+  // Counts active movement tweens on the player sprite; used to detect when the
+  // last hop in a multi-hop path completes so we can switch back to idle.
+  private movingTweenCount = 0;
 
   // City map state
   private isCityMap = false;
@@ -135,7 +143,7 @@ export class GameScene extends Phaser.Scene {
       if (payload.character_id === this.myCharacter?.id) {
         this.myCharacter.pos_x = payload.pos_x;
         this.myCharacter.pos_y = payload.pos_y;
-        this.playerSprite.setPosition(
+        this.playerAnimSprite.setPosition(
           payload.pos_x * TILE_SIZE + TILE_SIZE / 2,
           payload.pos_y * TILE_SIZE + TILE_SIZE / 2,
         );
@@ -151,10 +159,11 @@ export class GameScene extends Phaser.Scene {
     this.client.on<PlayerMoveRejectedPayload>('player.move_rejected', (payload) => {
       if (this.isCityMap) return; // City maps use city.move_rejected
 
-      // Roll back prediction
+      // Roll back predicted position — direction intentionally NOT reset.
+      // The player expressed intent to move that way; only position reverts.
       this.myCharacter.pos_x = payload.pos_x;
       this.myCharacter.pos_y = payload.pos_y;
-      this.playerSprite.setPosition(
+      this.playerAnimSprite.setPosition(
         payload.pos_x * TILE_SIZE + TILE_SIZE / 2,
         payload.pos_y * TILE_SIZE + TILE_SIZE / 2,
       );
@@ -244,12 +253,27 @@ export class GameScene extends Phaser.Scene {
 
       if (payload.character_id === this.myCharacter?.id) {
         this.myCharacter.current_node_id = payload.node_id;
+
+        const dir = this.pixelDir(
+          this.playerAnimSprite.x, this.playerAnimSprite.y,
+          payload.x, payload.y,
+        );
+        this.playerAnimSprite.setDirection(dir);
+        this.playerAnimSprite.setAnimation('walk');
+        this.movingTweenCount++;
+
         this.tweens.add({
-          targets: this.playerSprite,
+          targets: this.playerAnimSprite,
           x: payload.x,
           y: payload.y,
           duration: 250,
           ease: 'Sine.easeInOut',
+          onComplete: () => {
+            this.movingTweenCount--;
+            if (this.movingTweenCount === 0) {
+              this.playerAnimSprite.setAnimation('breathing-idle');
+            }
+          },
         });
       } else {
         const container = this.remotePlayers.get(payload.character_id);
@@ -273,7 +297,7 @@ export class GameScene extends Phaser.Scene {
       const node = this.cityMapData?.nodes.find(n => n.id === payload.current_node_id);
       if (node) {
         this.myCharacter.current_node_id = payload.current_node_id;
-        this.playerSprite.setPosition(node.x, node.y);
+        this.playerAnimSprite.setPosition(node.x, node.y);
       }
       this.cameras.main.shake(80, 0.004);
     });
@@ -598,6 +622,8 @@ export class GameScene extends Phaser.Scene {
 
   // ── Character placement ─────────────────────────────────────────
 
+  // Additional AnimatedSprite instances (monsters, NPCs, remote players) can be
+  // created using the same pattern — just supply a SpriteDefinition from getSprite().
   private placeMyCharacter(): void {
     let x: number;
     let y: number;
@@ -619,17 +645,24 @@ export class GameScene extends Phaser.Scene {
       y = this.myCharacter.pos_y * TILE_SIZE + TILE_SIZE / 2;
     }
 
-    const sprite = this.add.rectangle(0, 0, 22, 22, 0x88cc88);
-    const nameLabel = this.add.text(0, 14, this.myCharacter.name, {
+    const def = getSprite('medieval_knight')!;
+    this.playerAnimSprite = new AnimatedSprite(this, x, y, def);
+    this.playerAnimSprite.setAnimation('breathing-idle');
+    this.playerAnimSprite.setDirection('south');
+
+    // Name label sits below the 64px sprite (sprite spans -32 to +32 from center)
+    const nameLabel = this.add.text(0, 36, this.myCharacter.name, {
       fontFamily: 'Rajdhani, sans-serif',
       fontSize: '12px',
       color: '#ffffff',
       stroke: '#0d0d0d',
       strokeThickness: 4,
     }).setOrigin(0.5, 0);
+    this.playerAnimSprite.add(nameLabel);
 
-    this.playerSprite = this.add.container(x, y, [sprite, nameLabel]).setDepth(10);
-    this.cameras.main.startFollow(this.playerSprite);
+    this.children.add(this.playerAnimSprite);
+    this.playerAnimSprite.setDepth(10);
+    this.cameras.main.startFollow(this.playerAnimSprite);
   }
 
   private buildStatsBar(): void {
@@ -680,8 +713,10 @@ export class GameScene extends Phaser.Scene {
           // Client-side prediction
           const dx = dir === 'e' ? 1 : dir === 'w' ? -1 : 0;
           const dy = dir === 's' ? 1 : dir === 'n' ? -1 : 0;
-          this.playerSprite.x += dx * TILE_SIZE;
-          this.playerSprite.y += dy * TILE_SIZE;
+          this.playerAnimSprite.x += dx * TILE_SIZE;
+          this.playerAnimSprite.y += dy * TILE_SIZE;
+          // Update sprite facing direction
+          this.playerAnimSprite.setDirection(DIR4_TO_DIR8[dir as Direction4]);
           this.client.send('player.move', { direction: dir });
           break;
         }
@@ -717,6 +752,23 @@ export class GameScene extends Phaser.Scene {
   private removeRemotePlayer(id: string): void {
     this.remotePlayers.get(id)?.destroy();
     this.remotePlayers.delete(id);
+  }
+
+  update(_time: number, delta: number): void {
+    this.playerAnimSprite?.update(delta);
+  }
+
+  /** Returns the nearest 8-way compass direction from (x0,y0) toward (x1,y1). */
+  private pixelDir(x0: number, y0: number, x1: number, y1: number): Direction8 {
+    const deg = ((Math.atan2(y1 - y0, x1 - x0) * 180 / Math.PI) + 360) % 360;
+    if (deg < 22.5 || deg >= 337.5) return 'east';
+    if (deg < 67.5)  return 'south-east';
+    if (deg < 112.5) return 'south';
+    if (deg < 157.5) return 'south-west';
+    if (deg < 202.5) return 'west';
+    if (deg < 247.5) return 'north-west';
+    if (deg < 292.5) return 'north';
+    return 'north-east';
   }
 
   private spawnMonsterSprite(instanceId: string, name: string, posX: number, posY: number, currentHp: number, maxHp: number): void {
