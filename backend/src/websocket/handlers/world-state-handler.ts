@@ -5,6 +5,9 @@ import { onClientReconnect } from '../disconnect-handler';
 import { log } from '../../logger';
 import { sendToSession } from '../server';
 import type { AuthenticatedSession } from '../server';
+import { getCityMapCache } from '../../game/world/city-map-loader';
+import { getSpawnNodeForZone } from '../../db/queries/city-maps';
+import { query } from '../../db/connection';
 
 // Zone-registry and monster-registry will be populated in US2 and US3.
 // For US1, we return empty arrays as placeholders.
@@ -46,28 +49,69 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
   broadcastPlayerEntered(character.zone_id, playerState);
 
   const players = getZonePlayers
-    ? getZonePlayers(character.zone_id).map((p) => ({
-        id: p.characterId,
-        name: p.name,
-        class_id: p.classId,
-        level: p.level,
-        pos_x: p.posX,
-        pos_y: p.posY,
-      }))
+    ? getZonePlayers(character.zone_id)
+        .filter((p) => p.characterId !== character.id)
+        .map((p) => ({
+          id: p.characterId,
+          name: p.name,
+          class_id: p.classId,
+          level: p.level,
+          pos_x: p.posX,
+          pos_y: p.posY,
+        }))
     : [];
 
   const monsters = getZoneMonsters ? getZoneMonsters(character.zone_id) : [];
 
+  // Determine map type and build city map data if applicable
+  const cityCache = getCityMapCache(character.zone_id);
+  const mapType = cityCache ? 'city' : 'tile';
+
+  // For city maps: assign spawn node if player has no current_node_id
+  let currentNodeId = character.current_node_id ?? null;
+  if (cityCache && currentNodeId === null) {
+    const spawnNode = await getSpawnNodeForZone(character.zone_id);
+    if (spawnNode) {
+      currentNodeId = spawnNode.id;
+      await query('UPDATE characters SET current_node_id = $1 WHERE id = $2', [spawnNode.id, character.id]);
+      log('info', 'world-state', 'spawn_node_assigned', {
+        characterId: character.id,
+        zone_id: character.zone_id,
+        node_id: spawnNode.id,
+      });
+    }
+  }
+
+  // For city maps: if current_node_id references a deleted node, reset to spawn
+  if (cityCache && currentNodeId !== null) {
+    const nodeExists = cityCache.mapData.nodes.some((n) => n.id === currentNodeId);
+    if (!nodeExists) {
+      const spawnNode = await getSpawnNodeForZone(character.zone_id);
+      if (spawnNode) {
+        currentNodeId = spawnNode.id;
+        await query('UPDATE characters SET current_node_id = $1 WHERE id = $2', [spawnNode.id, character.id]);
+        log('warn', 'world-state', 'node_reset_to_spawn', {
+          characterId: character.id,
+          zone_id: character.zone_id,
+          old_node_id: character.current_node_id,
+          new_node_id: spawnNode.id,
+        });
+      }
+    }
+  }
+
   log('info', 'world-state', 'sent', {
     accountId: session.accountId,
     zone_id: character.zone_id,
+    map_type: mapType,
     players: players.length,
     monsters: monsters.length,
   });
 
-  sendToSession(session, 'world.state', {
+  const worldStatePayload: Record<string, unknown> = {
     zone_id: character.zone_id,
     zone_name: cls ? `Zone ${character.zone_id}` : 'Unknown Zone',
+    map_type: mapType,
     my_character: {
       id: character.id,
       name: character.name,
@@ -82,8 +126,24 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
       zone_id: character.zone_id,
       pos_x: character.pos_x,
       pos_y: character.pos_y,
+      current_node_id: currentNodeId,
     },
     players,
-    monsters,
-  });
+    monsters: mapType === 'city' ? [] : monsters,
+  };
+
+  // Include city map data when applicable
+  if (cityCache) {
+    worldStatePayload.city_map = {
+      image_url: cityCache.imageFilename ? `/images/${cityCache.imageFilename}` : null,
+      image_width: cityCache.imageWidth,
+      image_height: cityCache.imageHeight,
+      nodes: cityCache.mapData.nodes,
+      edges: cityCache.mapData.edges,
+      buildings: cityCache.mapData.buildings,
+      spawn_node_id: cityCache.mapData.spawn_node_id,
+    };
+  }
+
+  sendToSession(session, 'world.state', worldStatePayload);
 }

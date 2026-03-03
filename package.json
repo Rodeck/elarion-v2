@@ -1,0 +1,11 @@
+{
+  "name": "elarion-v2",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n \"GAME-FE,GAME-BE,ADMIN-BE,ADMIN-FE\" -c \"cyan,yellow,magenta,blue\" --kill-others-on-fail \"npm --prefix frontend run dev\" \"npm --prefix backend run dev\" \"npm --prefix admin/backend run dev\" \"npm --prefix admin/frontend run dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

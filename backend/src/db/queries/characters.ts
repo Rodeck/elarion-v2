@@ -26,6 +26,7 @@ export interface Character {
   zone_id: number;
   pos_x: number;
   pos_y: number;
+  current_node_id: number | null;
   in_combat: boolean;
   updated_at: Date;
 }
@@ -55,7 +56,7 @@ export async function insertCharacter(data: InsertCharacterData): Promise<Charac
       data.zone_id, data.pos_x, data.pos_y,
     ],
   );
-  return result.rows[0];
+  return result.rows[0]!;
 }
 
 export async function findByAccountId(accountId: string): Promise<Character | null> {
@@ -78,7 +79,7 @@ export async function updateCharacter(
     `UPDATE characters SET ${setClauses}, updated_at = now() WHERE id = $1 RETURNING *`,
     [id, ...values],
   );
-  return result.rows[0];
+  return result.rows[0]!;
 }
 
 export async function findAllClasses(): Promise<CharacterClass[]> {
@@ -92,4 +93,11 @@ export async function findClassById(id: number): Promise<CharacterClass | null> 
     [id],
   );
   return result.rows[0] ?? null;
+}
+
+export async function updateCharacterNode(characterId: string, nodeId: number): Promise<void> {
+  await query(
+    `UPDATE characters SET current_node_id = $2, updated_at = now() WHERE id = $1`,
+    [characterId, nodeId],
+  );
 }

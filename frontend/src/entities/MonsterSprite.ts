@@ -64,7 +64,7 @@ export class MonsterSprite extends Phaser.GameObjects.Container {
     this.hpFill.width = this.HP_BAR_WIDTH * ratio;
   }
 
-  moveTo(posX: number, posY: number): void {
+  moveToTile(posX: number, posY: number): void {
     this.setPosition(posX * TILE_SIZE + TILE_SIZE / 2, posY * TILE_SIZE + TILE_SIZE / 2);
   }
 }

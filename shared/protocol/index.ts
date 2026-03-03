@@ -29,6 +29,7 @@ export interface CharacterData {
   zone_id: number;
   pos_x: number;
   pos_y: number;
+  current_node_id: number | null;
 }
 
 export interface PlayerSummary {
@@ -38,6 +39,7 @@ export interface PlayerSummary {
   level: number;
   pos_x: number;
   pos_y: number;
+  current_node_id?: number | null;
 }
 
 export interface MonsterInstance {
@@ -56,6 +58,43 @@ export interface ItemGained {
   name: string;
   type: string;
   quantity: number;
+}
+
+export interface CityMapNode {
+  id: number;
+  x: number;
+  y: number;
+}
+
+export interface CityMapEdge {
+  from_node_id: number;
+  to_node_id: number;
+}
+
+export interface CityMapBuilding {
+  id: number;
+  name: string;
+  node_id: number;
+  label_x: number;
+  label_y: number;
+  hotspot?: {
+    type: 'rect' | 'circle';
+    x: number;
+    y: number;
+    w?: number;
+    h?: number;
+    r?: number;
+  };
+}
+
+export interface CityMapData {
+  image_url: string;
+  image_width: number;
+  image_height: number;
+  nodes: CityMapNode[];
+  edges: CityMapEdge[];
+  buildings: CityMapBuilding[];
+  spawn_node_id: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,6 +129,10 @@ export interface ChatSendPayload {
   message: string;
 }
 
+export interface CityMovePayload {
+  target_node_id: number;
+}
+
 // ---------------------------------------------------------------------------
 // Client → Server message types
 // ---------------------------------------------------------------------------
@@ -100,6 +143,7 @@ export type CharacterCreateMessage = WsMessage<CharacterCreatePayload>;
 export type PlayerMoveMessage      = WsMessage<PlayerMovePayload>;
 export type CombatStartMessage     = WsMessage<CombatStartPayload>;
 export type ChatSendMessage        = WsMessage<ChatSendPayload>;
+export type CityMoveMessage        = WsMessage<CityMovePayload>;
 
 // ---------------------------------------------------------------------------
 // Server → Client payloads
@@ -125,6 +169,8 @@ export interface WorldStatePayload {
   my_character: CharacterData;
   players: PlayerSummary[];
   monsters: MonsterInstance[];
+  map_type: 'tile' | 'city';
+  city_map?: CityMapData;
 }
 
 export interface PlayerMovedPayload {
@@ -205,8 +251,26 @@ export interface ChatMessagePayload {
   timestamp: string;
 }
 
+export interface CityPlayerMovedPayload {
+  character_id: string;
+  node_id: number;
+  x: number;
+  y: number;
+}
+
+export interface CityBuildingArrivedPayload {
+  building_id: number;
+  building_name: string;
+  node_id: number;
+}
+
+export interface CityMoveRejectedPayload {
+  current_node_id: number;
+  reason: 'NO_PATH' | 'INVALID_NODE' | 'IN_COMBAT' | 'NOT_CITY_MAP' | 'RATE_LIMITED';
+}
+
 export interface ServerRateLimitedPayload {
-  action: 'player.move' | 'chat.send' | 'combat.start';
+  action: 'player.move' | 'chat.send' | 'combat.start' | 'city.move';
   retry_after_ms: number;
 }
 
@@ -245,6 +309,9 @@ export type MonsterDespawnedMessage    = WsMessage<MonsterDespawnedPayload>;
 export type ChatMessageMessage         = WsMessage<ChatMessagePayload>;
 export type ServerRateLimitedMessage   = WsMessage<ServerRateLimitedPayload>;
 export type ServerErrorMessage         = WsMessage<ServerErrorPayload>;
+export type CityPlayerMovedMessage     = WsMessage<CityPlayerMovedPayload>;
+export type CityBuildingArrivedMessage = WsMessage<CityBuildingArrivedPayload>;
+export type CityMoveRejectedMessage    = WsMessage<CityMoveRejectedPayload>;
 
 // ---------------------------------------------------------------------------
 // Discriminated union helpers (useful for switch-based dispatch)
@@ -267,7 +334,10 @@ export type AnyServerMessage =
   | MonsterDespawnedMessage
   | ChatMessageMessage
   | ServerRateLimitedMessage
-  | ServerErrorMessage;
+  | ServerErrorMessage
+  | CityPlayerMovedMessage
+  | CityBuildingArrivedMessage
+  | CityMoveRejectedMessage;
 
 export type AnyClientMessage =
   | AuthRegisterMessage
@@ -275,4 +345,5 @@ export type AnyClientMessage =
   | CharacterCreateMessage
   | PlayerMoveMessage
   | CombatStartMessage
-  | ChatSendMessage;
+  | ChatSendMessage
+  | CityMoveMessage;

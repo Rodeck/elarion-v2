@@ -58,7 +58,7 @@ function parseTmx(tmxPath: string): { width: number; height: number; passability
     passability[row] = [];
     for (let col = 0; col < width; col++) {
       const gid = gids[row * width + col] ?? 0;
-      passability[row][col] = isPassableTile(gid);
+      passability[row]![col] = isPassableTile(gid);
     }
   }
 
@@ -69,14 +69,26 @@ export async function loadAllZones(): Promise<void> {
   const result = await query<{
     id: number;
     name: string;
-    tmx_filename: string;
+    map_type: string;
+    tmx_filename: string | null;
     width_tiles: number;
     height_tiles: number;
     spawn_x: number;
     spawn_y: number;
-  }>('SELECT id, name, tmx_filename, width_tiles, height_tiles, spawn_x, spawn_y FROM map_zones');
+  }>('SELECT id, name, COALESCE(map_type, \'tile\') AS map_type, tmx_filename, width_tiles, height_tiles, spawn_x, spawn_y FROM map_zones');
 
   for (const row of result.rows) {
+    // Skip city maps — they are loaded by city-map-loader
+    if (row.map_type === 'city') {
+      log('info', 'zone-loader', 'skipping_city_zone', { zone_id: row.id, name: row.name });
+      continue;
+    }
+
+    if (!row.tmx_filename) {
+      log('warn', 'zone-loader', 'no_tmx_filename', { zone_id: row.id });
+      continue;
+    }
+
     const tmxPath = path.join(MAPS_DIR, row.tmx_filename);
 
     if (!fs.existsSync(tmxPath)) {
