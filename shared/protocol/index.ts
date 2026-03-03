@@ -159,6 +159,10 @@ export interface AuthErrorPayload {
   message: string;
 }
 
+export interface AuthSessionInfoPayload {
+  has_character: boolean;
+}
+
 export interface CharacterCreatedPayload {
   character: CharacterData;
 }
@@ -294,6 +298,7 @@ export interface ServerErrorPayload {
 
 export type AuthSuccessMessage         = WsMessage<AuthSuccessPayload>;
 export type AuthErrorMessage           = WsMessage<AuthErrorPayload>;
+export type AuthSessionInfoMessage     = WsMessage<AuthSessionInfoPayload>;
 export type CharacterCreatedMessage    = WsMessage<CharacterCreatedPayload>;
 export type WorldStateMessage          = WsMessage<WorldStatePayload>;
 export type PlayerMovedMessage         = WsMessage<PlayerMovedPayload>;
@@ -320,6 +325,7 @@ export type CityMoveRejectedMessage    = WsMessage<CityMoveRejectedPayload>;
 export type AnyServerMessage =
   | AuthSuccessMessage
   | AuthErrorMessage
+  | AuthSessionInfoMessage
   | CharacterCreatedMessage
   | WorldStateMessage
   | PlayerMovedMessage

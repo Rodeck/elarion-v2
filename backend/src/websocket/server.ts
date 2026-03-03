@@ -101,8 +101,8 @@ export function startWebSocketServer(): void {
       active_connections: sessions.size,
     });
 
-    // Send world state immediately if player has a character
-    if (session.characterId && worldStateHandler) {
+    // Send world state (or session info) immediately for authenticated connections
+    if (session.accountId && worldStateHandler) {
       void worldStateHandler(session);
     }
 

@@ -4,6 +4,8 @@ import { StatsBar } from '../ui/StatsBar';
 import { ChatBox } from '../ui/ChatBox';
 import { CombatLog } from '../ui/CombatLog';
 import { BuildingPanel } from '../ui/BuildingPanel';
+import { LogoutButton } from '../ui/LogoutButton';
+import { SessionStore } from '../auth/SessionStore';
 import { AnimatedSprite } from '../entities/AnimatedSprite';
 import { getSprite } from '../entities/SpriteRegistry';
 import { DIR4_TO_DIR8 } from '../types/sprite';
@@ -39,6 +41,7 @@ export class GameScene extends Phaser.Scene {
   private myCharacter!: CharacterData;
   private playerAnimSprite!: AnimatedSprite;
   private statsBar!: StatsBar;
+  private logoutButton!: LogoutButton;
   private chatBox!: ChatBox;
   private combatLog!: CombatLog;
   private buildingPanel!: BuildingPanel;
@@ -680,6 +683,18 @@ export class GameScene extends Phaser.Scene {
       c.experience,
       xpThreshold,
     );
+    this.logoutButton = new LogoutButton(topBar, () => this.handleLogout());
+  }
+
+  private handleLogout(): void {
+    SessionStore.clear();
+    this.client.disconnect();
+    this.statsBar.destroy();
+    this.logoutButton.destroy();
+    this.chatBox.destroy();
+    this.combatLog.destroy();
+    this.buildingPanel.destroy();
+    this.scene.start('LoginScene');
   }
 
   private setupInput(): void {

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { WSClient } from '../network/WSClient';
 import { Colors, Fonts } from '../styles/phaser-tokens';
+import { SessionStore } from '../auth/SessionStore';
 import type { AuthSuccessPayload, AuthErrorPayload } from '@elarion/protocol';
 
 type Tab = 'login' | 'register';
@@ -200,7 +201,7 @@ export class LoginScene extends Phaser.Scene {
     await client.connect();
 
     client.on<AuthSuccessPayload>('auth.success', (payload) => {
-      sessionStorage.setItem('elarion_token', payload.token);
+      SessionStore.save(payload.token);
       client.disconnect();
 
       if (payload.has_character) {
