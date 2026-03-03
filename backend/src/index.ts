@@ -15,6 +15,7 @@ import { handlePlayerMove } from './game/world/movement-handler';
 import { handleCombatStart } from './game/combat/combat-controller';
 import { handleChatSend } from './game/chat/chat-handler';
 import { handleCityMove } from './game/world/city-movement-handler';
+import { handleBuildingAction } from './game/world/building-action-handler';
 import { sendWorldState, setZonePlayersGetter, setZoneMonstersGetter } from './websocket/handlers/world-state-handler';
 import { getZonePlayers } from './game/world/zone-registry';
 import { getZoneMonsters } from './game/world/monster-registry';
@@ -74,6 +75,7 @@ async function bootstrap(): Promise<void> {
   registerHandler('combat.start', handleCombatStart);
   registerHandler('chat.send', handleChatSend);
   registerHandler('city.move', handleCityMove);
+  registerHandler('city.building_action', handleBuildingAction);
 
   // Start WebSocket server (also sends world.state on connect)
   startWebSocketServer();

@@ -27,6 +27,7 @@ import type {
   CityPlayerMovedPayload,
   CityMoveRejectedPayload,
   CityBuildingArrivedPayload,
+  CityBuildingActionRejectedPayload,
   CityMapData,
   CityMapNode,
   CityMapBuilding,
@@ -63,6 +64,9 @@ export class GameScene extends Phaser.Scene {
   // last hop in a multi-hop path completes so we can switch back to idle.
   private movingTweenCount = 0;
 
+  // Travel transition state
+  private awaitingTravelWorldState = false;
+
   // City map state
   private isCityMap = false;
   private cityMapData: CityMapData | null = null;
@@ -72,6 +76,7 @@ export class GameScene extends Phaser.Scene {
   private cityBuildingLabels: Phaser.GameObjects.Text[] = [];
   private cityHotspotGraphics: Phaser.GameObjects.Graphics | null = null;
   private cityNodeMarkers: Phaser.GameObjects.Arc[] = [];
+  private cityBgSprite: Phaser.GameObjects.Sprite | null = null;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -90,7 +95,11 @@ export class GameScene extends Phaser.Scene {
     this.combatLog = new CombatLog(bottomBar);
 
     const gameEl = document.getElementById('game')!;
-    this.buildingPanel = new BuildingPanel(gameEl);
+    this.buildingPanel = new BuildingPanel(gameEl, (payload) => {
+      this.cameras.main.fadeOut(600, 0, 0, 0);
+      this.awaitingTravelWorldState = true;
+      this.client.send('city.building_action', payload);
+    });
 
     void this.client.connect().then(() => {
       this.registerHandlers();
@@ -102,13 +111,37 @@ export class GameScene extends Phaser.Scene {
 
   private registerHandlers(): void {
     this.client.on<WorldStatePayload>('world.state', (payload) => {
+      const isTravelArrival = this.awaitingTravelWorldState;
+      this.awaitingTravelWorldState = false;
+
       this.myCharacter = payload.my_character;
+
+      if (isTravelArrival) {
+        // Teardown old city map objects before rebuilding
+        this.cityBgSprite?.destroy();
+        this.cityBgSprite = null;
+        this.cityBuildingLabels.forEach((l) => l.destroy());
+        this.cityBuildingLabels = [];
+        this.cityHotspotGraphics?.destroy();
+        this.cityHotspotGraphics = null;
+        this.cityNodeMarkers.forEach((m) => m.destroy());
+        this.cityNodeMarkers = [];
+        this.pathPreviewGraphics?.destroy();
+        this.pathPreviewGraphics = null;
+        this.remotePlayers.forEach((c) => c.destroy());
+        this.remotePlayers.clear();
+        this.buildingPanel.hide();
+      }
 
       if (payload.map_type === 'city' && payload.city_map) {
         this.isCityMap = true;
         this.cityMapData = payload.city_map;
         this.buildCityAdjacency();
-        this.buildCityMap(payload);
+        if (isTravelArrival) {
+          this.buildCityMapWithFadeIn(payload);
+        } else {
+          this.buildCityMap(payload);
+        }
       } else {
         this.isCityMap = false;
         this.cityMapData = null;
@@ -256,6 +289,8 @@ export class GameScene extends Phaser.Scene {
 
       if (payload.character_id === this.myCharacter?.id) {
         this.myCharacter.current_node_id = payload.node_id;
+        // Close building panel when player moves away
+        this.buildingPanel.hide();
 
         const dir = this.pixelDir(
           this.playerAnimSprite.x, this.playerAnimSprite.y,
@@ -307,7 +342,15 @@ export class GameScene extends Phaser.Scene {
 
     this.client.on<CityBuildingArrivedPayload>('city.building_arrived', (payload) => {
       this.pendingBuildingId = null;
-      this.buildingPanel.show(payload.building_name);
+      const building = this.cityMapData?.buildings.find((b) => b.id === payload.building_id);
+      if (building) {
+        this.buildingPanel.show(building);
+      }
+    });
+
+    this.client.on<CityBuildingActionRejectedPayload>('city.building_action_rejected', (payload) => {
+      this.cameras.main.fadeIn(300, 0, 0, 0);
+      this.buildingPanel.showRejection(payload.reason);
     });
   }
 
@@ -347,12 +390,12 @@ export class GameScene extends Phaser.Scene {
     this.load.image(imageKey, cityMap.image_url);
     this.load.once('complete', () => {
       // Display background image
-      const bg = this.add.sprite(
+      this.cityBgSprite = this.add.sprite(
         cityMap.image_width / 2,
         cityMap.image_height / 2,
         imageKey,
       ).setDepth(0);
-      bg.setDisplaySize(cityMap.image_width, cityMap.image_height);
+      this.cityBgSprite.setDisplaySize(cityMap.image_width, cityMap.image_height);
 
       // Set camera bounds to image dimensions
       this.cameras.main.setBounds(0, 0, cityMap.image_width, cityMap.image_height);
@@ -370,6 +413,37 @@ export class GameScene extends Phaser.Scene {
       this.setupCityInput();
     });
     this.load.start();
+  }
+
+  private buildCityMapWithFadeIn(payload: WorldStatePayload): void {
+    const cityMap = payload.city_map!;
+    const imageKey = `city_bg_${payload.zone_id}`;
+
+    // If texture already loaded (same zone revisited), skip load
+    const startRender = () => {
+      this.cityBgSprite = this.add.sprite(
+        cityMap.image_width / 2,
+        cityMap.image_height / 2,
+        imageKey,
+      ).setDepth(0);
+      this.cityBgSprite.setDisplaySize(cityMap.image_width, cityMap.image_height);
+
+      this.cameras.main.setBounds(0, 0, cityMap.image_width, cityMap.image_height);
+      this.renderBuildingHotspots(cityMap.buildings);
+      this.renderBuildingLabels(cityMap.nodes, cityMap.buildings);
+      this.renderCityNodeMarkers();
+      this.setupCityInput();
+
+      this.cameras.main.fadeIn(600, 0, 0, 0);
+    };
+
+    if (this.textures.exists(imageKey)) {
+      startRender();
+    } else {
+      this.load.image(imageKey, cityMap.image_url);
+      this.load.once('complete', startRender);
+      this.load.start();
+    }
   }
 
   private renderBuildingHotspots(buildings: CityMapBuilding[]): void {
@@ -491,7 +565,7 @@ export class GameScene extends Phaser.Scene {
         const targetNodeId = clickedBuilding.node_id;
         if (targetNodeId === this.myCharacter.current_node_id) {
           // Already at this building — show panel immediately
-          this.buildingPanel.show(clickedBuilding.name);
+          this.buildingPanel.show(clickedBuilding);
           return;
         }
         this.pendingBuildingId = clickedBuilding.id;
@@ -646,6 +720,11 @@ export class GameScene extends Phaser.Scene {
     } else {
       x = this.myCharacter.pos_x * TILE_SIZE + TILE_SIZE / 2;
       y = this.myCharacter.pos_y * TILE_SIZE + TILE_SIZE / 2;
+    }
+
+    // Destroy any previously-placed sprite (e.g. after zone travel)
+    if (this.playerAnimSprite) {
+      this.playerAnimSprite.destroy();
     }
 
     const def = getSprite('medieval_knight')!;

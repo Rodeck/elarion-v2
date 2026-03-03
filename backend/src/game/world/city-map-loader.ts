@@ -3,17 +3,21 @@ import {
   CityMapNode,
   CityMapEdge,
   CityMapBuilding,
+  BuildingActionDto,
 } from '@elarion/protocol';
 import {
   getMapsByType,
+  getMapById,
   getNodesForZone,
   getEdgesForZone,
   getBuildingsForZone,
+  getBuildingActionsForZone,
   getSpawnNodeForZone,
   type MapZoneWithCounts,
   type PathNode,
   type PathEdge,
   type Building,
+  type BuildingAction,
 } from '../../db/queries/city-maps';
 import { log } from '../../logger';
 
@@ -39,13 +43,35 @@ function toProtocolEdge(edge: PathEdge): CityMapEdge {
   return { from_node_id: edge.from_node_id, to_node_id: edge.to_node_id };
 }
 
-function toProtocolBuilding(b: Building): CityMapBuilding {
+function toProtocolBuilding(
+  b: Building,
+  actions: BuildingAction[],
+  zoneNameMap: Map<number, string>,
+): CityMapBuilding {
+  const protocolActions: BuildingActionDto[] = actions
+    .filter((a) => a.building_id === b.id)
+    .map((a) => {
+      const targetZoneName = zoneNameMap.get(a.config.target_zone_id) ?? `Zone ${a.config.target_zone_id}`;
+      return {
+        id: a.id,
+        action_type: a.action_type,
+        label: `Travel to ${targetZoneName}`,
+        config: {
+          target_zone_id: a.config.target_zone_id,
+          target_zone_name: targetZoneName,
+          target_node_id: a.config.target_node_id,
+        },
+      };
+    });
+
   const result: CityMapBuilding = {
     id: b.id,
     name: b.name,
+    description: b.description ?? '',
     node_id: b.node_id,
     label_x: b.label_offset_x ?? 0,
     label_y: b.label_offset_y ?? 0,
+    actions: protocolActions,
   };
 
   if (b.hotspot_type === 'rect' || b.hotspot_type === 'circle') {
@@ -89,12 +115,23 @@ function buildAdjacencyList(edges: PathEdge[]): Map<number, number[]> {
 // ─── Single-zone loader ─────────────────────────────────────────────────────
 
 async function loadSingleZone(zone: MapZoneWithCounts): Promise<void> {
-  const [nodes, edges, buildings, spawnNode] = await Promise.all([
+  const [nodes, edges, buildings, buildingActions, spawnNode] = await Promise.all([
     getNodesForZone(zone.id),
     getEdgesForZone(zone.id),
     getBuildingsForZone(zone.id),
+    getBuildingActionsForZone(zone.id),
     getSpawnNodeForZone(zone.id),
   ]);
+
+  // Resolve target zone names for travel action labels
+  const targetZoneIds = [...new Set(buildingActions.map((a) => a.config.target_zone_id))];
+  const zoneNameMap = new Map<number, string>();
+  await Promise.all(
+    targetZoneIds.map(async (zid) => {
+      const z = await getMapById(zid);
+      if (z) zoneNameMap.set(zid, z.name);
+    }),
+  );
 
   const mapData: CityMapData = {
     image_url: zone.image_filename ? `/assets/maps/${zone.image_filename}` : '',
@@ -102,7 +139,7 @@ async function loadSingleZone(zone: MapZoneWithCounts): Promise<void> {
     image_height: zone.image_height_px ?? 0,
     nodes: nodes.map(toProtocolNode),
     edges: edges.map(toProtocolEdge),
-    buildings: buildings.map(toProtocolBuilding),
+    buildings: buildings.map((b) => toProtocolBuilding(b, buildingActions, zoneNameMap)),
     spawn_node_id: spawnNode?.id ?? 0,
   };
 

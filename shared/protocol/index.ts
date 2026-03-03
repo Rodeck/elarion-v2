@@ -71,12 +71,27 @@ export interface CityMapEdge {
   to_node_id: number;
 }
 
+export interface TravelActionDto {
+  target_zone_id: number;
+  target_zone_name: string;
+  target_node_id: number;
+}
+
+export interface BuildingActionDto {
+  id: number;
+  action_type: 'travel';
+  label: string;
+  config: TravelActionDto;
+}
+
 export interface CityMapBuilding {
   id: number;
   name: string;
+  description: string;
   node_id: number;
   label_x: number;
   label_y: number;
+  actions: BuildingActionDto[];
   hotspot?: {
     type: 'rect' | 'circle';
     x: number;
@@ -133,17 +148,24 @@ export interface CityMovePayload {
   target_node_id: number;
 }
 
+export interface CityBuildingActionPayload {
+  building_id: number;
+  action_id: number;
+  action_type: 'travel';
+}
+
 // ---------------------------------------------------------------------------
 // Client → Server message types
 // ---------------------------------------------------------------------------
 
-export type AuthRegisterMessage    = WsMessage<AuthRegisterPayload>;
-export type AuthLoginMessage       = WsMessage<AuthLoginPayload>;
-export type CharacterCreateMessage = WsMessage<CharacterCreatePayload>;
-export type PlayerMoveMessage      = WsMessage<PlayerMovePayload>;
-export type CombatStartMessage     = WsMessage<CombatStartPayload>;
-export type ChatSendMessage        = WsMessage<ChatSendPayload>;
-export type CityMoveMessage        = WsMessage<CityMovePayload>;
+export type AuthRegisterMessage      = WsMessage<AuthRegisterPayload>;
+export type AuthLoginMessage         = WsMessage<AuthLoginPayload>;
+export type CharacterCreateMessage   = WsMessage<CharacterCreatePayload>;
+export type PlayerMoveMessage        = WsMessage<PlayerMovePayload>;
+export type CombatStartMessage       = WsMessage<CombatStartPayload>;
+export type ChatSendMessage          = WsMessage<ChatSendPayload>;
+export type CityMoveMessage          = WsMessage<CityMovePayload>;
+export type CityBuildingActionMessage = WsMessage<CityBuildingActionPayload>;
 
 // ---------------------------------------------------------------------------
 // Server → Client payloads
@@ -273,6 +295,15 @@ export interface CityMoveRejectedPayload {
   reason: 'NO_PATH' | 'INVALID_NODE' | 'IN_COMBAT' | 'NOT_CITY_MAP' | 'RATE_LIMITED';
 }
 
+export interface CityBuildingActionRejectedPayload {
+  reason:
+    | 'NOT_AT_BUILDING'
+    | 'INVALID_ACTION'
+    | 'INVALID_DESTINATION'
+    | 'IN_COMBAT'
+    | 'NOT_CITY_MAP';
+}
+
 export interface ServerRateLimitedPayload {
   action: 'player.move' | 'chat.send' | 'combat.start' | 'city.move';
   retry_after_ms: number;
@@ -314,9 +345,10 @@ export type MonsterDespawnedMessage    = WsMessage<MonsterDespawnedPayload>;
 export type ChatMessageMessage         = WsMessage<ChatMessagePayload>;
 export type ServerRateLimitedMessage   = WsMessage<ServerRateLimitedPayload>;
 export type ServerErrorMessage         = WsMessage<ServerErrorPayload>;
-export type CityPlayerMovedMessage     = WsMessage<CityPlayerMovedPayload>;
-export type CityBuildingArrivedMessage = WsMessage<CityBuildingArrivedPayload>;
-export type CityMoveRejectedMessage    = WsMessage<CityMoveRejectedPayload>;
+export type CityPlayerMovedMessage              = WsMessage<CityPlayerMovedPayload>;
+export type CityBuildingArrivedMessage          = WsMessage<CityBuildingArrivedPayload>;
+export type CityMoveRejectedMessage             = WsMessage<CityMoveRejectedPayload>;
+export type CityBuildingActionRejectedMessage   = WsMessage<CityBuildingActionRejectedPayload>;
 
 // ---------------------------------------------------------------------------
 // Discriminated union helpers (useful for switch-based dispatch)
@@ -343,7 +375,8 @@ export type AnyServerMessage =
   | ServerErrorMessage
   | CityPlayerMovedMessage
   | CityBuildingArrivedMessage
-  | CityMoveRejectedMessage;
+  | CityMoveRejectedMessage
+  | CityBuildingActionRejectedMessage;
 
 export type AnyClientMessage =
   | AuthRegisterMessage
@@ -352,4 +385,5 @@ export type AnyClientMessage =
   | PlayerMoveMessage
   | CombatStartMessage
   | ChatSendMessage
-  | CityMoveMessage;
+  | CityMoveMessage
+  | CityBuildingActionMessage;
