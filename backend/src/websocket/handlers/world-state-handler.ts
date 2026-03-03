@@ -28,7 +28,8 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
 
   const character = await findByAccountId(session.accountId);
   if (!character) {
-    log('warn', 'world-state', 'no_character', { accountId: session.accountId });
+    log('info', 'world-state', 'session_restore_no_character', { accountId: session.accountId });
+    sendToSession(session, 'auth.session_info', { has_character: false });
     return;
   }
 

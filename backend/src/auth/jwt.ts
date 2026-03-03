@@ -3,7 +3,6 @@ import { config } from '../config';
 
 const SECRET = new TextEncoder().encode(config.jwtSecret);
 const ALGORITHM = 'HS256';
-const EXPIRY = '10m';
 
 export interface JwtClaims {
   accountId: string;
@@ -17,7 +16,7 @@ export async function signToken(accountId: string, characterId?: string): Promis
   return new SignJWT(payload as unknown as Record<string, unknown>)
     .setProtectedHeader({ alg: ALGORITHM })
     .setIssuedAt()
-    .setExpirationTime(EXPIRY)
+    .setExpirationTime(config.jwtExpiry)
     .sign(SECRET);
 }
 

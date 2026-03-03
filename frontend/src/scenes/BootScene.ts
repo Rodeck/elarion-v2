@@ -1,7 +1,10 @@
 import Phaser from 'phaser';
 import { Colors, Fonts } from '../styles/phaser-tokens';
 import { queueTextures, buildDefinition } from '../entities/SpriteLoader';
+import { SessionStore } from '../auth/SessionStore';
+import { WSClient } from '../network/WSClient';
 import type { SpriteMetadataJson } from '../types/sprite';
+import type { AuthSessionInfoPayload } from '@elarion/protocol';
 
 const KNIGHT_ID = 'medieval_knight';
 const KNIGHT_META_KEY = 'medieval_knight_meta';
@@ -63,6 +66,66 @@ export class BootScene extends Phaser.Scene {
     // Build the SpriteDefinition from the loaded metadata and register it globally.
     buildDefinition(this, KNIGHT_META_KEY, KNIGHT_ID);
 
-    this.scene.start('LoginScene');
+    this.trySessionRestore();
+  }
+
+  private trySessionRestore(): void {
+    const token = SessionStore.load();
+
+    if (!token) {
+      this.scene.start('LoginScene');
+      return;
+    }
+
+    const wsHost = import.meta.env['VITE_WS_HOST'] ?? 'localhost:4000';
+    const client = new WSClient(`ws://${wsHost}/game?token=${token}`);
+
+    let settled = false;
+
+    const settle = (fn: () => void): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(fallbackTimer);
+      fn();
+    };
+
+    const fallbackTimer = setTimeout(() => {
+      settle(() => {
+        SessionStore.clear();
+        client.disconnect();
+        this.scene.start('LoginScene');
+      });
+    }, 5000);
+
+    client.on<AuthSessionInfoPayload>('auth.session_info', (payload) => {
+      if (!payload.has_character) {
+        settle(() => {
+          client.disconnect();
+          this.scene.start('CharacterCreateScene', { token });
+        });
+      }
+    });
+
+    // world.state means authenticated with character — let GameScene handle the rest
+    client.on<unknown>('world.state', () => {
+      settle(() => {
+        client.disconnect();
+        this.scene.start('GameScene', { token });
+      });
+    });
+
+    client.on<unknown>('disconnected', () => {
+      settle(() => {
+        SessionStore.clear();
+        this.scene.start('LoginScene');
+      });
+    });
+
+    client.connect().catch(() => {
+      settle(() => {
+        SessionStore.clear();
+        this.scene.start('LoginScene');
+      });
+    });
   }
 }

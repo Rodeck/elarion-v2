@@ -10,4 +10,5 @@ export const config = {
   wsPort: parseInt(process.env['WS_PORT'] ?? '4000', 10),
   nodeEnv: process.env['NODE_ENV'] ?? 'development',
   isDev: (process.env['NODE_ENV'] ?? 'development') === 'development',
+  jwtExpiry: process.env['JWT_EXPIRY'] ?? '30d',
 };
