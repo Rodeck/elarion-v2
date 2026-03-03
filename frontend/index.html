@@ -37,6 +37,19 @@
       background: #0f0d0a;
     }
     #game canvas { display: block; }
+    #inventory-panel {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 286px;
+      background: rgba(10, 9, 7, 0.93);
+      border-right: 1px solid #5a4a2a;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+    }
     #bottom-bar {
       height: 20vh;
       min-height: 100px;
@@ -62,8 +75,8 @@
       border: 2px solid #c9a55c;
       border-radius: 8px;
       padding: 24px 32px;
-      min-width: 300px;
-      max-width: 400px;
+      min-width: 390px;
+      max-width: 520px;
       position: relative;
       color: #e8dcc8;
     }
@@ -94,7 +107,9 @@
 </head>
 <body>
   <div id="top-bar"></div>
-  <div id="game"></div>
+  <div id="game">
+    <div id="inventory-panel"></div>
+  </div>
   <div id="bottom-bar"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>

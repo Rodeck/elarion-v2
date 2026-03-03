@@ -1,4 +1,6 @@
 import { MapListView } from './ui/map-list';
+import { ItemManager } from './ui/item-manager';
+import { AdminTools } from './ui/admin-tools';
 import { Toolbar } from './ui/toolbar';
 import { MapCanvas } from './editor/canvas';
 import { EditorModeManager } from './editor/modes';
@@ -25,6 +27,8 @@ import type { EditorNode, EditorEdge, EditorBuilding } from './editor/canvas';
 const app = document.getElementById('app')!;
 
 let mapListView: MapListView | null = null;
+let itemManager: ItemManager | null = null;
+let adminTools: AdminTools | null = null;
 let toolbar: Toolbar | null = null;
 let canvas: MapCanvas | null = null;
 let modeManager: EditorModeManager | null = null;
@@ -86,17 +90,87 @@ function destroyEditor(): void {
 function destroyAll(): void {
   mapListView?.destroy();
   mapListView = null;
+  itemManager = null;
+  adminTools = null;
   destroyEditor();
   app.innerHTML = '';
 }
 
-async function showMapList(): Promise<void> {
+async function showMapList(activeTab: 'maps' | 'items' | 'admin-tools' = 'maps'): Promise<void> {
   destroyAll();
-  mapListView = new MapListView(app);
+
+  // Tab bar
+  const tabBar = document.createElement('div');
+  tabBar.className = 'admin-tab-bar';
+  tabBar.innerHTML = `
+    <button class="btn ${activeTab === 'maps' ? 'btn--active' : ''}" id="tab-maps">Map Editor</button>
+    <button class="btn ${activeTab === 'items' ? 'btn--active' : ''}" id="tab-items">Items</button>
+    <button class="btn ${activeTab === 'admin-tools' ? 'btn--active' : ''}" id="tab-admin-tools">Admin Tools</button>
+  `;
+  app.appendChild(tabBar);
+
+  // Panels
+  const mapEditorPanel = document.createElement('div');
+  mapEditorPanel.id = 'map-editor';
+  mapEditorPanel.style.display = activeTab === 'maps' ? '' : 'none';
+  app.appendChild(mapEditorPanel);
+
+  const itemManagerPanel = document.createElement('div');
+  itemManagerPanel.id = 'item-manager';
+  itemManagerPanel.style.display = activeTab === 'items' ? '' : 'none';
+  app.appendChild(itemManagerPanel);
+
+  const adminToolsPanel = document.createElement('div');
+  adminToolsPanel.id = 'admin-tools';
+  adminToolsPanel.style.display = activeTab === 'admin-tools' ? '' : 'none';
+  app.appendChild(adminToolsPanel);
+
+  function setActiveTab(tab: 'maps' | 'items' | 'admin-tools'): void {
+    mapEditorPanel.style.display = tab === 'maps' ? '' : 'none';
+    itemManagerPanel.style.display = tab === 'items' ? '' : 'none';
+    adminToolsPanel.style.display = tab === 'admin-tools' ? '' : 'none';
+    tabBar.querySelector('#tab-maps')!.classList.toggle('btn--active', tab === 'maps');
+    tabBar.querySelector('#tab-items')!.classList.toggle('btn--active', tab === 'items');
+    tabBar.querySelector('#tab-admin-tools')!.classList.toggle('btn--active', tab === 'admin-tools');
+  }
+
+  tabBar.querySelector('#tab-maps')!.addEventListener('click', () => setActiveTab('maps'));
+
+  tabBar.querySelector('#tab-items')!.addEventListener('click', async () => {
+    setActiveTab('items');
+    if (!itemManager) {
+      itemManager = new ItemManager();
+      itemManager.init(itemManagerPanel);
+      await itemManager.load();
+    }
+  });
+
+  tabBar.querySelector('#tab-admin-tools')!.addEventListener('click', async () => {
+    setActiveTab('admin-tools');
+    if (!adminTools) {
+      adminTools = new AdminTools();
+      adminTools.init(adminToolsPanel);
+      await adminTools.load();
+    }
+  });
+
+  // Initialize map list
+  mapListView = new MapListView(mapEditorPanel);
   mapListView.setOnEditMap((mapId) => {
     window.location.hash = `#/edit/${mapId}`;
   });
   await mapListView.render();
+
+  // Eagerly initialize whichever tab is active on load
+  if (activeTab === 'items') {
+    itemManager = new ItemManager();
+    itemManager.init(itemManagerPanel);
+    await itemManager.load();
+  } else if (activeTab === 'admin-tools') {
+    adminTools = new AdminTools();
+    adminTools.init(adminToolsPanel);
+    await adminTools.load();
+  }
 }
 
 async function showEditor(mapId: number): Promise<void> {

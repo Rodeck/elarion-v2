@@ -5,6 +5,7 @@ import { ChatBox } from '../ui/ChatBox';
 import { CombatLog } from '../ui/CombatLog';
 import { BuildingPanel } from '../ui/BuildingPanel';
 import { LogoutButton } from '../ui/LogoutButton';
+import { InventoryPanel } from '../ui/InventoryPanel';
 import { SessionStore } from '../auth/SessionStore';
 import { AnimatedSprite } from '../entities/AnimatedSprite';
 import { getSprite } from '../entities/SpriteRegistry';
@@ -31,6 +32,11 @@ import type {
   CityMapData,
   CityMapNode,
   CityMapBuilding,
+  InventoryStatePayload,
+  InventoryItemReceivedPayload,
+  InventoryItemDeletedPayload,
+  InventoryDeleteRejectedPayload,
+  InventoryFullPayload,
 } from '@elarion/protocol';
 
 const TILE_SIZE = 32;
@@ -46,6 +52,7 @@ export class GameScene extends Phaser.Scene {
   private chatBox!: ChatBox;
   private combatLog!: CombatLog;
   private buildingPanel!: BuildingPanel;
+  private inventoryPanel!: InventoryPanel;
 
   // Remote players: characterId → sprite
   private remotePlayers = new Map<string, Phaser.GameObjects.Container>();
@@ -93,6 +100,11 @@ export class GameScene extends Phaser.Scene {
     const bottomBar = document.getElementById('bottom-bar')!;
     this.chatBox   = new ChatBox(this.client, bottomBar);
     this.combatLog = new CombatLog(bottomBar);
+
+    const inventoryEl = document.getElementById('inventory-panel')!;
+    this.inventoryPanel = new InventoryPanel(inventoryEl, (slotId) => {
+      this.client.send('inventory.delete_item', { slot_id: slotId });
+    });
 
     const gameEl = document.getElementById('game')!;
     this.buildingPanel = new BuildingPanel(gameEl, (payload) => {
@@ -351,6 +363,27 @@ export class GameScene extends Phaser.Scene {
     this.client.on<CityBuildingActionRejectedPayload>('city.building_action_rejected', (payload) => {
       this.cameras.main.fadeIn(300, 0, 0, 0);
       this.buildingPanel.showRejection(payload.reason);
+    });
+
+    // Inventory handlers
+    this.client.on<InventoryStatePayload>('inventory.state', (payload) => {
+      this.inventoryPanel.renderInventory(payload.slots, payload.capacity);
+    });
+
+    this.client.on<InventoryItemDeletedPayload>('inventory.item_deleted', (payload) => {
+      this.inventoryPanel.removeSlot(payload.slot_id);
+    });
+
+    this.client.on<InventoryDeleteRejectedPayload>('inventory.delete_rejected', (payload) => {
+      this.inventoryPanel.showDeleteError(payload.slot_id);
+    });
+
+    this.client.on<InventoryItemReceivedPayload>('inventory.item_received', (payload) => {
+      this.inventoryPanel.addOrUpdateSlot(payload.slot);
+    });
+
+    this.client.on<InventoryFullPayload>('inventory.full', (payload) => {
+      this.chatBox.addSystemMessage(`Inventory full — could not receive ${payload.item_name}`);
     });
   }
 

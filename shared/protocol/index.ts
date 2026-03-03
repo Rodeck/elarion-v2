@@ -376,7 +376,12 @@ export type AnyServerMessage =
   | CityPlayerMovedMessage
   | CityBuildingArrivedMessage
   | CityMoveRejectedMessage
-  | CityBuildingActionRejectedMessage;
+  | CityBuildingActionRejectedMessage
+  | InventoryStateMessage
+  | InventoryItemReceivedMessage
+  | InventoryFullMessage
+  | InventoryItemDeletedMessage
+  | InventoryDeleteRejectedMessage;
 
 export type AnyClientMessage =
   | AuthRegisterMessage
@@ -386,4 +391,85 @@ export type AnyClientMessage =
   | CombatStartMessage
   | ChatSendMessage
   | CityMoveMessage
-  | CityBuildingActionMessage;
+  | CityBuildingActionMessage
+  | InventoryDeleteItemMessage;
+
+// ---------------------------------------------------------------------------
+// Inventory: shared sub-types
+// ---------------------------------------------------------------------------
+
+export type ItemCategory =
+  | 'resource' | 'food' | 'heal' | 'weapon'
+  | 'boots' | 'shield' | 'greaves' | 'bracer' | 'tool';
+
+export type WeaponSubtype =
+  | 'one_handed' | 'two_handed' | 'dagger' | 'wand' | 'staff' | 'bow';
+
+/** A single resolved item definition as sent to the client. */
+export interface ItemDefinitionDto {
+  id: number;
+  name: string;
+  description: string;         // empty string if null in DB
+  category: ItemCategory;
+  weapon_subtype: WeaponSubtype | null;  // non-null only for 'weapon'
+  attack: number | null;
+  defence: number | null;
+  heal_power: number | null;
+  food_power: number | null;
+  stack_size: number | null;   // null = not stackable
+  icon_url: string | null;     // absolute URL or null (use placeholder)
+}
+
+/** A single occupied inventory slot as sent to the client. */
+export interface InventorySlotDto {
+  slot_id: number;             // inventory_items.id — used for deletion
+  item_def_id: number;
+  quantity: number;
+  definition: ItemDefinitionDto;
+}
+
+// ---------------------------------------------------------------------------
+// Inventory: Client → Server payloads
+// ---------------------------------------------------------------------------
+
+export interface InventoryDeleteItemPayload {
+  slot_id: number;             // inventory_items.id to delete
+}
+
+// ---------------------------------------------------------------------------
+// Inventory: Server → Client payloads
+// ---------------------------------------------------------------------------
+
+export interface InventoryStatePayload {
+  slots: InventorySlotDto[];   // ordered by created_at ASC; max 20 entries
+  capacity: number;            // always 20 for now
+}
+
+export interface InventoryItemReceivedPayload {
+  slot: InventorySlotDto;      // full slot (new or updated)
+  stacked: boolean;            // true if quantity was incremented on existing slot
+}
+
+export interface InventoryFullPayload {
+  item_name: string;           // name of the item that couldn't be added
+}
+
+export interface InventoryItemDeletedPayload {
+  slot_id: number;             // the slot that was removed
+}
+
+export interface InventoryDeleteRejectedPayload {
+  slot_id: number;
+  reason: 'NOT_FOUND' | 'NOT_OWNER';
+}
+
+// ---------------------------------------------------------------------------
+// Inventory: message type aliases
+// ---------------------------------------------------------------------------
+
+export type InventoryDeleteItemMessage     = WsMessage<InventoryDeleteItemPayload>;
+export type InventoryStateMessage          = WsMessage<InventoryStatePayload>;
+export type InventoryItemReceivedMessage   = WsMessage<InventoryItemReceivedPayload>;
+export type InventoryFullMessage           = WsMessage<InventoryFullPayload>;
+export type InventoryItemDeletedMessage    = WsMessage<InventoryItemDeletedPayload>;
+export type InventoryDeleteRejectedMessage = WsMessage<InventoryDeleteRejectedPayload>;

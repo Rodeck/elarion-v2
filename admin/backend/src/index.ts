@@ -9,6 +9,8 @@ import { edgesRouter } from './routes/edges';
 import { buildingsRouter } from './routes/buildings';
 import { uploadRouter } from './routes/upload';
 import { authRouter } from './routes/auth';
+import { itemsRouter } from './routes/items';
+import { adminToolsRouter } from './routes/admin-tools';
 
 const app = express();
 
@@ -18,6 +20,10 @@ app.use(express.json());
 // Serve uploaded map images statically
 const imagesDir = path.resolve(__dirname, '../../../backend/assets/maps/images');
 app.use('/images', express.static(imagesDir));
+
+// Serve item icons statically
+const iconsDir = path.resolve(__dirname, '../../../backend/assets/items/icons');
+app.use('/item-icons', express.static(iconsDir));
 
 // Public auth routes (must be before requireAdmin middleware)
 app.use(authRouter);
@@ -31,6 +37,8 @@ app.use('/api/maps', nodesRouter);
 app.use('/api/maps', edgesRouter);
 app.use('/api/maps', buildingsRouter);
 app.use('/api/maps', uploadRouter);
+app.use('/api/items', itemsRouter);
+app.use('/api/admin-tools', adminToolsRouter);
 
 app.listen(config.editorPort, () => {
   console.log(JSON.stringify({

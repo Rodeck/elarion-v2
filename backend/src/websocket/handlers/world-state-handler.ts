@@ -1,4 +1,5 @@
 import { findByAccountId, findClassById } from '../../db/queries/characters';
+import { sendInventoryState } from './inventory-state-handler';
 import { addPlayer } from '../../game/world/zone-registry';
 import { broadcastPlayerEntered } from '../../game/world/zone-broadcasts';
 import { onClientReconnect } from '../disconnect-handler';
@@ -147,4 +148,7 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
   }
 
   sendToSession(session, 'world.state', worldStatePayload);
+
+  // Send inventory state immediately after world state
+  await sendInventoryState(session);
 }

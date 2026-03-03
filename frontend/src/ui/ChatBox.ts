@@ -196,6 +196,16 @@ export class ChatBox {
     }
   }
 
+  addSystemMessage(message: string): void {
+    const list = this.activeChannel === 'global' ? this.globalList : this.localList;
+    const line = document.createElement('div');
+    line.style.cssText = 'padding:2px 4px;';
+    line.innerHTML = `<span style="color:var(--color-text-muted);font-style:italic;">${this.escapeHtml(message)}</span>`;
+    list.appendChild(line);
+    list.scrollTop = list.scrollHeight;
+    while (list.children.length > 100) list.removeChild(list.firstChild!);
+  }
+
   showRateLimitNotice(retryAfterMs: number): void {
     if (this.rateLimitTimer) clearInterval(this.rateLimitTimer);
 

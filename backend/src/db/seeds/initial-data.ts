@@ -34,31 +34,11 @@ async function seedMonsters(): Promise<void> {
   log('info', 'seed', 'monsters_skipped', { reason: 'admin-managed zones' });
 }
 
-async function seedItems(): Promise<void> {
-  const items = [
-    { id: 1, name: 'Wooden Sword',   type: 'weapon',     stat_modifiers: { attack_power: 5 },  description: 'A basic training sword.' },
-    { id: 2, name: 'Leather Armour', type: 'armour',     stat_modifiers: { defence: 4 },        description: 'Simple protective gear.' },
-    { id: 3, name: 'Health Potion',  type: 'consumable', stat_modifiers: { current_hp: 30 },    description: 'Restores 30 HP when used.' },
-    { id: 4, name: 'Iron Ring',      type: 'armour',     stat_modifiers: { defence: 2 },        description: 'A plain iron band.' },
-    { id: 5, name: 'Short Bow',      type: 'weapon',     stat_modifiers: { attack_power: 8 },   description: 'A compact ranged weapon.' },
-  ];
-
-  for (const item of items) {
-    await query(
-      `INSERT INTO items (id, name, type, stat_modifiers, description)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (id) DO NOTHING`,
-      [item.id, item.name, item.type, JSON.stringify(item.stat_modifiers), item.description],
-    );
-  }
-  log('info', 'seed', 'items_seeded', { count: items.length });
-}
-
 export async function runSeeds(): Promise<void> {
   log('info', 'seed', 'starting');
   await seedCharacterClasses();
   await seedMapZones();
   await seedMonsters();
-  await seedItems();
+  // Item definitions are admin-managed via the admin UI — no seed data needed.
   log('info', 'seed', 'complete');
 }

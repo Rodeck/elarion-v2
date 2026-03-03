@@ -401,3 +401,79 @@ export async function validateMap(
     `${BASE}/${id}/validate`,
   );
 }
+
+// ---------------------------------------------------------------------------
+// Items
+// ---------------------------------------------------------------------------
+
+const ITEMS_BASE = '/api/items';
+
+export interface ItemDefinitionResponse {
+  id: number;
+  name: string;
+  description: string | null;
+  category: string;
+  weapon_subtype: string | null;
+  attack: number | null;
+  defence: number | null;
+  heal_power: number | null;
+  food_power: number | null;
+  stack_size: number | null;
+  icon_url: string | null;
+  created_at: string;
+}
+
+export async function getItems(category?: string): Promise<ItemDefinitionResponse[]> {
+  const url = category ? `${ITEMS_BASE}?category=${encodeURIComponent(category)}` : ITEMS_BASE;
+  return request<ItemDefinitionResponse[]>(url);
+}
+
+export async function getItem(id: number): Promise<ItemDefinitionResponse> {
+  return request<ItemDefinitionResponse>(`${ITEMS_BASE}/${id}`);
+}
+
+export async function createItem(formData: FormData): Promise<ItemDefinitionResponse> {
+  return request<ItemDefinitionResponse>(ITEMS_BASE, {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export async function updateItem(id: number, formData: FormData): Promise<ItemDefinitionResponse> {
+  return request<ItemDefinitionResponse>(`${ITEMS_BASE}/${id}`, {
+    method: 'PUT',
+    body: formData,
+  });
+}
+
+export async function deleteItem(id: number): Promise<void> {
+  return request<void>(`${ITEMS_BASE}/${id}`, { method: 'DELETE' });
+}
+
+// ---------------------------------------------------------------------------
+// Admin Tools
+// ---------------------------------------------------------------------------
+
+const ADMIN_TOOLS_BASE = '/api/admin-tools';
+
+export interface CharacterSummary {
+  id: string;
+  name: string;
+  level: number;
+  class_name: string;
+}
+
+export async function getCharacters(): Promise<CharacterSummary[]> {
+  return request<CharacterSummary[]>(`${ADMIN_TOOLS_BASE}/characters`);
+}
+
+export async function grantItem(
+  characterId: string,
+  itemDefId: number,
+  quantity: number,
+): Promise<{ success: true; message: string }> {
+  return request<{ success: true; message: string }>(`${ADMIN_TOOLS_BASE}/grant-item`, {
+    method: 'POST',
+    body: JSON.stringify({ character_id: characterId, item_def_id: itemDefId, quantity }),
+  });
+}

@@ -11,4 +11,5 @@ export const config = {
   nodeEnv: process.env['NODE_ENV'] ?? 'development',
   isDev: (process.env['NODE_ENV'] ?? 'development') === 'development',
   jwtExpiry: process.env['JWT_EXPIRY'] ?? '30d',
+  adminBaseUrl: process.env['ADMIN_BASE_URL'] ?? 'http://localhost:4001',
 };
