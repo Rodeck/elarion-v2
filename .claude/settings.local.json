@@ -21,7 +21,11 @@
       "Bash(pwsh:*)",
       "Bash(npm install:*)",
       "Bash(docker exec:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(python3:*)",
+      "Bash(mkdir:*)",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)"
     ]
   }
 }
