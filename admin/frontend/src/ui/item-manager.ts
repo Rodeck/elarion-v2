@@ -52,58 +52,63 @@ export class ItemManager {
         </div>
 
         <div id="item-list-container">
-          <p>Loading...</p>
+          <p style="color:#3d4262;font-size:0.875rem;">Loading...</p>
         </div>
-
-        <hr />
 
         <div class="item-form-section">
           <h3 id="item-form-title">Add New Item</h3>
           <p id="item-error" class="error" style="display:none"></p>
           <form id="item-form" autocomplete="off">
-            <label>Name *<input name="name" type="text" maxlength="64" required /></label>
-            <label>Description<textarea name="description" rows="2"></textarea></label>
-            <label>Category *
-              <select name="category" required>
-                <option value="">— select —</option>
-                ${VALID_CATEGORIES.map((c) => `<option value="${c}">${this.labelFor(c)}</option>`).join('')}
-              </select>
-            </label>
+            <label for="item-name">Name *</label>
+            <input id="item-name" name="name" type="text" maxlength="64" required placeholder="Item name" />
+
+            <label for="item-desc">Description</label>
+            <textarea id="item-desc" name="description" rows="2" placeholder="Optional description"></textarea>
+
+            <label for="item-category">Category *</label>
+            <select id="item-category" name="category" required>
+              <option value="">— select —</option>
+              ${VALID_CATEGORIES.map((c) => `<option value="${c}">${this.labelFor(c)}</option>`).join('')}
+            </select>
 
             <div id="field-weapon_subtype" style="display:none">
-              <label>Weapon Subtype *
-                <select name="weapon_subtype">
-                  <option value="">— select —</option>
-                  ${VALID_WEAPON_SUBTYPES.map((s) => `<option value="${s}">${this.subtypeLabel(s)}</option>`).join('')}
-                </select>
-              </label>
+              <label for="item-weapon-subtype">Weapon Subtype *</label>
+              <select id="item-weapon-subtype" name="weapon_subtype">
+                <option value="">— select —</option>
+                ${VALID_WEAPON_SUBTYPES.map((s) => `<option value="${s}">${this.subtypeLabel(s)}</option>`).join('')}
+              </select>
             </div>
 
             <div id="field-attack" style="display:none">
-              <label>Attack<input name="attack" type="number" min="0" /></label>
+              <label for="item-attack">Attack</label>
+              <input id="item-attack" name="attack" type="number" min="0" style="width:120px" />
             </div>
 
             <div id="field-defence" style="display:none">
-              <label>Defence<input name="defence" type="number" min="0" /></label>
+              <label for="item-defence">Defence</label>
+              <input id="item-defence" name="defence" type="number" min="0" style="width:120px" />
             </div>
 
             <div id="field-heal_power" style="display:none">
-              <label>Heal Power<input name="heal_power" type="number" min="0" /></label>
+              <label for="item-heal">Heal Power</label>
+              <input id="item-heal" name="heal_power" type="number" min="0" style="width:120px" />
             </div>
 
             <div id="field-food_power" style="display:none">
-              <label>Food Power<input name="food_power" type="number" min="0" /></label>
+              <label for="item-food">Food Power</label>
+              <input id="item-food" name="food_power" type="number" min="0" style="width:120px" />
             </div>
 
             <div id="field-stack_size" style="display:none">
-              <label>Stack Size *<input name="stack_size" type="number" min="1" /></label>
+              <label for="item-stack">Stack Size *</label>
+              <input id="item-stack" name="stack_size" type="number" min="1" style="width:120px" />
             </div>
 
-            <label>Icon (PNG, max 2 MB)
-              <input name="icon" type="file" accept="image/png" />
-            </label>
-            <div id="icon-preview" style="display:none">
-              <p>Current icon: <img id="current-icon-img" src="" alt="icon" style="height:40px;vertical-align:middle;" /></p>
+            <label for="item-icon">Icon (PNG, max 2 MB)</label>
+            <input id="item-icon" name="icon" type="file" accept="image/png" style="color:#8a94b0;font-size:0.8125rem;" />
+            <div id="icon-preview" style="display:none;margin-top:6px;">
+              <p style="font-size:0.8rem;color:#5a6280;margin:0 0 4px;">Current icon:</p>
+              <img id="current-icon-img" src="" alt="icon" style="height:40px;width:40px;object-fit:contain;border-radius:4px;border:1px solid #1e2232;" />
             </div>
 
             <div class="form-actions">

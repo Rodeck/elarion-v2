@@ -29,7 +29,9 @@
       "mcp__github__list_issues",
       "mcp__github__issue_write",
       "Bash(powershell:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(npx vite:*)",
+      "Bash(head:*)"
     ]
   }
 }

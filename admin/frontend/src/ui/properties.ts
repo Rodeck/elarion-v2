@@ -56,7 +56,6 @@ export class PropertiesPanel {
     const descArea = document.createElement('textarea');
     descArea.id = 'prop-desc';
     descArea.rows = 3;
-    descArea.style.cssText = 'width:100%;resize:vertical;box-sizing:border-box;';
     descArea.value = (building as unknown as { description?: string | null }).description ?? '';
     panel.appendChild(descArea);
 
@@ -112,12 +111,11 @@ export class PropertiesPanel {
 
     // ── Actions section ─────────────────────────────────────────────
     const actionsSection = document.createElement('div');
-    actionsSection.className = 'actions-section';
-    actionsSection.style.cssText = 'margin-top:12px;';
+    actionsSection.style.marginTop = '12px';
 
-    const actionsHeader = document.createElement('h4');
-    actionsHeader.textContent = 'Actions';
-    actionsHeader.style.cssText = 'margin:0 0 6px;';
+    const actionsHeader = document.createElement('label');
+    actionsHeader.textContent = 'Travel Actions';
+    actionsHeader.style.marginBottom = '4px';
     actionsSection.appendChild(actionsHeader);
 
     const actionsList = document.createElement('div');
@@ -129,11 +127,12 @@ export class PropertiesPanel {
     // Load and render existing actions
     void this.renderActions(actionsList, building.id, mapId);
 
-    // ── Add Action form ─────────────────────────────────────────────
+    // ── Add Action button ───────────────────────────────────────────
     const addBtn = document.createElement('button');
     addBtn.className = 'btn btn--secondary';
     addBtn.textContent = '+ Add Action';
-    addBtn.style.cssText = 'margin-top:8px;width:100%;';
+    addBtn.style.width = '100%';
+    addBtn.style.marginTop = '6px';
 
     const addForm = document.createElement('div');
     addForm.id = 'add-action-form';
@@ -144,7 +143,7 @@ export class PropertiesPanel {
       addForm.style.display = 'block';
       void this.buildAddActionForm(addForm, actionsList, building.id, mapId, () => {
         addForm.style.display = 'none';
-        addBtn.style.display = 'block';
+        addBtn.style.display = '';
       });
     });
 
@@ -156,7 +155,8 @@ export class PropertiesPanel {
     deleteBtn.className = 'btn btn--danger';
     deleteBtn.id = 'prop-delete';
     deleteBtn.textContent = 'Delete Building';
-    deleteBtn.style.cssText = 'margin-top:16px;width:100%;';
+    deleteBtn.style.width = '100%';
+    deleteBtn.style.marginTop = '12px';
     deleteBtn.addEventListener('click', () => {
       if (this.currentBuildingId === null) return;
       if (!confirm('Delete this building?')) return;
@@ -173,14 +173,14 @@ export class PropertiesPanel {
     buildingId: number,
     mapId: number,
   ): Promise<void> {
-    container.innerHTML = '<em style="font-size:11px;color:#888;">Loading...</em>';
+    container.innerHTML = '<em style="font-size:11px;color:#404666;">Loading...</em>';
     try {
       const actions = await listBuildingActions(mapId, buildingId);
       container.innerHTML = '';
 
       if (actions.length === 0) {
         const empty = document.createElement('p');
-        empty.style.cssText = 'font-size:11px;color:#888;font-style:italic;margin:0;';
+        empty.style.cssText = 'font-size:11px;color:#3a4060;font-style:italic;margin:0;';
         empty.textContent = 'No actions configured.';
         container.appendChild(empty);
         return;
@@ -190,7 +190,7 @@ export class PropertiesPanel {
         container.appendChild(this.actionRow(action, buildingId, mapId, container, actions));
       }
     } catch {
-      container.innerHTML = '<em style="font-size:11px;color:#c00;">Failed to load actions.</em>';
+      container.innerHTML = '<em style="font-size:11px;color:#f87171;">Failed to load actions.</em>';
     }
   }
 
@@ -202,16 +202,15 @@ export class PropertiesPanel {
     allActions: BuildingAction[],
   ): HTMLElement {
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
+    row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:3px;';
 
-    const label = document.createElement('span');
-    label.style.cssText = 'flex:1;font-size:12px;';
-    label.textContent = `Travel → Zone ${action.config.target_zone_id} Node ${action.config.target_node_id}`;
+    const labelEl = document.createElement('span');
+    labelEl.style.cssText = 'flex:1;font-size:11px;color:#8a94b0;';
+    labelEl.textContent = `Travel → Zone ${action.config.target_zone_id} Node ${action.config.target_node_id}`;
 
     const del = document.createElement('button');
-    del.className = 'btn btn--danger';
+    del.className = 'btn btn--danger btn--small';
     del.textContent = '✕';
-    del.style.cssText = 'padding:2px 7px;font-size:11px;';
     del.addEventListener('click', async () => {
       if (!confirm('Delete this action?')) return;
       try {
@@ -221,7 +220,7 @@ export class PropertiesPanel {
         row.remove();
         if (container.children.length === 0) {
           const empty = document.createElement('p');
-          empty.style.cssText = 'font-size:11px;color:#888;font-style:italic;margin:0;';
+          empty.style.cssText = 'font-size:11px;color:#3a4060;font-style:italic;margin:0;';
           empty.textContent = 'No actions configured.';
           container.appendChild(empty);
         }
@@ -230,7 +229,7 @@ export class PropertiesPanel {
       }
     });
 
-    row.appendChild(label);
+    row.appendChild(labelEl);
     row.appendChild(del);
     return row;
   }
@@ -242,18 +241,18 @@ export class PropertiesPanel {
     mapId: number,
     onClose: () => void,
   ): Promise<void> {
-    container.innerHTML = '<em style="font-size:11px;color:#888;">Loading maps...</em>';
+    container.innerHTML = '<em style="font-size:11px;color:#404666;">Loading maps...</em>';
 
     let maps: MapSummary[] = [];
     try {
       maps = await listMaps();
     } catch {
-      container.innerHTML = '<em style="font-size:11px;color:#c00;">Failed to load maps.</em>';
+      container.innerHTML = '<em style="font-size:11px;color:#f87171;">Failed to load maps.</em>';
       return;
     }
 
     container.innerHTML = '';
-    container.style.cssText = 'border:1px solid #444;padding:8px;margin-top:4px;';
+    container.style.cssText = 'border:1px solid #1e2232;border-radius:6px;padding:8px;margin-top:6px;background:#0c0e14;';
 
     // Map selector
     const mapLabel = this.label('Destination Map', 'action-map-select');
@@ -261,7 +260,6 @@ export class PropertiesPanel {
 
     const mapSelect = document.createElement('select');
     mapSelect.id = 'action-map-select';
-    mapSelect.style.cssText = 'width:100%;margin-bottom:6px;';
     const defaultOpt = document.createElement('option');
     defaultOpt.value = '';
     defaultOpt.textContent = '— select map —';
@@ -280,7 +278,6 @@ export class PropertiesPanel {
 
     const nodeSelect = document.createElement('select');
     nodeSelect.id = 'action-node-select';
-    nodeSelect.style.cssText = 'width:100%;margin-bottom:8px;';
     nodeSelect.disabled = true;
     const nodeDefaultOpt = document.createElement('option');
     nodeDefaultOpt.value = '';
@@ -321,12 +318,12 @@ export class PropertiesPanel {
 
     // Buttons
     const btnRow = document.createElement('div');
-    btnRow.style.cssText = 'display:flex;gap:6px;';
+    btnRow.style.cssText = 'display:flex;gap:6px;margin-top:8px;';
 
     const saveBtn = document.createElement('button');
     saveBtn.className = 'btn btn--primary';
-    saveBtn.textContent = 'Save Action';
-    saveBtn.style.cssText = 'flex:1;';
+    saveBtn.textContent = 'Save';
+    saveBtn.style.flex = '1';
     saveBtn.addEventListener('click', async () => {
       const targetZoneId = parseInt(mapSelect.value, 10);
       const targetNodeId = parseInt(nodeSelect.value, 10);
@@ -340,7 +337,6 @@ export class PropertiesPanel {
           action_type: 'travel',
           config: { target_zone_id: targetZoneId, target_node_id: targetNodeId },
         });
-        // Refresh the actions list
         await this.renderActions(actionsList, buildingId, mapId);
         void action;
         onClose();
@@ -353,7 +349,7 @@ export class PropertiesPanel {
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'btn';
     cancelBtn.textContent = 'Cancel';
-    cancelBtn.style.cssText = 'flex:1;';
+    cancelBtn.style.flex = '1';
     cancelBtn.addEventListener('click', onClose);
 
     btnRow.appendChild(saveBtn);
@@ -379,5 +375,4 @@ export class PropertiesPanel {
     lbl.textContent = text;
     return lbl;
   }
-
 }

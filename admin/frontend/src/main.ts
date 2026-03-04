@@ -106,6 +106,8 @@ async function showMapList(activeTab: 'maps' | 'items' | 'admin-tools' = 'maps')
     <button class="btn ${activeTab === 'maps' ? 'btn--active' : ''}" id="tab-maps">Map Editor</button>
     <button class="btn ${activeTab === 'items' ? 'btn--active' : ''}" id="tab-items">Items</button>
     <button class="btn ${activeTab === 'admin-tools' ? 'btn--active' : ''}" id="tab-admin-tools">Admin Tools</button>
+    <div style="flex:1"></div>
+    <span style="font-size:0.75rem;color:#2d3347;align-self:center;padding-right:0.5rem;letter-spacing:0.05em;font-weight:600;">ELARION ADMIN</span>
   `;
   app.appendChild(tabBar);
 
@@ -405,8 +407,8 @@ function showNodeProperties(nodeId: number): void {
   panel.innerHTML = `
     <div class="properties">
       <h3>Node #${node.id}</h3>
-      <p>Position: (${node.x}, ${node.y})</p>
-      <p>Spawn: ${node.is_spawn ? 'Yes' : 'No'}</p>
+      <p>Position: (${Math.round(node.x)}, ${Math.round(node.y)})</p>
+      <p>Spawn: <span style="color:${node.is_spawn ? '#4ade80' : '#5a6280'}">${node.is_spawn ? 'Yes' : 'No'}</span></p>
     </div>
   `;
 }
