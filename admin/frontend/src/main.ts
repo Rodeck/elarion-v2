@@ -1,5 +1,6 @@
 import { MapListView } from './ui/map-list';
 import { ItemManager } from './ui/item-manager';
+import { MonsterManager } from './ui/monster-manager';
 import { AdminTools } from './ui/admin-tools';
 import { Toolbar } from './ui/toolbar';
 import { MapCanvas } from './editor/canvas';
@@ -28,6 +29,7 @@ const app = document.getElementById('app')!;
 
 let mapListView: MapListView | null = null;
 let itemManager: ItemManager | null = null;
+let monsterManager: MonsterManager | null = null;
 let adminTools: AdminTools | null = null;
 let toolbar: Toolbar | null = null;
 let canvas: MapCanvas | null = null;
@@ -91,12 +93,13 @@ function destroyAll(): void {
   mapListView?.destroy();
   mapListView = null;
   itemManager = null;
+  monsterManager = null;
   adminTools = null;
   destroyEditor();
   app.innerHTML = '';
 }
 
-async function showMapList(activeTab: 'maps' | 'items' | 'admin-tools' = 'maps'): Promise<void> {
+async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-tools' = 'maps'): Promise<void> {
   destroyAll();
 
   // Tab bar
@@ -105,6 +108,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'admin-tools' = 'maps')
   tabBar.innerHTML = `
     <button class="btn ${activeTab === 'maps' ? 'btn--active' : ''}" id="tab-maps">Map Editor</button>
     <button class="btn ${activeTab === 'items' ? 'btn--active' : ''}" id="tab-items">Items</button>
+    <button class="btn ${activeTab === 'monsters' ? 'btn--active' : ''}" id="tab-monsters">Monsters</button>
     <button class="btn ${activeTab === 'admin-tools' ? 'btn--active' : ''}" id="tab-admin-tools">Admin Tools</button>
     <div style="flex:1"></div>
     <span style="font-size:0.75rem;color:#2d3347;align-self:center;padding-right:0.5rem;letter-spacing:0.05em;font-weight:600;">ELARION ADMIN</span>
@@ -122,17 +126,24 @@ async function showMapList(activeTab: 'maps' | 'items' | 'admin-tools' = 'maps')
   itemManagerPanel.style.display = activeTab === 'items' ? '' : 'none';
   app.appendChild(itemManagerPanel);
 
+  const monsterManagerPanel = document.createElement('div');
+  monsterManagerPanel.id = 'monster-manager';
+  monsterManagerPanel.style.display = activeTab === 'monsters' ? '' : 'none';
+  app.appendChild(monsterManagerPanel);
+
   const adminToolsPanel = document.createElement('div');
   adminToolsPanel.id = 'admin-tools';
   adminToolsPanel.style.display = activeTab === 'admin-tools' ? '' : 'none';
   app.appendChild(adminToolsPanel);
 
-  function setActiveTab(tab: 'maps' | 'items' | 'admin-tools'): void {
+  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools'): void {
     mapEditorPanel.style.display = tab === 'maps' ? '' : 'none';
     itemManagerPanel.style.display = tab === 'items' ? '' : 'none';
+    monsterManagerPanel.style.display = tab === 'monsters' ? '' : 'none';
     adminToolsPanel.style.display = tab === 'admin-tools' ? '' : 'none';
     tabBar.querySelector('#tab-maps')!.classList.toggle('btn--active', tab === 'maps');
     tabBar.querySelector('#tab-items')!.classList.toggle('btn--active', tab === 'items');
+    tabBar.querySelector('#tab-monsters')!.classList.toggle('btn--active', tab === 'monsters');
     tabBar.querySelector('#tab-admin-tools')!.classList.toggle('btn--active', tab === 'admin-tools');
   }
 
@@ -144,6 +155,15 @@ async function showMapList(activeTab: 'maps' | 'items' | 'admin-tools' = 'maps')
       itemManager = new ItemManager();
       itemManager.init(itemManagerPanel);
       await itemManager.load();
+    }
+  });
+
+  tabBar.querySelector('#tab-monsters')!.addEventListener('click', async () => {
+    setActiveTab('monsters');
+    if (!monsterManager) {
+      monsterManager = new MonsterManager();
+      monsterManager.init(monsterManagerPanel);
+      await monsterManager.load();
     }
   });
 
@@ -168,6 +188,10 @@ async function showMapList(activeTab: 'maps' | 'items' | 'admin-tools' = 'maps')
     itemManager = new ItemManager();
     itemManager.init(itemManagerPanel);
     await itemManager.load();
+  } else if (activeTab === 'monsters') {
+    monsterManager = new MonsterManager();
+    monsterManager.init(monsterManagerPanel);
+    await monsterManager.load();
   } else if (activeTab === 'admin-tools') {
     adminTools = new AdminTools();
     adminTools.init(adminToolsPanel);

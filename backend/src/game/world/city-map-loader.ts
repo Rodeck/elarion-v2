@@ -18,6 +18,8 @@ import {
   type PathEdge,
   type Building,
   type BuildingAction,
+  type TravelActionConfig,
+  type ExploreActionConfig,
 } from '../../db/queries/city-maps';
 import { log } from '../../logger';
 
@@ -50,16 +52,27 @@ function toProtocolBuilding(
 ): CityMapBuilding {
   const protocolActions: BuildingActionDto[] = actions
     .filter((a) => a.building_id === b.id)
-    .map((a) => {
-      const targetZoneName = zoneNameMap.get(a.config.target_zone_id) ?? `Zone ${a.config.target_zone_id}`;
+    .map((a): BuildingActionDto => {
+      if (a.action_type === 'explore') {
+        const cfg = a.config as ExploreActionConfig;
+        return {
+          id: a.id,
+          action_type: 'explore',
+          label: 'Explore',
+          config: { encounter_chance: cfg.encounter_chance },
+        };
+      }
+      // travel
+      const cfg = a.config as TravelActionConfig;
+      const targetZoneName = zoneNameMap.get(cfg.target_zone_id) ?? `Zone ${cfg.target_zone_id}`;
       return {
         id: a.id,
-        action_type: a.action_type,
+        action_type: 'travel',
         label: `Travel to ${targetZoneName}`,
         config: {
-          target_zone_id: a.config.target_zone_id,
+          target_zone_id: cfg.target_zone_id,
           target_zone_name: targetZoneName,
-          target_node_id: a.config.target_node_id,
+          target_node_id: cfg.target_node_id,
         },
       };
     });
@@ -124,7 +137,13 @@ async function loadSingleZone(zone: MapZoneWithCounts): Promise<void> {
   ]);
 
   // Resolve target zone names for travel action labels
-  const targetZoneIds = [...new Set(buildingActions.map((a) => a.config.target_zone_id))];
+  const targetZoneIds = [
+    ...new Set(
+      buildingActions
+        .filter((a) => a.action_type === 'travel')
+        .map((a) => (a.config as TravelActionConfig).target_zone_id),
+    ),
+  ];
   const zoneNameMap = new Map<number, string>();
   await Promise.all(
     targetZoneIds.map(async (zid) => {

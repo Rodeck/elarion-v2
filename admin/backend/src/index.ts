@@ -10,6 +10,7 @@ import { buildingsRouter } from './routes/buildings';
 import { uploadRouter } from './routes/upload';
 import { authRouter } from './routes/auth';
 import { itemsRouter } from './routes/items';
+import { monstersRouter } from './routes/monsters';
 import { adminToolsRouter } from './routes/admin-tools';
 
 const app = express();
@@ -25,6 +26,10 @@ app.use('/images', express.static(imagesDir));
 const iconsDir = path.resolve(__dirname, '../../../backend/assets/items/icons');
 app.use('/item-icons', express.static(iconsDir));
 
+// Serve monster icons statically
+const monsterIconsDir = path.resolve(__dirname, '../../../backend/assets/monsters/icons');
+app.use('/monster-icons', express.static(monsterIconsDir));
+
 // Public auth routes (must be before requireAdmin middleware)
 app.use(authRouter);
 
@@ -38,6 +43,7 @@ app.use('/api/maps', edgesRouter);
 app.use('/api/maps', buildingsRouter);
 app.use('/api/maps', uploadRouter);
 app.use('/api/items', itemsRouter);
+app.use('/api/monsters', monstersRouter);
 app.use('/api/admin-tools', adminToolsRouter);
 
 app.listen(config.editorPort, () => {

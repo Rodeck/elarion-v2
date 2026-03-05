@@ -49,18 +49,25 @@ export interface Building {
   hotspot_r: number | null;
 }
 
-export interface BuildingAction {
-  id: number;
-  building_id: number;
-  action_type: 'travel';
-  sort_order: number;
-  config: TravelActionConfig;
-  created_at: string;
-}
-
 export interface TravelActionConfig {
   target_zone_id: number;
   target_node_id: number;
+}
+
+export interface ExploreActionConfig {
+  encounter_chance: number;
+  monsters: { monster_id: number; weight: number }[];
+}
+
+export type BuildingActionConfig = TravelActionConfig | ExploreActionConfig;
+
+export interface BuildingAction {
+  id: number;
+  building_id: number;
+  action_type: 'travel' | 'explore';
+  sort_order: number;
+  config: BuildingActionConfig;
+  created_at: string;
 }
 
 export interface CreateBuildingData {
@@ -364,8 +371,8 @@ export async function getBuildingActionsForZone(zoneId: number): Promise<Buildin
 
 export async function createBuildingAction(
   buildingId: number,
-  actionType: 'travel',
-  config: TravelActionConfig,
+  actionType: 'travel' | 'explore',
+  config: BuildingActionConfig,
   sortOrder: number = 0,
 ): Promise<BuildingAction> {
   const result = await query<BuildingAction>(

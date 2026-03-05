@@ -6,8 +6,13 @@ import {
   deleteBuildingAction,
   listMaps,
   listNodes,
+  listMonsters,
   type BuildingAction,
   type MapSummary,
+  type MonsterResponse,
+  type TravelActionConfig,
+  type ExploreActionConfig,
+  type ExploreMonsterEntry,
 } from '../editor/api';
 
 export class PropertiesPanel {
@@ -95,7 +100,7 @@ export class PropertiesPanel {
       }
 
       try {
-        await updateBuilding(this.currentMapId, this.currentBuildingId, data);
+        await updateBuilding(this.currentMapId, this.currentBuildingId, data as Parameters<typeof updateBuilding>[2]);
         if (field === 'name' || field === 'label_offset_x' || field === 'label_offset_y') {
           this.onBuildingUpdate?.(this.currentBuildingId, data as Partial<EditorBuilding>);
         }
@@ -114,7 +119,7 @@ export class PropertiesPanel {
     actionsSection.style.marginTop = '12px';
 
     const actionsHeader = document.createElement('label');
-    actionsHeader.textContent = 'Travel Actions';
+    actionsHeader.textContent = 'Actions';
     actionsHeader.style.marginBottom = '4px';
     actionsSection.appendChild(actionsHeader);
 
@@ -206,7 +211,13 @@ export class PropertiesPanel {
 
     const labelEl = document.createElement('span');
     labelEl.style.cssText = 'flex:1;font-size:11px;color:#8a94b0;';
-    labelEl.textContent = `Travel → Zone ${action.config.target_zone_id} Node ${action.config.target_node_id}`;
+    if (action.action_type === 'travel') {
+      const cfg = action.config as TravelActionConfig;
+      labelEl.textContent = `Travel → Zone ${cfg.target_zone_id} Node ${cfg.target_node_id}`;
+    } else {
+      const cfg = action.config as ExploreActionConfig;
+      labelEl.textContent = `Explore (${cfg.encounter_chance}% chance, ${cfg.monsters.length} monster${cfg.monsters.length !== 1 ? 's' : ''})`;
+    }
 
     const del = document.createElement('button');
     del.className = 'btn btn--danger btn--small';
@@ -241,22 +252,41 @@ export class PropertiesPanel {
     mapId: number,
     onClose: () => void,
   ): Promise<void> {
-    container.innerHTML = '<em style="font-size:11px;color:#404666;">Loading maps...</em>';
+    container.innerHTML = '<em style="font-size:11px;color:#404666;">Loading...</em>';
 
     let maps: MapSummary[] = [];
+    let monsters: MonsterResponse[] = [];
     try {
-      maps = await listMaps();
+      [maps, monsters] = await Promise.all([listMaps(), listMonsters()]);
     } catch {
-      container.innerHTML = '<em style="font-size:11px;color:#f87171;">Failed to load maps.</em>';
+      container.innerHTML = '<em style="font-size:11px;color:#f87171;">Failed to load data.</em>';
       return;
     }
 
     container.innerHTML = '';
     container.style.cssText = 'border:1px solid #1e2232;border-radius:6px;padding:8px;margin-top:6px;background:#0c0e14;';
 
-    // Map selector
+    // ── Action type selector ─────────────────────────────────────────
+    const typeLabel = this.label('Action Type', 'action-type-select');
+    container.appendChild(typeLabel);
+
+    const typeSelect = document.createElement('select');
+    typeSelect.id = 'action-type-select';
+    const actionTypes: [string, string][] = [['travel', 'Travel'], ['explore', 'Explore']];
+    for (const [val, text] of actionTypes) {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = text;
+      typeSelect.appendChild(opt);
+    }
+    container.appendChild(typeSelect);
+
+    // ── Travel fields ────────────────────────────────────────────────
+    const travelFields = document.createElement('div');
+    travelFields.id = 'travel-fields';
+
     const mapLabel = this.label('Destination Map', 'action-map-select');
-    container.appendChild(mapLabel);
+    travelFields.appendChild(mapLabel);
 
     const mapSelect = document.createElement('select');
     mapSelect.id = 'action-map-select';
@@ -270,11 +300,10 @@ export class PropertiesPanel {
       opt.textContent = m.name;
       mapSelect.appendChild(opt);
     }
-    container.appendChild(mapSelect);
+    travelFields.appendChild(mapSelect);
 
-    // Node selector
     const nodeLabel = this.label('Destination Node', 'action-node-select');
-    container.appendChild(nodeLabel);
+    travelFields.appendChild(nodeLabel);
 
     const nodeSelect = document.createElement('select');
     nodeSelect.id = 'action-node-select';
@@ -283,9 +312,8 @@ export class PropertiesPanel {
     nodeDefaultOpt.value = '';
     nodeDefaultOpt.textContent = '— select node —';
     nodeSelect.appendChild(nodeDefaultOpt);
-    container.appendChild(nodeSelect);
+    travelFields.appendChild(nodeSelect);
 
-    // Populate nodes when map changes
     mapSelect.addEventListener('change', async () => {
       const selectedMapId = parseInt(mapSelect.value, 10);
       nodeSelect.innerHTML = '';
@@ -294,9 +322,7 @@ export class PropertiesPanel {
       nd.textContent = '— loading... —';
       nodeSelect.appendChild(nd);
       nodeSelect.disabled = true;
-
       if (isNaN(selectedMapId)) return;
-
       try {
         const nodes = await listNodes(selectedMapId);
         nodeSelect.innerHTML = '';
@@ -316,7 +342,99 @@ export class PropertiesPanel {
       }
     });
 
-    // Buttons
+    container.appendChild(travelFields);
+
+    // ── Explore fields ───────────────────────────────────────────────
+    const exploreFields = document.createElement('div');
+    exploreFields.id = 'explore-fields';
+    exploreFields.style.display = 'none';
+
+    const chanceLabel = this.label('Encounter Chance (1–100%)', 'action-encounter-chance');
+    exploreFields.appendChild(chanceLabel);
+
+    const chanceInput = document.createElement('input');
+    chanceInput.id = 'action-encounter-chance';
+    chanceInput.type = 'number';
+    chanceInput.min = '1';
+    chanceInput.max = '100';
+    chanceInput.value = '15';
+    exploreFields.appendChild(chanceInput);
+
+    const monstersLabel = this.label('Monster Table', 'explore-monsters-table');
+    exploreFields.appendChild(monstersLabel);
+
+    // Monster entries list
+    const monsterEntriesEl = document.createElement('div');
+    monsterEntriesEl.id = 'explore-monsters-table';
+    monsterEntriesEl.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-bottom:4px;';
+    exploreFields.appendChild(monsterEntriesEl);
+
+    const monsterEntries: ExploreMonsterEntry[] = [];
+
+    const buildMonsterRow = (entry: ExploreMonsterEntry): HTMLElement => {
+      const entryRow = document.createElement('div');
+      entryRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
+
+      const mSel = document.createElement('select');
+      mSel.style.flex = '1';
+      monsters.forEach((m) => {
+        const opt = document.createElement('option');
+        opt.value = String(m.id);
+        opt.textContent = m.name;
+        opt.selected = m.id === entry.monster_id;
+        mSel.appendChild(opt);
+      });
+      mSel.addEventListener('change', () => {
+        entry.monster_id = parseInt(mSel.value, 10);
+      });
+
+      const wInput = document.createElement('input');
+      wInput.type = 'number';
+      wInput.min = '1';
+      wInput.value = String(entry.weight);
+      wInput.style.width = '52px';
+      wInput.title = 'Weight';
+      wInput.placeholder = 'Wt';
+      wInput.addEventListener('input', () => {
+        entry.weight = parseInt(wInput.value, 10) || 1;
+      });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'btn btn--danger btn--small';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', () => {
+        const idx = monsterEntries.indexOf(entry);
+        if (idx !== -1) monsterEntries.splice(idx, 1);
+        entryRow.remove();
+      });
+
+      entryRow.appendChild(mSel);
+      entryRow.appendChild(wInput);
+      entryRow.appendChild(removeBtn);
+      return entryRow;
+    };
+
+    const addMonsterBtn = document.createElement('button');
+    addMonsterBtn.className = 'btn btn--secondary';
+    addMonsterBtn.textContent = '+ Add Monster';
+    addMonsterBtn.style.cssText = 'width:100%;font-size:11px;margin-bottom:4px;';
+    addMonsterBtn.addEventListener('click', () => {
+      if (monsters.length === 0) { alert('No monsters defined yet. Create monsters first.'); return; }
+      const entry: ExploreMonsterEntry = { monster_id: monsters[0]!.id, weight: 1 };
+      monsterEntries.push(entry);
+      monsterEntriesEl.appendChild(buildMonsterRow(entry));
+    });
+    exploreFields.appendChild(addMonsterBtn);
+    container.appendChild(exploreFields);
+
+    // ── Show/hide on type change ─────────────────────────────────────
+    typeSelect.addEventListener('change', () => {
+      const isTravelSelected = typeSelect.value === 'travel';
+      travelFields.style.display = isTravelSelected ? '' : 'none';
+      exploreFields.style.display = isTravelSelected ? 'none' : '';
+    });
+
+    // ── Buttons ──────────────────────────────────────────────────────
     const btnRow = document.createElement('div');
     btnRow.style.cssText = 'display:flex;gap:6px;margin-top:8px;';
 
@@ -325,20 +443,38 @@ export class PropertiesPanel {
     saveBtn.textContent = 'Save';
     saveBtn.style.flex = '1';
     saveBtn.addEventListener('click', async () => {
-      const targetZoneId = parseInt(mapSelect.value, 10);
-      const targetNodeId = parseInt(nodeSelect.value, 10);
-      if (isNaN(targetZoneId) || isNaN(targetNodeId)) {
-        alert('Please select both a destination map and node.');
-        return;
-      }
       saveBtn.disabled = true;
       try {
-        const action = await createBuildingAction(mapId, buildingId, {
-          action_type: 'travel',
-          config: { target_zone_id: targetZoneId, target_node_id: targetNodeId },
-        });
+        if (typeSelect.value === 'travel') {
+          const targetZoneId = parseInt(mapSelect.value, 10);
+          const targetNodeId = parseInt(nodeSelect.value, 10);
+          if (isNaN(targetZoneId) || isNaN(targetNodeId)) {
+            alert('Please select both a destination map and node.');
+            saveBtn.disabled = false;
+            return;
+          }
+          await createBuildingAction(mapId, buildingId, {
+            action_type: 'travel',
+            config: { target_zone_id: targetZoneId, target_node_id: targetNodeId },
+          });
+        } else {
+          const encounterChance = parseInt(chanceInput.value, 10);
+          if (isNaN(encounterChance) || encounterChance < 1 || encounterChance > 100) {
+            alert('Encounter chance must be between 1 and 100.');
+            saveBtn.disabled = false;
+            return;
+          }
+          if (monsterEntries.length === 0) {
+            alert('Add at least one monster to the table.');
+            saveBtn.disabled = false;
+            return;
+          }
+          await createBuildingAction(mapId, buildingId, {
+            action_type: 'explore',
+            config: { encounter_chance: encounterChance, monsters: monsterEntries } as ExploreActionConfig,
+          });
+        }
         await this.renderActions(actionsList, buildingId, mapId);
-        void action;
         onClose();
       } catch (err) {
         alert(`Failed to save action: ${(err as Error).message}`);

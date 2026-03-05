@@ -4,11 +4,13 @@ import { broadcastPlayerLeft } from './zone-broadcasts';
 import { sendWorldState } from '../../websocket/handlers/world-state-handler';
 import { findByAccountId } from '../../db/queries/characters';
 import { getBuildingActions, getBuildingById, getMapById } from '../../db/queries/city-maps';
+import type { TravelActionConfig, ExploreActionConfig } from '../../db/queries/city-maps';
 import { query } from '../../db/connection';
 import { log } from '../../logger';
 import { sendToSession } from '../../websocket/server';
 import type { AuthenticatedSession } from '../../websocket/server';
 import type { CityBuildingActionPayload } from '@elarion/protocol';
+import { resolveExplore } from '../combat/explore-combat-service';
 
 export async function handleBuildingAction(
   session: AuthenticatedSession,
@@ -72,8 +74,25 @@ export async function handleBuildingAction(
     return;
   }
 
+  // ── Branch on action type ────────────────────────────────────────────────
+
+  if (action.action_type === 'explore') {
+    const exploreConfig = action.config as ExploreActionConfig;
+
+    try {
+      const result = await resolveExplore(session, character, action_id, exploreConfig);
+      sendToSession(session, 'building.explore_result', result);
+    } catch (err) {
+      log('error', 'building-action', 'explore_failed', { characterId, action_id, error: String(err) });
+      sendToSession(session, 'city.building_action_rejected', { reason: 'EXPLORE_FAILED' });
+    }
+    return;
+  }
+
+  // ── Travel action ────────────────────────────────────────────────────────
+
   // Gate 5: destination must still exist
-  const { target_zone_id, target_node_id } = action.config;
+  const { target_zone_id, target_node_id } = action.config as TravelActionConfig;
   const targetZone = await getMapById(target_zone_id);
   if (!targetZone) {
     sendToSession(session, 'city.building_action_rejected', { reason: 'INVALID_DESTINATION' });

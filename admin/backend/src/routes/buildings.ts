@@ -11,7 +11,9 @@ import {
   updateBuildingAction,
   deleteBuildingAction,
   type TravelActionConfig,
+  type ExploreActionConfig,
 } from '../../../../backend/src/db/queries/city-maps';
+import { getMonsterById } from '../../../../backend/src/db/queries/monsters';
 import { query } from '../../../../backend/src/db/connection';
 
 export const buildingsRouter = Router();
@@ -249,38 +251,67 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
   const { action_type, sort_order, config } = req.body as {
     action_type: string;
     sort_order?: number;
-    config: { target_zone_id: number; target_node_id: number };
+    config: Record<string, unknown>;
   };
 
-  if (action_type !== 'travel') {
-    return res.status(400).json({ error: 'action_type must be "travel"' });
-  }
-  if (!config || !Number.isInteger(config.target_zone_id) || !Number.isInteger(config.target_node_id)) {
-    return res.status(400).json({ error: 'config must include target_zone_id and target_node_id as integers' });
+  if (action_type !== 'travel' && action_type !== 'explore') {
+    return res.status(400).json({ error: 'action_type must be "travel" or "explore"' });
   }
 
   try {
-    // Validate destination zone
-    const targetZone = await getMapById(config.target_zone_id);
-    if (!targetZone) {
-      return res.status(400).json({ error: 'target_zone_id references a non-existent zone' });
-    }
-    // Validate destination node belongs to zone
-    const nodeRow = await query<{ id: number }>(
-      'SELECT id FROM path_nodes WHERE id = $1 AND zone_id = $2',
-      [config.target_node_id, config.target_zone_id],
-    );
-    if (nodeRow.rows.length === 0) {
-      return res.status(400).json({ error: 'target_node_id does not exist in target_zone_id' });
-    }
+    if (action_type === 'travel') {
+      const cfg = config as { target_zone_id?: unknown; target_node_id?: unknown };
+      if (!Number.isInteger(cfg.target_zone_id) || !Number.isInteger(cfg.target_node_id)) {
+        return res.status(400).json({ error: 'config must include target_zone_id and target_node_id as integers' });
+      }
+      const targetZone = await getMapById(cfg.target_zone_id as number);
+      if (!targetZone) return res.status(400).json({ error: 'target_zone_id references a non-existent zone' });
+      const nodeRow = await query<{ id: number }>(
+        'SELECT id FROM path_nodes WHERE id = $1 AND zone_id = $2',
+        [cfg.target_node_id, cfg.target_zone_id],
+      );
+      if (nodeRow.rows.length === 0) return res.status(400).json({ error: 'target_node_id does not exist in target_zone_id' });
 
-    const travelConfig: TravelActionConfig = {
-      target_zone_id: config.target_zone_id,
-      target_node_id: config.target_node_id,
-    };
-    const action = await createBuildingAction(buildingId, 'travel', travelConfig, sort_order ?? 0);
-    log('info', 'Created building action', { building_id: buildingId, action_id: action.id, admin: req.username });
-    return res.status(201).json({ action });
+      const travelConfig: TravelActionConfig = {
+        target_zone_id: cfg.target_zone_id as number,
+        target_node_id: cfg.target_node_id as number,
+      };
+      const action = await createBuildingAction(buildingId, 'travel', travelConfig, sort_order ?? 0);
+      log('info', 'Created travel action', { building_id: buildingId, action_id: action.id, admin: req.username });
+      return res.status(201).json({ action });
+    } else {
+      // explore
+      const cfg = config as { encounter_chance?: unknown; monsters?: unknown[] };
+      const encounterChance = Number(cfg.encounter_chance);
+      if (!Number.isInteger(encounterChance) || encounterChance < 0 || encounterChance > 100) {
+        return res.status(400).json({ error: 'encounter_chance must be an integer 0–100' });
+      }
+      const monsters = cfg.monsters ?? [];
+      if (!Array.isArray(monsters)) {
+        return res.status(400).json({ error: 'monsters must be an array' });
+      }
+      if (encounterChance > 0 && monsters.length === 0) {
+        return res.status(400).json({ error: 'monsters array is required when encounter_chance > 0' });
+      }
+      for (const entry of monsters) {
+        const e = entry as { monster_id?: unknown; weight?: unknown };
+        if (!Number.isInteger(e.monster_id)) return res.status(400).json({ error: 'each monster entry must have a valid monster_id' });
+        if (!Number.isInteger(e.weight) || (e.weight as number) <= 0) return res.status(400).json({ error: 'each monster entry weight must be a positive integer' });
+        const m = await getMonsterById(e.monster_id as number);
+        if (!m) return res.status(400).json({ error: `monster_id ${e.monster_id} does not exist` });
+      }
+
+      const exploreConfig: ExploreActionConfig = {
+        encounter_chance: encounterChance,
+        monsters: (monsters as Array<{ monster_id: number; weight: number }>).map((e) => ({
+          monster_id: e.monster_id,
+          weight: e.weight,
+        })),
+      };
+      const action = await createBuildingAction(buildingId, 'explore', exploreConfig, sort_order ?? 0);
+      log('info', 'Created explore action', { building_id: buildingId, action_id: action.id, admin: req.username });
+      return res.status(201).json({ action });
+    }
   } catch (err) {
     log('error', 'Failed to create building action', { building_id: buildingId, error: String(err) });
     return res.status(500).json({ error: 'Internal server error' });
