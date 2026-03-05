@@ -55,12 +55,24 @@ export interface TravelActionConfig {
   target_node_id: number;
 }
 
+export interface ExploreMonsterEntry {
+  monster_id: number;
+  weight: number;
+}
+
+export interface ExploreActionConfig {
+  encounter_chance: number;
+  monsters: ExploreMonsterEntry[];
+}
+
+export type BuildingActionConfig = TravelActionConfig | ExploreActionConfig;
+
 export interface BuildingAction {
   id: number;
   building_id: number;
-  action_type: 'travel';
+  action_type: 'travel' | 'explore';
   sort_order: number;
-  config: TravelActionConfig;
+  config: BuildingActionConfig;
   created_at: string;
 }
 
@@ -357,7 +369,11 @@ export async function listBuildingActions(mapId: number, buildingId: number): Pr
 export async function createBuildingAction(
   mapId: number,
   buildingId: number,
-  data: { action_type: 'travel'; sort_order?: number; config: TravelActionConfig },
+  data: {
+    action_type: 'travel' | 'explore';
+    sort_order?: number;
+    config: BuildingActionConfig;
+  },
 ): Promise<BuildingAction> {
   const res = await request<{ action: BuildingAction }>(
     `${BASE}/${mapId}/buildings/${buildingId}/actions`,
@@ -370,7 +386,7 @@ export async function updateBuildingAction(
   mapId: number,
   buildingId: number,
   actionId: number,
-  data: { sort_order?: number; config?: TravelActionConfig },
+  data: { sort_order?: number; config?: BuildingActionConfig },
 ): Promise<BuildingAction> {
   const res = await request<{ action: BuildingAction }>(
     `${BASE}/${mapId}/buildings/${buildingId}/actions/${actionId}`,
@@ -448,6 +464,78 @@ export async function updateItem(id: number, formData: FormData): Promise<ItemDe
 
 export async function deleteItem(id: number): Promise<void> {
   return request<void>(`${ITEMS_BASE}/${id}`, { method: 'DELETE' });
+}
+
+// ---------------------------------------------------------------------------
+// Monsters
+// ---------------------------------------------------------------------------
+
+const MONSTERS_BASE = '/api/monsters';
+
+export interface MonsterLootEntry {
+  id: number;
+  item_def_id: number;
+  item_name: string;
+  drop_chance: number;
+  quantity: number;
+  icon_url: string | null;
+}
+
+export interface MonsterResponse {
+  id: number;
+  name: string;
+  attack: number;
+  defense: number;
+  hp: number;
+  xp_reward: number;
+  icon_url: string | null;
+  created_at: string;
+  loot?: MonsterLootEntry[];
+}
+
+export async function listMonsters(): Promise<MonsterResponse[]> {
+  return request<MonsterResponse[]>(MONSTERS_BASE);
+}
+
+export async function getMonster(id: number): Promise<MonsterResponse> {
+  return request<MonsterResponse>(`${MONSTERS_BASE}/${id}`);
+}
+
+export async function createMonster(formData: FormData): Promise<MonsterResponse> {
+  return request<MonsterResponse>(MONSTERS_BASE, { method: 'POST', body: formData });
+}
+
+export async function updateMonster(id: number, formData: FormData): Promise<MonsterResponse> {
+  return request<MonsterResponse>(`${MONSTERS_BASE}/${id}`, { method: 'PUT', body: formData });
+}
+
+export async function deleteMonster(id: number): Promise<void> {
+  return request<void>(`${MONSTERS_BASE}/${id}`, { method: 'DELETE' });
+}
+
+export async function addMonsterLoot(
+  monsterId: number,
+  data: { item_def_id: number; drop_chance: number; quantity: number },
+): Promise<MonsterLootEntry> {
+  return request<MonsterLootEntry>(`${MONSTERS_BASE}/${monsterId}/loot`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateMonsterLoot(
+  monsterId: number,
+  lootId: number,
+  data: { drop_chance?: number; quantity?: number },
+): Promise<MonsterLootEntry> {
+  return request<MonsterLootEntry>(`${MONSTERS_BASE}/${monsterId}/loot/${lootId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteMonsterLoot(monsterId: number, lootId: number): Promise<void> {
+  return request<void>(`${MONSTERS_BASE}/${monsterId}/loot/${lootId}`, { method: 'DELETE' });
 }
 
 // ---------------------------------------------------------------------------

@@ -42,24 +42,6 @@ export interface PlayerSummary {
   current_node_id?: number | null;
 }
 
-export interface MonsterInstance {
-  instance_id: string;
-  template_id: number;
-  name: string;
-  max_hp: number;
-  current_hp: number;
-  pos_x: number;
-  pos_y: number;
-  in_combat: boolean;
-}
-
-export interface ItemGained {
-  item_id: number;
-  name: string;
-  type: string;
-  quantity: number;
-}
-
 export interface CityMapNode {
   id: number;
   x: number;
@@ -77,12 +59,25 @@ export interface TravelActionDto {
   target_node_id: number;
 }
 
-export interface BuildingActionDto {
+export interface ExploreActionDto {
+  encounter_chance: number; // 0–100, informational only
+}
+
+export interface TravelBuildingActionDto {
   id: number;
   action_type: 'travel';
   label: string;
   config: TravelActionDto;
 }
+
+export interface ExploreBuildingActionDto {
+  id: number;
+  action_type: 'explore';
+  label: string;
+  config: ExploreActionDto;
+}
+
+export type BuildingActionDto = TravelBuildingActionDto | ExploreBuildingActionDto;
 
 export interface CityMapBuilding {
   id: number;
@@ -112,6 +107,40 @@ export interface CityMapData {
   spawn_node_id: number;
 }
 
+export interface CombatRoundRecord {
+  round: number;
+  player_attack: number;    // damage dealt by player to monster
+  monster_attack: number;   // damage dealt by monster to player (0 if monster died first)
+  player_hp_after: number;
+  monster_hp_after: number;
+}
+
+export interface ItemDroppedDto {
+  item_def_id: number;
+  name: string;
+  quantity: number;
+  icon_url: string | null;
+}
+
+export interface BuildingExploreResultPayload {
+  action_id: number;
+  outcome: 'no_encounter' | 'combat';
+
+  // Only present when outcome === 'combat':
+  monster?: {
+    id: number;
+    name: string;
+    icon_url: string | null;
+    max_hp: number;
+    attack: number;
+    defense: number;
+  };
+  rounds?: CombatRoundRecord[];
+  combat_result?: 'win' | 'loss';
+  xp_gained?: number;               // only when combat_result === 'win'
+  items_dropped?: ItemDroppedDto[]; // only when combat_result === 'win', may be empty
+}
+
 // ---------------------------------------------------------------------------
 // Client → Server payloads
 // ---------------------------------------------------------------------------
@@ -135,10 +164,6 @@ export interface PlayerMovePayload {
   direction: 'n' | 's' | 'e' | 'w';
 }
 
-export interface CombatStartPayload {
-  monster_instance_id: string;
-}
-
 export interface ChatSendPayload {
   channel: 'local' | 'global';
   message: string;
@@ -151,7 +176,7 @@ export interface CityMovePayload {
 export interface CityBuildingActionPayload {
   building_id: number;
   action_id: number;
-  action_type: 'travel';
+  action_type: 'travel' | 'explore';
 }
 
 // ---------------------------------------------------------------------------
@@ -162,7 +187,6 @@ export type AuthRegisterMessage      = WsMessage<AuthRegisterPayload>;
 export type AuthLoginMessage         = WsMessage<AuthLoginPayload>;
 export type CharacterCreateMessage   = WsMessage<CharacterCreatePayload>;
 export type PlayerMoveMessage        = WsMessage<PlayerMovePayload>;
-export type CombatStartMessage       = WsMessage<CombatStartPayload>;
 export type ChatSendMessage          = WsMessage<ChatSendPayload>;
 export type CityMoveMessage          = WsMessage<CityMovePayload>;
 export type CityBuildingActionMessage = WsMessage<CityBuildingActionPayload>;
@@ -194,7 +218,6 @@ export interface WorldStatePayload {
   zone_name: string;
   my_character: CharacterData;
   players: PlayerSummary[];
-  monsters: MonsterInstance[];
   map_type: 'tile' | 'city';
   city_map?: CityMapData;
 }
@@ -219,55 +242,12 @@ export interface PlayerLeftZonePayload {
   character_id: string;
 }
 
-export interface CombatStartedPayload {
-  combat_id: string;
-  monster: {
-    instance_id: string;
-    name: string;
-    max_hp: number;
-    current_hp: number;
-    attack_power: number;
-    defence: number;
-  };
-}
-
-export interface CombatRoundPayload {
-  combat_id: string;
-  round_number: number;
-  attacker: 'player' | 'monster';
-  attacker_name: string;
-  action: 'attack' | 'critical' | 'miss';
-  damage: number;
-  player_hp_after: number;
-  monster_hp_after: number;
-}
-
-export interface CombatEndedPayload {
-  combat_id: string;
-  outcome: 'victory' | 'defeat';
-  xp_gained: number;
-  items_gained: ItemGained[];
-}
-
 export interface CharacterLevelledUpPayload {
   new_level: number;
   new_max_hp: number;
   new_attack_power: number;
   new_defence: number;
   new_experience: number;
-}
-
-export interface MonsterSpawnedPayload {
-  instance_id: string;
-  template_id: number;
-  name: string;
-  max_hp: number;
-  pos_x: number;
-  pos_y: number;
-}
-
-export interface MonsterDespawnedPayload {
-  instance_id: string;
 }
 
 export interface ChatMessagePayload {
@@ -301,11 +281,12 @@ export interface CityBuildingActionRejectedPayload {
     | 'INVALID_ACTION'
     | 'INVALID_DESTINATION'
     | 'IN_COMBAT'
-    | 'NOT_CITY_MAP';
+    | 'NOT_CITY_MAP'
+    | 'EXPLORE_FAILED';
 }
 
 export interface ServerRateLimitedPayload {
-  action: 'player.move' | 'chat.send' | 'combat.start' | 'city.move';
+  action: 'player.move' | 'chat.send' | 'city.move';
   retry_after_ms: number;
 }
 
@@ -315,10 +296,6 @@ export interface ServerErrorPayload {
     | 'NOT_AUTHENTICATED'
     | 'CHARACTER_EXISTS'
     | 'CHARACTER_REQUIRED'
-    | 'MONSTER_NOT_FOUND'
-    | 'MONSTER_NOT_ADJACENT'
-    | 'ALREADY_IN_COMBAT'
-    | 'DUPLICATE_COMBAT'
     | 'INTERNAL_ERROR';
   message: string;
 }
@@ -336,12 +313,7 @@ export type PlayerMovedMessage         = WsMessage<PlayerMovedPayload>;
 export type PlayerMoveRejectedMessage  = WsMessage<PlayerMoveRejectedPayload>;
 export type PlayerEnteredZoneMessage   = WsMessage<PlayerEnteredZonePayload>;
 export type PlayerLeftZoneMessage      = WsMessage<PlayerLeftZonePayload>;
-export type CombatStartedMessage       = WsMessage<CombatStartedPayload>;
-export type CombatRoundMessage         = WsMessage<CombatRoundPayload>;
-export type CombatEndedMessage         = WsMessage<CombatEndedPayload>;
 export type CharacterLevelledUpMessage = WsMessage<CharacterLevelledUpPayload>;
-export type MonsterSpawnedMessage      = WsMessage<MonsterSpawnedPayload>;
-export type MonsterDespawnedMessage    = WsMessage<MonsterDespawnedPayload>;
 export type ChatMessageMessage         = WsMessage<ChatMessagePayload>;
 export type ServerRateLimitedMessage   = WsMessage<ServerRateLimitedPayload>;
 export type ServerErrorMessage         = WsMessage<ServerErrorPayload>;
@@ -349,6 +321,7 @@ export type CityPlayerMovedMessage              = WsMessage<CityPlayerMovedPaylo
 export type CityBuildingArrivedMessage          = WsMessage<CityBuildingArrivedPayload>;
 export type CityMoveRejectedMessage             = WsMessage<CityMoveRejectedPayload>;
 export type CityBuildingActionRejectedMessage   = WsMessage<CityBuildingActionRejectedPayload>;
+export type BuildingExploreResultMessage        = WsMessage<BuildingExploreResultPayload>;
 
 // ---------------------------------------------------------------------------
 // Discriminated union helpers (useful for switch-based dispatch)
@@ -364,12 +337,7 @@ export type AnyServerMessage =
   | PlayerMoveRejectedMessage
   | PlayerEnteredZoneMessage
   | PlayerLeftZoneMessage
-  | CombatStartedMessage
-  | CombatRoundMessage
-  | CombatEndedMessage
   | CharacterLevelledUpMessage
-  | MonsterSpawnedMessage
-  | MonsterDespawnedMessage
   | ChatMessageMessage
   | ServerRateLimitedMessage
   | ServerErrorMessage
@@ -377,6 +345,7 @@ export type AnyServerMessage =
   | CityBuildingArrivedMessage
   | CityMoveRejectedMessage
   | CityBuildingActionRejectedMessage
+  | BuildingExploreResultMessage
   | InventoryStateMessage
   | InventoryItemReceivedMessage
   | InventoryFullMessage
@@ -388,7 +357,6 @@ export type AnyClientMessage =
   | AuthLoginMessage
   | CharacterCreateMessage
   | PlayerMoveMessage
-  | CombatStartMessage
   | ChatSendMessage
   | CityMoveMessage
   | CityBuildingActionMessage

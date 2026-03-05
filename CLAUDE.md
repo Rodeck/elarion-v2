@@ -13,6 +13,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - PostgreSQL 16 — new `building_actions` table; `buildings` table extended with `description TEXT` (006-building-actions)
 - TypeScript 5.x (frontend, backend, admin — all packages) + Phaser 3.60.0 (game frontend), Node.js 20 LTS + `ws` (game backend), Express 4 + `multer` (admin backend), Vite 5 (both frontends) (007-item-inventory)
 - PostgreSQL 16 — two new tables (`item_definitions`, `inventory_items`) replacing legacy `items`/`character_items` via migration 010 (007-item-inventory)
+- TypeScript 5.x (all packages — frontend, backend, shared, admin) (008-monster-combat)
+- PostgreSQL 16 — new `monsters` + `monster_loot` tables; `building_actions` extended; old combat tables dropped (008-monster-combat)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -38,9 +40,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 008-monster-combat: Added TypeScript 5.x (all packages — frontend, backend, shared, admin)
 - 007-item-inventory: Added TypeScript 5.x (frontend, backend, admin — all packages) + Phaser 3.60.0 (game frontend), Node.js 20 LTS + `ws` (game backend), Express 4 + `multer` (admin backend), Vite 5 (both frontends)
 - 006-building-actions: Added TypeScript 5.x (frontend, backend, admin) + Phaser 3.60.0 (game frontend), Node.js 20 LTS + `ws` (backend), Express 4 (admin backend), Vite 5 (both frontends)
-- 005-session-persistence: Added TypeScript 5.x — frontend (Phaser 3, Vite) and backend (Node.js 20 LTS) + `jose` (JWT, backend), Phaser 3.60.0, `ws` library (WebSocket server)
 
 
 

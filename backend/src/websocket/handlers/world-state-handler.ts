@@ -10,18 +10,10 @@ import { getCityMapCache } from '../../game/world/city-map-loader';
 import { getSpawnNodeForZone } from '../../db/queries/city-maps';
 import { query } from '../../db/connection';
 
-// Zone-registry and monster-registry will be populated in US2 and US3.
-// For US1, we return empty arrays as placeholders.
-// These are imported lazily to avoid circular deps once implemented.
 let getZonePlayers: ((zoneId: number) => { characterId: string; name: string; classId: number; level: number; posX: number; posY: number }[]) | null = null;
-let getZoneMonsters: ((zoneId: number) => { instance_id: string; template_id: number; name: string; max_hp: number; current_hp: number; pos_x: number; pos_y: number; in_combat: boolean }[]) | null = null;
 
 export function setZonePlayersGetter(fn: typeof getZonePlayers): void {
   getZonePlayers = fn;
-}
-
-export function setZoneMonstersGetter(fn: typeof getZoneMonsters): void {
-  getZoneMonsters = fn;
 }
 
 export async function sendWorldState(session: AuthenticatedSession): Promise<void> {
@@ -62,8 +54,6 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
           pos_y: p.posY,
         }))
     : [];
-
-  const monsters = getZoneMonsters ? getZoneMonsters(character.zone_id) : [];
 
   // Determine map type and build city map data if applicable
   const cityCache = getCityMapCache(character.zone_id);
@@ -107,7 +97,6 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
     zone_id: character.zone_id,
     map_type: mapType,
     players: players.length,
-    monsters: monsters.length,
   });
 
   const worldStatePayload: Record<string, unknown> = {
@@ -131,7 +120,6 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
       current_node_id: currentNodeId,
     },
     players,
-    monsters: mapType === 'city' ? [] : monsters,
   };
 
   // Include city map data when applicable

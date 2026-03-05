@@ -1,15 +1,18 @@
-import type { CityMapBuilding, CityBuildingActionPayload } from '@elarion/protocol';
+import type { CityMapBuilding, CityBuildingActionPayload, BuildingExploreResultPayload } from '@elarion/protocol';
+import { CombatModal } from './CombatModal';
 
-type TravelCallback = (payload: CityBuildingActionPayload) => void;
+type ActionCallback = (payload: CityBuildingActionPayload) => void;
 
 export class BuildingPanel {
   private container: HTMLElement;
   private overlay: HTMLElement | null = null;
-  private onTravel: TravelCallback | null = null;
+  private onAction: ActionCallback | null = null;
+  private combatModal: CombatModal;
 
-  constructor(parent: HTMLElement, onTravel: TravelCallback) {
+  constructor(parent: HTMLElement, onAction: ActionCallback) {
     this.container = parent;
-    this.onTravel = onTravel;
+    this.onAction = onAction;
+    this.combatModal = new CombatModal(document.body);
   }
 
   show(building: CityMapBuilding): void {
@@ -67,6 +70,7 @@ export class BuildingPanel {
       for (const action of building.actions) {
         const btn = document.createElement('button');
         btn.dataset['actionId'] = String(action.id);
+        btn.dataset['actionType'] = action.action_type;
         btn.style.cssText = [
           'width:100%',
           'padding:9px 12px',
@@ -91,7 +95,7 @@ export class BuildingPanel {
 
         btn.addEventListener('click', () => {
           this.disableButtons();
-          this.onTravel?.({
+          this.onAction?.({
             building_id: building.id,
             action_id: action.id,
             action_type: action.action_type,
@@ -137,7 +141,13 @@ export class BuildingPanel {
     }
   }
 
-  private disableButtons(): void {
+  /** Called when the server sends building.explore_result for an action we triggered. */
+  showExploreResult(result: BuildingExploreResultPayload): void {
+    this.enableButtons();
+    void this.combatModal.show(result);
+  }
+
+  disableButtons(): void {
     if (!this.overlay) return;
     this.overlay.querySelectorAll<HTMLButtonElement>('button').forEach((btn) => {
       btn.disabled = true;
@@ -146,7 +156,7 @@ export class BuildingPanel {
     });
   }
 
-  private enableButtons(): void {
+  enableButtons(): void {
     if (!this.overlay) return;
     this.overlay.querySelectorAll<HTMLButtonElement>('button').forEach((btn) => {
       btn.disabled = false;
@@ -162,11 +172,13 @@ export class BuildingPanel {
       case 'INVALID_DESTINATION': return 'The destination no longer exists.';
       case 'IN_COMBAT': return 'You cannot travel while in combat.';
       case 'NOT_CITY_MAP': return 'Travel is only available in city maps.';
-      default: return 'Travel failed. Please try again.';
+      case 'EXPLORE_FAILED': return 'Exploration failed. Please try again.';
+      default: return 'Action failed. Please try again.';
     }
   }
 
   destroy(): void {
     this.hide();
+    this.combatModal.close();
   }
 }

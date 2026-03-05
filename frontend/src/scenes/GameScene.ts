@@ -18,17 +18,13 @@ import type {
   PlayerEnteredZonePayload,
   PlayerLeftZonePayload,
   PlayerMoveRejectedPayload,
-  CombatStartedPayload,
-  CombatRoundPayload,
-  CombatEndedPayload,
   CharacterLevelledUpPayload,
-  MonsterSpawnedPayload,
-  MonsterDespawnedPayload,
   ChatMessagePayload,
   CityPlayerMovedPayload,
   CityMoveRejectedPayload,
   CityBuildingArrivedPayload,
   CityBuildingActionRejectedPayload,
+  BuildingExploreResultPayload,
   CityMapData,
   CityMapNode,
   CityMapBuilding,
@@ -57,15 +53,9 @@ export class GameScene extends Phaser.Scene {
   // Remote players: characterId → sprite
   private remotePlayers = new Map<string, Phaser.GameObjects.Container>();
 
-  // Monster sprites: instanceId → sprite
-  private monsterSprites = new Map<string, Phaser.GameObjects.Container>();
-
   // Movement throttle
   private lastMoveSent = 0;
   private readonly MOVE_INTERVAL_MS = 100; // max 10/sec
-
-  // Combat
-  private inCombat = false;
 
   // Counts active movement tweens on the player sprite; used to detect when the
   // last hop in a multi-hop path completes so we can switch back to idle.
@@ -108,8 +98,10 @@ export class GameScene extends Phaser.Scene {
 
     const gameEl = document.getElementById('game')!;
     this.buildingPanel = new BuildingPanel(gameEl, (payload) => {
-      this.cameras.main.fadeOut(600, 0, 0, 0);
-      this.awaitingTravelWorldState = true;
+      if (payload.action_type === 'travel') {
+        this.cameras.main.fadeOut(600, 0, 0, 0);
+        this.awaitingTravelWorldState = true;
+      }
       this.client.send('city.building_action', payload);
     });
 
@@ -163,13 +155,6 @@ export class GameScene extends Phaser.Scene {
 
       this.placeMyCharacter();
       this.buildStatsBar();
-
-      // Place monsters (tile maps only — city maps don't have roaming monsters)
-      if (!this.isCityMap) {
-        for (const m of payload.monsters) {
-          this.spawnMonsterSprite(m.instance_id, m.name, m.pos_x, m.pos_y, m.current_hp, m.max_hp);
-        }
-      }
 
       // Place other players
       for (const p of payload.players) {
@@ -236,43 +221,8 @@ export class GameScene extends Phaser.Scene {
       this.removeRemotePlayer(payload.character_id);
     });
 
-    this.client.on<MonsterSpawnedPayload>('monster.spawned', (payload) => {
-      if (!this.isCityMap) {
-        this.spawnMonsterSprite(payload.instance_id, payload.name, payload.pos_x, payload.pos_y, payload.max_hp, payload.max_hp);
-      }
-    });
-
-    this.client.on<MonsterDespawnedPayload>('monster.despawned', (payload) => {
-      this.monsterSprites.get(payload.instance_id)?.destroy();
-      this.monsterSprites.delete(payload.instance_id);
-    });
-
     this.client.on<{ code: string; message: string }>('server.error', (payload) => {
       this.combatLog.appendError(payload.message);
-    });
-
-    this.client.on<CombatStartedPayload>('combat.started', () => {
-      this.inCombat = true;
-    });
-
-    this.client.on<CombatRoundPayload>('combat.round', (payload) => {
-      if (this.myCharacter) {
-        this.myCharacter.current_hp = payload.player_hp_after;
-        this.statsBar.setHp(payload.player_hp_after, this.myCharacter.max_hp);
-      }
-      this.combatLog.appendRound(
-        payload.round_number,
-        payload.attacker,
-        payload.action,
-        payload.damage,
-        payload.player_hp_after,
-        payload.monster_hp_after,
-      );
-    });
-
-    this.client.on<CombatEndedPayload>('combat.ended', (payload) => {
-      this.inCombat = false;
-      this.combatLog.appendSummary(payload.outcome, payload.xp_gained, payload.items_gained ?? []);
     });
 
     this.client.on<CharacterLevelledUpPayload>('character.levelled_up', (payload) => {
@@ -361,8 +311,15 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.client.on<CityBuildingActionRejectedPayload>('city.building_action_rejected', (payload) => {
-      this.cameras.main.fadeIn(300, 0, 0, 0);
+      if (this.awaitingTravelWorldState) {
+        this.cameras.main.fadeIn(300, 0, 0, 0);
+        this.awaitingTravelWorldState = false;
+      }
       this.buildingPanel.showRejection(payload.reason);
+    });
+
+    this.client.on<BuildingExploreResultPayload>('building.explore_result', (payload) => {
+      this.buildingPanel.showExploreResult(payload);
     });
 
     // Inventory handlers
@@ -582,7 +539,7 @@ export class GameScene extends Phaser.Scene {
 
   private setupCityInput(): void {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.inCombat || !this.isCityMap || !this.cityMapData) return;
+      if (!this.isCityMap || !this.cityMapData) return;
 
       const now = Date.now();
       if (now - this.lastMoveSent < this.MOVE_INTERVAL_MS) return;
@@ -829,8 +786,6 @@ export class GameScene extends Phaser.Scene {
     ];
 
     this.input.keyboard!.on('keydown', () => {
-      if (this.inCombat) return;
-
       const now = Date.now();
       if (now - this.lastMoveSent < this.MOVE_INTERVAL_MS) return;
 
@@ -898,23 +853,4 @@ export class GameScene extends Phaser.Scene {
     return 'north-east';
   }
 
-  private spawnMonsterSprite(instanceId: string, name: string, posX: number, posY: number, currentHp: number, maxHp: number): void {
-    const x = posX * TILE_SIZE + TILE_SIZE / 2;
-    const y = posY * TILE_SIZE + TILE_SIZE / 2;
-
-    const sprite = this.add.rectangle(0, 0, 20, 20, 0xcc4444).setDepth(8);
-    const label = this.add.text(0, -20, name, { fontSize: '9px', color: '#ffaaaa' }).setOrigin(0.5);
-    const hpText = this.add.text(0, 14, `${currentHp}/${maxHp}`, { fontSize: '9px', color: '#ff8888' }).setOrigin(0.5);
-    const container = this.add.container(x, y, [sprite, label, hpText]).setDepth(8);
-
-    // Make monster interactive for combat
-    sprite.setInteractive({ cursor: 'pointer' });
-    sprite.on('pointerdown', () => {
-      if (!this.inCombat) {
-        this.client.send('combat.start', { monster_instance_id: instanceId });
-      }
-    });
-
-    this.monsterSprites.set(instanceId, container);
-  }
 }

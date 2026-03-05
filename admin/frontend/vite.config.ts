@@ -18,6 +18,14 @@ export default defineConfig({
         target: 'http://localhost:4001',
         changeOrigin: true,
       },
+      '/item-icons': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
+      '/monster-icons': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
     },
   },
 });
