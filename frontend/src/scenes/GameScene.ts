@@ -92,6 +92,7 @@ export class GameScene extends Phaser.Scene {
     this.combatLog = new CombatLog(bottomBar);
 
     const inventoryEl = document.getElementById('inventory-panel')!;
+    inventoryEl.style.display = 'flex';
     this.inventoryPanel = new InventoryPanel(inventoryEl, (slotId) => {
       this.client.send('inventory.delete_item', { slot_id: slotId });
     });

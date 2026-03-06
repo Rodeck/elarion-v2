@@ -91,13 +91,13 @@ export class CombatModal {
     modal.innerHTML = '';
 
     const header = document.createElement('div');
-    header.style.cssText = 'padding:16px 20px 12px;border-bottom:1px solid #3a2e1a;display:flex;align-items:center;gap:14px;';
+    header.style.cssText = 'padding:16px 20px 12px;border-bottom:1px solid #3a2e1a;display:flex;align-items:center;gap:18px;';
 
     if (result.monster?.icon_url) {
       const icon = document.createElement('img');
       icon.src = result.monster.icon_url;
       icon.alt = result.monster.name;
-      icon.style.cssText = 'width:48px;height:48px;object-fit:contain;image-rendering:pixelated;';
+      icon.style.cssText = 'width:120px;height:120px;object-fit:contain;image-rendering:pixelated;flex-shrink:0;';
       header.appendChild(icon);
     }
 
@@ -105,12 +105,12 @@ export class CombatModal {
     info.style.cssText = 'flex:1;';
 
     const name = document.createElement('h2');
-    name.style.cssText = 'margin:0 0 4px;font-size:14px;letter-spacing:0.08em;color:#e8c870;';
+    name.style.cssText = 'margin:0 0 6px;font-size:16px;letter-spacing:0.08em;color:#e8c870;';
     name.textContent = result.monster?.name ?? 'Unknown';
     info.appendChild(name);
 
     const stats = document.createElement('p');
-    stats.style.cssText = 'margin:0;font-family:Crimson Text,serif;font-size:11px;color:#7a6040;';
+    stats.style.cssText = 'margin:0;font-family:Crimson Text,serif;font-size:12px;color:#7a6040;';
     stats.textContent = `HP: ${result.monster?.max_hp ?? '?'}  ATK: ${result.monster?.attack ?? '?'}  DEF: ${result.monster?.defense ?? '?'}`;
     info.appendChild(stats);
 
