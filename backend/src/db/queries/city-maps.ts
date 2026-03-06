@@ -59,12 +59,12 @@ export interface ExploreActionConfig {
   monsters: { monster_id: number; weight: number }[];
 }
 
-export type BuildingActionConfig = TravelActionConfig | ExploreActionConfig;
+export type BuildingActionConfig = TravelActionConfig | ExploreActionConfig | Record<string, unknown>;
 
 export interface BuildingAction {
   id: number;
   building_id: number;
-  action_type: 'travel' | 'explore';
+  action_type: 'travel' | 'explore' | 'expedition';
   sort_order: number;
   config: BuildingActionConfig;
   created_at: string;

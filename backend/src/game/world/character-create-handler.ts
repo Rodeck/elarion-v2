@@ -1,11 +1,13 @@
 import { findByAccountId, insertCharacter, findClassById } from '../../db/queries/characters';
 import { getMapsByType } from '../../db/queries/city-maps';
+import { createSquire } from '../../db/queries/squires';
 import { log } from '../../logger';
 import { sendToSession } from '../../websocket/server';
 import type { AuthenticatedSession } from '../../websocket/server';
 import type { CharacterCreatePayload } from '@elarion/protocol';
 
 const VALID_CLASS_IDS = new Set([1, 2, 3]);
+const SQUIRE_NAMES = ['Aldric', 'Brand', 'Cade', 'Daveth', 'Edgar', 'Finn', 'Gareth', 'Hadwyn'];
 const NAME_REGEX = /^[a-zA-Z0-9_]{3,32}$/;
 
 async function getStarterZoneId(): Promise<number | null> {
@@ -92,6 +94,11 @@ export async function handleCharacterCreate(session: AuthenticatedSession, paylo
   });
 
   session.characterId = character.id;
+
+  // Assign a starter squire with a random name from the pool
+  const squireName = SQUIRE_NAMES[Math.floor(Math.random() * SQUIRE_NAMES.length)]!;
+  await createSquire(character.id, squireName);
+  log('info', 'squire', 'squire.created', { character_id: character.id, squire_name: squireName });
 
   log('info', 'character', 'create_success', {
     accountId: session.accountId,

@@ -3,11 +3,19 @@ import { getCityMapCache } from './city-map-loader';
 import { broadcastToZone } from './zone-broadcasts';
 import { movePlayerToNode } from './zone-registry';
 import { findByAccountId, updateCharacter } from '../../db/queries/characters';
+import { getBuildingActions } from '../../db/queries/city-maps';
+import type { ExploreActionConfig } from '../../db/queries/city-maps';
+import {
+  getSquiresForCharacter,
+  getActiveExpeditionForSquire,
+} from '../../db/queries/squires';
+import type { ExpeditionActionConfig } from '../../db/queries/squires';
+import { buildExpeditionStateDto } from '../expedition/expedition-service';
 import { query } from '../../db/connection';
 import { log } from '../../logger';
 import { sendToSession } from '../../websocket/server';
 import type { AuthenticatedSession } from '../../websocket/server';
-import type { CityMovePayload } from '@elarion/protocol';
+import type { CityMovePayload, CityMapBuilding, ExpeditionStateDto } from '@elarion/protocol';
 
 // ---------------------------------------------------------------------------
 // Movement cancellation — track active movement timers per character
@@ -68,6 +76,29 @@ function checkCityMoveRateLimit(characterId: string): { allowed: boolean; retryA
 // ---------------------------------------------------------------------------
 
 const STEP_DELAY_MS = 300;
+
+// ---------------------------------------------------------------------------
+// Expedition state lookup for building_arrived
+// ---------------------------------------------------------------------------
+
+async function getExpeditionStateForBuilding(
+  characterId: string,
+  building: CityMapBuilding,
+): Promise<ExpeditionStateDto | undefined> {
+  const expeditionActionDto = building.actions.find((a) => a.action_type === 'expedition');
+  if (!expeditionActionDto) return undefined;
+
+  const allActions = await getBuildingActions(building.id);
+  const dbAction = allActions.find((a) => a.id === expeditionActionDto.id && (a.action_type as string) === 'expedition');
+  if (!dbAction) return undefined;
+
+  const squires = await getSquiresForCharacter(characterId);
+  const squire = squires[0];
+  if (!squire) return undefined;
+
+  const expedition = await getActiveExpeditionForSquire(squire.id);
+  return buildExpeditionStateDto(squire, dbAction.id, dbAction.config as unknown as ExpeditionActionConfig, expedition);
+}
 
 // ---------------------------------------------------------------------------
 // Handler
@@ -257,18 +288,21 @@ export async function handleCityMove(session: AuthenticatedSession, payload: unk
       // If the arrived node has a building, notify the moving player only
       const building = buildingByNode.get(stepNodeId);
       if (building) {
-        sendToSession(session, 'city.building_arrived', {
-          building_id: building.id,
-          building_name: building.name,
-          node_id: stepNodeId,
-        });
-
-        log('debug', 'city-movement', 'building_arrived', {
-          characterId,
-          node_id: stepNodeId,
-          building_id: building.id,
-          building_name: building.name,
-        });
+        void (async () => {
+          const expedition_state = await getExpeditionStateForBuilding(characterId, building).catch(() => undefined);
+          sendToSession(session, 'city.building_arrived', {
+            building_id: building.id,
+            building_name: building.name,
+            node_id: stepNodeId,
+            ...(expedition_state !== undefined ? { expedition_state } : {}),
+          });
+          log('debug', 'city-movement', 'building_arrived', {
+            characterId,
+            node_id: stepNodeId,
+            building_id: building.id,
+            building_name: building.name,
+          });
+        })();
       }
 
       // If this is the last step, clean up the active movement

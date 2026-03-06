@@ -3,6 +3,7 @@ import {
   updateBuilding,
   listBuildingActions,
   createBuildingAction,
+  updateBuildingAction,
   deleteBuildingAction,
   listMaps,
   listNodes,
@@ -13,7 +14,11 @@ import {
   type TravelActionConfig,
   type ExploreActionConfig,
   type ExploreMonsterEntry,
+  type ExpeditionActionConfig,
+  type ExpeditionItemEntry,
+  type ItemDefinitionResponse,
 } from '../editor/api';
+import { openItemPicker, resolveItemName } from './item-picker';
 
 export class PropertiesPanel {
   private container: HTMLElement;
@@ -214,6 +219,9 @@ export class PropertiesPanel {
     if (action.action_type === 'travel') {
       const cfg = action.config as TravelActionConfig;
       labelEl.textContent = `Travel → Zone ${cfg.target_zone_id} Node ${cfg.target_node_id}`;
+    } else if (action.action_type === 'expedition') {
+      const cfg = action.config as ExpeditionActionConfig;
+      labelEl.textContent = `Expedition (gold:${cfg.base_gold} exp:${cfg.base_exp} items:${cfg.items.length})`;
     } else {
       const cfg = action.config as ExploreActionConfig;
       labelEl.textContent = `Explore (${cfg.encounter_chance}% chance, ${cfg.monsters.length} monster${cfg.monsters.length !== 1 ? 's' : ''})`;
@@ -228,7 +236,7 @@ export class PropertiesPanel {
         await deleteBuildingAction(mapId, buildingId, action.id);
         const idx = allActions.indexOf(action);
         if (idx !== -1) allActions.splice(idx, 1);
-        row.remove();
+        wrapper.remove();
         if (container.children.length === 0) {
           const empty = document.createElement('p');
           empty.style.cssText = 'font-size:11px;color:#3a4060;font-style:italic;margin:0;';
@@ -242,7 +250,222 @@ export class PropertiesPanel {
 
     row.appendChild(labelEl);
     row.appendChild(del);
-    return row;
+
+    const wrapper = document.createElement('div');
+    wrapper.appendChild(row);
+
+    if (action.action_type === 'expedition') {
+      const editBtn = document.createElement('button');
+      editBtn.className = 'btn btn--secondary btn--small';
+      editBtn.textContent = '✎';
+      editBtn.title = 'Edit expedition config';
+
+      const editForm = document.createElement('div');
+      editForm.style.display = 'none';
+
+      editBtn.addEventListener('click', () => {
+        const isOpen = editForm.style.display !== 'none';
+        if (isOpen) {
+          editForm.style.display = 'none';
+        } else {
+          editForm.innerHTML = '';
+          editForm.style.display = '';
+          this.renderEditExpeditionForm(editForm, action, mapId, buildingId, labelEl, () => {
+            editForm.style.display = 'none';
+          });
+        }
+      });
+
+      row.appendChild(editBtn);
+      wrapper.appendChild(editForm);
+    }
+
+    return wrapper;
+  }
+
+  private renderEditExpeditionForm(
+    container: HTMLElement,
+    action: BuildingAction,
+    mapId: number,
+    buildingId: number,
+    labelEl: HTMLElement,
+    onClose: () => void,
+  ): void {
+    const cfg = action.config as ExpeditionActionConfig;
+    container.style.cssText = 'border:1px solid #1e2232;border-radius:6px;padding:8px;margin-top:4px;margin-bottom:4px;background:#0c0e14;';
+
+    container.appendChild(this.label('Base Gold (1h)', `edit-base-gold-${action.id}`));
+    const baseGoldInput = document.createElement('input');
+    baseGoldInput.id = `edit-base-gold-${action.id}`;
+    baseGoldInput.type = 'number';
+    baseGoldInput.min = '0';
+    baseGoldInput.value = String(cfg.base_gold);
+    container.appendChild(baseGoldInput);
+
+    container.appendChild(this.label('Base Exp (1h)', `edit-base-exp-${action.id}`));
+    const baseExpInput = document.createElement('input');
+    baseExpInput.id = `edit-base-exp-${action.id}`;
+    baseExpInput.type = 'number';
+    baseExpInput.min = '0';
+    baseExpInput.value = String(cfg.base_exp);
+    container.appendChild(baseExpInput);
+
+    container.appendChild(this.label('Item Rewards', `edit-items-${action.id}`));
+    const itemEntriesEl = document.createElement('div');
+    itemEntriesEl.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-bottom:4px;';
+    container.appendChild(itemEntriesEl);
+
+    const expeditionItems: ExpeditionItemEntry[] = cfg.items.map((i) => ({ ...i }));
+
+    const buildItemRow = (entry: ExpeditionItemEntry, initialName?: string): HTMLElement => {
+      const entryRow = document.createElement('div');
+      entryRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-bottom:2px;';
+
+      const trigger = document.createElement('button');
+      trigger.type = 'button';
+      trigger.className = 'item-select-trigger';
+
+      const triggerIcon = document.createElement('div');
+      triggerIcon.className = 'item-select-trigger-icon';
+
+      const triggerName = document.createElement('span');
+      triggerName.className = 'item-select-trigger-name';
+
+      const updateTrigger = (item: ItemDefinitionResponse): void => {
+        triggerIcon.innerHTML = '';
+        if (item.icon_url) {
+          const img = document.createElement('img');
+          img.src = item.icon_url;
+          img.alt = '';
+          triggerIcon.appendChild(img);
+        } else {
+          triggerIcon.textContent = (item.name[0] ?? '?').toUpperCase();
+        }
+        triggerName.textContent = item.name;
+        triggerName.classList.remove('item-select-trigger-name--placeholder');
+      };
+
+      if (initialName) {
+        triggerIcon.textContent = initialName[0]?.toUpperCase() ?? '?';
+        triggerName.textContent = initialName;
+      } else {
+        triggerIcon.textContent = '?';
+        triggerName.textContent = `#${entry.item_def_id}`;
+        triggerName.classList.add('item-select-trigger-name--placeholder');
+      }
+
+      trigger.appendChild(triggerIcon);
+      trigger.appendChild(triggerName);
+
+      trigger.addEventListener('click', () => {
+        void openItemPicker((item) => {
+          entry.item_def_id = item.id;
+          updateTrigger(item);
+        });
+      });
+
+      const qtyInput = document.createElement('input');
+      qtyInput.type = 'number';
+      qtyInput.min = '1';
+      qtyInput.value = String(entry.base_quantity);
+      qtyInput.style.cssText = 'width:56px;flex-shrink:0;';
+      qtyInput.title = 'Quantity';
+      qtyInput.placeholder = 'Qty';
+      qtyInput.addEventListener('input', () => {
+        entry.base_quantity = parseInt(qtyInput.value, 10) || 1;
+      });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'btn btn--danger btn--small';
+      removeBtn.type = 'button';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', () => {
+        const idx = expeditionItems.indexOf(entry);
+        if (idx !== -1) expeditionItems.splice(idx, 1);
+        entryRow.remove();
+      });
+
+      entryRow.appendChild(trigger);
+      entryRow.appendChild(qtyInput);
+      entryRow.appendChild(removeBtn);
+      return entryRow;
+    };
+
+    // Render existing items — resolve names async so they show properly
+    for (const item of expeditionItems) {
+      const row = buildItemRow(item);
+      itemEntriesEl.appendChild(row);
+      void resolveItemName(item.item_def_id).then((name) => {
+        const nameEl = row.querySelector<HTMLElement>('.item-select-trigger-name');
+        const iconEl = row.querySelector<HTMLElement>('.item-select-trigger-icon');
+        if (nameEl) {
+          nameEl.textContent = name;
+          nameEl.classList.remove('item-select-trigger-name--placeholder');
+        }
+        if (iconEl) iconEl.textContent = name[0]?.toUpperCase() ?? '?';
+      });
+    }
+
+    const addItemBtn = document.createElement('button');
+    addItemBtn.className = 'btn btn--secondary';
+    addItemBtn.type = 'button';
+    addItemBtn.textContent = '+ Add Item';
+    addItemBtn.style.cssText = 'width:100%;font-size:11px;margin-bottom:4px;';
+    addItemBtn.addEventListener('click', () => {
+      const entry: ExpeditionItemEntry = { item_def_id: 0, base_quantity: 1 };
+      expeditionItems.push(entry);
+      itemEntriesEl.appendChild(buildItemRow(entry));
+    });
+    container.appendChild(addItemBtn);
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:6px;margin-top:6px;';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn btn--primary';
+    saveBtn.textContent = 'Save';
+    saveBtn.style.flex = '1';
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      const baseGold = parseInt(baseGoldInput.value, 10);
+      const baseExp = parseInt(baseExpInput.value, 10);
+      if (isNaN(baseGold) || baseGold < 0) {
+        alert('Base gold must be a non-negative integer.');
+        saveBtn.disabled = false;
+        return;
+      }
+      if (isNaN(baseExp) || baseExp < 0) {
+        alert('Base exp must be a non-negative integer.');
+        saveBtn.disabled = false;
+        return;
+      }
+      if (expeditionItems.some((i) => i.item_def_id <= 0)) {
+        alert('All item rows must have an item selected.');
+        saveBtn.disabled = false;
+        return;
+      }
+      try {
+        const updated = await updateBuildingAction(mapId, buildingId, action.id, {
+          config: { base_gold: baseGold, base_exp: baseExp, items: expeditionItems } as ExpeditionActionConfig,
+        });
+        action.config = updated.config;
+        labelEl.textContent = `Expedition (gold:${baseGold} exp:${baseExp} items:${expeditionItems.length})`;
+        onClose();
+      } catch (err) {
+        alert(`Failed to save: ${(err as Error).message}`);
+        saveBtn.disabled = false;
+      }
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.flex = '1';
+    cancelBtn.addEventListener('click', onClose);
+
+    btnRow.appendChild(saveBtn);
+    btnRow.appendChild(cancelBtn);
+    container.appendChild(btnRow);
   }
 
   private async buildAddActionForm(
@@ -272,7 +495,7 @@ export class PropertiesPanel {
 
     const typeSelect = document.createElement('select');
     typeSelect.id = 'action-type-select';
-    const actionTypes: [string, string][] = [['travel', 'Travel'], ['explore', 'Explore']];
+    const actionTypes: [string, string][] = [['travel', 'Travel'], ['explore', 'Explore'], ['expedition', 'Expedition']];
     for (const [val, text] of actionTypes) {
       const opt = document.createElement('option');
       opt.value = val;
@@ -427,11 +650,128 @@ export class PropertiesPanel {
     exploreFields.appendChild(addMonsterBtn);
     container.appendChild(exploreFields);
 
+    // ── Expedition fields ────────────────────────────────────────────
+    const expeditionFields = document.createElement('div');
+    expeditionFields.id = 'expedition-fields';
+    expeditionFields.style.display = 'none';
+
+    expeditionFields.appendChild(this.label('Base Gold (1h)', 'action-base-gold'));
+    const baseGoldInput = document.createElement('input');
+    baseGoldInput.id = 'action-base-gold';
+    baseGoldInput.type = 'number';
+    baseGoldInput.min = '0';
+    baseGoldInput.value = '10';
+    expeditionFields.appendChild(baseGoldInput);
+
+    expeditionFields.appendChild(this.label('Base Exp (1h)', 'action-base-exp'));
+    const baseExpInput = document.createElement('input');
+    baseExpInput.id = 'action-base-exp';
+    baseExpInput.type = 'number';
+    baseExpInput.min = '0';
+    baseExpInput.value = '20';
+    expeditionFields.appendChild(baseExpInput);
+
+    const itemsLabel = this.label('Item Rewards', 'expedition-items-list');
+    expeditionFields.appendChild(itemsLabel);
+
+    const itemEntriesEl = document.createElement('div');
+    itemEntriesEl.id = 'expedition-items-list';
+    itemEntriesEl.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-bottom:4px;';
+    expeditionFields.appendChild(itemEntriesEl);
+
+    const expeditionItems: ExpeditionItemEntry[] = [];
+
+    const buildItemRow = (entry: ExpeditionItemEntry, initialItem?: ItemDefinitionResponse): HTMLElement => {
+      const entryRow = document.createElement('div');
+      entryRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-bottom:2px;';
+
+      // Item selector trigger
+      const trigger = document.createElement('button');
+      trigger.type = 'button';
+      trigger.className = 'item-select-trigger';
+
+      const triggerIcon = document.createElement('div');
+      triggerIcon.className = 'item-select-trigger-icon';
+
+      const triggerName = document.createElement('span');
+      triggerName.className = 'item-select-trigger-name item-select-trigger-name--placeholder';
+
+      const updateTrigger = (item: ItemDefinitionResponse): void => {
+        triggerIcon.innerHTML = '';
+        if (item.icon_url) {
+          const img = document.createElement('img');
+          img.src = item.icon_url;
+          img.alt = '';
+          triggerIcon.appendChild(img);
+        } else {
+          triggerIcon.textContent = (item.name[0] ?? '?').toUpperCase();
+        }
+        triggerName.textContent = item.name;
+        triggerName.classList.remove('item-select-trigger-name--placeholder');
+      };
+
+      if (initialItem) {
+        updateTrigger(initialItem);
+      } else {
+        triggerIcon.textContent = '?';
+        triggerName.textContent = 'Select item…';
+      }
+
+      trigger.appendChild(triggerIcon);
+      trigger.appendChild(triggerName);
+
+      trigger.addEventListener('click', () => {
+        void openItemPicker((item) => {
+          entry.item_def_id = item.id;
+          updateTrigger(item);
+        });
+      });
+
+      const qtyInput = document.createElement('input');
+      qtyInput.type = 'number';
+      qtyInput.min = '1';
+      qtyInput.value = String(entry.base_quantity);
+      qtyInput.style.cssText = 'width:56px;flex-shrink:0;';
+      qtyInput.title = 'Quantity';
+      qtyInput.placeholder = 'Qty';
+      qtyInput.addEventListener('input', () => {
+        entry.base_quantity = parseInt(qtyInput.value, 10) || 1;
+      });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'btn btn--danger btn--small';
+      removeBtn.type = 'button';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', () => {
+        const idx = expeditionItems.indexOf(entry);
+        if (idx !== -1) expeditionItems.splice(idx, 1);
+        entryRow.remove();
+      });
+
+      entryRow.appendChild(trigger);
+      entryRow.appendChild(qtyInput);
+      entryRow.appendChild(removeBtn);
+      return entryRow;
+    };
+
+    const addItemBtn = document.createElement('button');
+    addItemBtn.className = 'btn btn--secondary';
+    addItemBtn.type = 'button';
+    addItemBtn.textContent = '+ Add Item';
+    addItemBtn.style.cssText = 'width:100%;font-size:11px;margin-bottom:4px;';
+    addItemBtn.addEventListener('click', () => {
+      const entry: ExpeditionItemEntry = { item_def_id: 0, base_quantity: 1 };
+      expeditionItems.push(entry);
+      itemEntriesEl.appendChild(buildItemRow(entry));
+    });
+    expeditionFields.appendChild(addItemBtn);
+    container.appendChild(expeditionFields);
+
     // ── Show/hide on type change ─────────────────────────────────────
     typeSelect.addEventListener('change', () => {
-      const isTravelSelected = typeSelect.value === 'travel';
-      travelFields.style.display = isTravelSelected ? '' : 'none';
-      exploreFields.style.display = isTravelSelected ? 'none' : '';
+      travelFields.style.display = typeSelect.value === 'travel' ? '' : 'none';
+      exploreFields.style.display = typeSelect.value === 'explore' ? '' : 'none';
+      expeditionFields.style.display = typeSelect.value === 'expedition' ? '' : 'none';
     });
 
     // ── Buttons ──────────────────────────────────────────────────────
@@ -457,7 +797,7 @@ export class PropertiesPanel {
             action_type: 'travel',
             config: { target_zone_id: targetZoneId, target_node_id: targetNodeId },
           });
-        } else {
+        } else if (typeSelect.value === 'explore') {
           const encounterChance = parseInt(chanceInput.value, 10);
           if (isNaN(encounterChance) || encounterChance < 1 || encounterChance > 100) {
             alert('Encounter chance must be between 1 and 100.');
@@ -472,6 +812,28 @@ export class PropertiesPanel {
           await createBuildingAction(mapId, buildingId, {
             action_type: 'explore',
             config: { encounter_chance: encounterChance, monsters: monsterEntries } as ExploreActionConfig,
+          });
+        } else {
+          const baseGold = parseInt(baseGoldInput.value, 10);
+          const baseExp = parseInt(baseExpInput.value, 10);
+          if (isNaN(baseGold) || baseGold < 0) {
+            alert('Base gold must be a non-negative integer.');
+            saveBtn.disabled = false;
+            return;
+          }
+          if (isNaN(baseExp) || baseExp < 0) {
+            alert('Base exp must be a non-negative integer.');
+            saveBtn.disabled = false;
+            return;
+          }
+          if (expeditionItems.some((i) => i.item_def_id <= 0)) {
+            alert('All item rows must have an item selected.');
+            saveBtn.disabled = false;
+            return;
+          }
+          await createBuildingAction(mapId, buildingId, {
+            action_type: 'expedition',
+            config: { base_gold: baseGold, base_exp: baseExp, items: expeditionItems } as ExpeditionActionConfig,
           });
         }
         await this.renderActions(actionsList, buildingId, mapId);

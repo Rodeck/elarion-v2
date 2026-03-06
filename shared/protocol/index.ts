@@ -77,7 +77,43 @@ export interface ExploreBuildingActionDto {
   config: ExploreActionDto;
 }
 
-export type BuildingActionDto = TravelBuildingActionDto | ExploreBuildingActionDto;
+export interface ExpeditionBuildingActionDto {
+  id: number;
+  action_type: 'expedition';
+  label: string;
+}
+
+export type BuildingActionDto = TravelBuildingActionDto | ExploreBuildingActionDto | ExpeditionBuildingActionDto;
+
+// ---------------------------------------------------------------------------
+// Expedition sub-types
+// ---------------------------------------------------------------------------
+
+export type SquireStatus = 'idle' | 'exploring' | 'ready';
+
+export interface ExpeditionDurationOption {
+  duration_hours: 1 | 3 | 6;
+  est_gold: number;
+  est_exp: number;
+  items: { name: string; quantity: number }[];
+}
+
+export interface CollectableRewards {
+  gold: number;
+  exp: number;
+  items: { name: string; quantity: number }[];
+}
+
+export interface ExpeditionStateDto {
+  action_id: number;
+  squire_name: string;
+  squire_status: SquireStatus;
+  expedition_id?: number;
+  started_at?: string;             // ISO 8601 — present when exploring
+  completes_at?: string;           // ISO 8601 — present when exploring
+  collectable_rewards?: CollectableRewards; // present when ready
+  duration_options?: ExpeditionDurationOption[]; // present when idle
+}
 
 export interface CityMapBuilding {
   id: number;
@@ -179,17 +215,29 @@ export interface CityBuildingActionPayload {
   action_type: 'travel' | 'explore';
 }
 
+export interface ExpeditionDispatchPayload {
+  building_id: number;
+  action_id: number;
+  duration_hours: 1 | 3 | 6;
+}
+
+export interface ExpeditionCollectPayload {
+  expedition_id: number;
+}
+
 // ---------------------------------------------------------------------------
 // Client → Server message types
 // ---------------------------------------------------------------------------
 
-export type AuthRegisterMessage      = WsMessage<AuthRegisterPayload>;
-export type AuthLoginMessage         = WsMessage<AuthLoginPayload>;
-export type CharacterCreateMessage   = WsMessage<CharacterCreatePayload>;
-export type PlayerMoveMessage        = WsMessage<PlayerMovePayload>;
-export type ChatSendMessage          = WsMessage<ChatSendPayload>;
-export type CityMoveMessage          = WsMessage<CityMovePayload>;
-export type CityBuildingActionMessage = WsMessage<CityBuildingActionPayload>;
+export type AuthRegisterMessage        = WsMessage<AuthRegisterPayload>;
+export type AuthLoginMessage           = WsMessage<AuthLoginPayload>;
+export type CharacterCreateMessage     = WsMessage<CharacterCreatePayload>;
+export type PlayerMoveMessage          = WsMessage<PlayerMovePayload>;
+export type ChatSendMessage            = WsMessage<ChatSendPayload>;
+export type CityMoveMessage            = WsMessage<CityMovePayload>;
+export type CityBuildingActionMessage  = WsMessage<CityBuildingActionPayload>;
+export type ExpeditionDispatchMessage  = WsMessage<ExpeditionDispatchPayload>;
+export type ExpeditionCollectMessage   = WsMessage<ExpeditionCollectPayload>;
 
 // ---------------------------------------------------------------------------
 // Server → Client payloads
@@ -268,6 +316,7 @@ export interface CityBuildingArrivedPayload {
   building_id: number;
   building_name: string;
   node_id: number;
+  expedition_state?: ExpeditionStateDto;
 }
 
 export interface CityMoveRejectedPayload {
@@ -350,7 +399,12 @@ export type AnyServerMessage =
   | InventoryItemReceivedMessage
   | InventoryFullMessage
   | InventoryItemDeletedMessage
-  | InventoryDeleteRejectedMessage;
+  | InventoryDeleteRejectedMessage
+  | ExpeditionDispatchedMessage
+  | ExpeditionDispatchRejectedMessage
+  | ExpeditionCompletedMessage
+  | ExpeditionCollectResultMessage
+  | ExpeditionCollectRejectedMessage;
 
 export type AnyClientMessage =
   | AuthRegisterMessage
@@ -360,7 +414,9 @@ export type AnyClientMessage =
   | ChatSendMessage
   | CityMoveMessage
   | CityBuildingActionMessage
-  | InventoryDeleteItemMessage;
+  | InventoryDeleteItemMessage
+  | ExpeditionDispatchMessage
+  | ExpeditionCollectMessage;
 
 // ---------------------------------------------------------------------------
 // Inventory: shared sub-types
@@ -432,6 +488,49 @@ export interface InventoryDeleteRejectedPayload {
 }
 
 // ---------------------------------------------------------------------------
+// Expedition: Server → Client payloads
+// ---------------------------------------------------------------------------
+
+export interface ExpeditionDispatchedPayload {
+  expedition_id: number;
+  squire_name: string;
+  building_name: string;
+  duration_hours: 1 | 3 | 6;
+  completes_at: string; // ISO 8601
+}
+
+export interface ExpeditionDispatchRejectedPayload {
+  reason:
+    | 'NO_SQUIRE_AVAILABLE'
+    | 'INVALID_DURATION'
+    | 'NOT_AT_BUILDING'
+    | 'NO_EXPEDITION_CONFIG'
+    | 'IN_COMBAT'
+    | 'NOT_CITY_MAP';
+}
+
+export interface ExpeditionCompletedPayload {
+  expedition_id: number;
+  squire_name: string;
+  building_name: string;
+}
+
+export interface ExpeditionCollectResultPayload {
+  squire_name: string;
+  rewards: {
+    gold: number;
+    exp: number;
+    items: { item_def_id: number; name: string; quantity: number }[];
+  };
+  items_skipped: boolean;
+}
+
+export interface ExpeditionCollectRejectedPayload {
+  expedition_id: number;
+  reason: 'NOT_FOUND' | 'NOT_OWNER' | 'NOT_COMPLETE' | 'ALREADY_COLLECTED';
+}
+
+// ---------------------------------------------------------------------------
 // Inventory: message type aliases
 // ---------------------------------------------------------------------------
 
@@ -441,3 +540,13 @@ export type InventoryItemReceivedMessage   = WsMessage<InventoryItemReceivedPayl
 export type InventoryFullMessage           = WsMessage<InventoryFullPayload>;
 export type InventoryItemDeletedMessage    = WsMessage<InventoryItemDeletedPayload>;
 export type InventoryDeleteRejectedMessage = WsMessage<InventoryDeleteRejectedPayload>;
+
+// ---------------------------------------------------------------------------
+// Expedition: message type aliases
+// ---------------------------------------------------------------------------
+
+export type ExpeditionDispatchedMessage        = WsMessage<ExpeditionDispatchedPayload>;
+export type ExpeditionDispatchRejectedMessage  = WsMessage<ExpeditionDispatchRejectedPayload>;
+export type ExpeditionCompletedMessage         = WsMessage<ExpeditionCompletedPayload>;
+export type ExpeditionCollectResultMessage     = WsMessage<ExpeditionCollectResultPayload>;
+export type ExpeditionCollectRejectedMessage   = WsMessage<ExpeditionCollectRejectedPayload>;
