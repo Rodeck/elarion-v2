@@ -97,8 +97,8 @@ export class GameScene extends Phaser.Scene {
       this.client.send('inventory.delete_item', { slot_id: slotId });
     });
 
-    const gameEl = document.getElementById('game')!;
-    this.buildingPanel = new BuildingPanel(gameEl, (payload) => {
+    const uiOverlay = document.getElementById('ui-overlay')!;
+    this.buildingPanel = new BuildingPanel(uiOverlay, (payload) => {
       if (payload.action_type === 'travel') {
         this.cameras.main.fadeOut(600, 0, 0, 0);
         this.awaitingTravelWorldState = true;

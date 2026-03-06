@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { WSClient } from '../network/WSClient';
-import { Colors, Fonts } from '../styles/phaser-tokens';
 import { SessionStore } from '../auth/SessionStore';
 import type { AuthSuccessPayload, AuthErrorPayload } from '@elarion/protocol';
 
@@ -8,187 +7,74 @@ type Tab = 'login' | 'register';
 
 export class LoginScene extends Phaser.Scene {
   private activeTab: Tab = 'login';
-  private errorText!: Phaser.GameObjects.Text;
-  private usernameInput!: HTMLInputElement;
-  private passwordInput!: HTMLInputElement;
-  private loginTabUnderline!: Phaser.GameObjects.Rectangle;
-  private registerTabUnderline!: Phaser.GameObjects.Rectangle;
-  private loginTabText!: Phaser.GameObjects.Text;
-  private registerTabText!: Phaser.GameObjects.Text;
+  private view: HTMLElement | null = null;
+  private usernameInput: HTMLInputElement | null = null;
+  private passwordInput: HTMLInputElement | null = null;
+  private errorEl: HTMLElement | null = null;
 
   constructor() {
     super({ key: 'LoginScene' });
   }
 
   create(): void {
-    const { width, height } = this.scale;
-    const cx = width / 2;
-    const cy = height / 2;
+    this.activeTab = 'login';
+    this.view = document.getElementById('login-view')!;
+    this.view.style.display = 'flex';
+    this.renderForm();
+    this.events.once('shutdown', () => this.hideView());
+  }
 
-    // Background
-    this.cameras.main.setBackgroundColor(Colors.bgDeepest);
+  private renderForm(): void {
+    const v = this.view!;
+    v.innerHTML = `
+      <h1 class="login-title">ELARION</h1>
+      <div class="login-panel">
+        <div class="login-tabs">
+          <button class="login-tab is-active" data-tab="login">LOGIN</button>
+          <button class="login-tab" data-tab="register">REGISTER</button>
+        </div>
+        <hr class="login-divider">
+        <div class="login-form">
+          <label class="login-label">Username</label>
+          <input class="login-input" id="lv-username" type="text" placeholder="Enter username" autocomplete="username">
+          <label class="login-label">Password</label>
+          <input class="login-input" id="lv-password" type="password" placeholder="Enter password" autocomplete="current-password">
+        </div>
+        <button class="login-submit">ENTER</button>
+        <p class="login-error" id="lv-error"></p>
+      </div>
+    `;
 
-    // Panel background
-    const panelW = 340;
-    const panelH = 320;
-    const panel = this.add.graphics();
-    panel.fillStyle(Colors.bgPanel, 0.95);
-    panel.fillRoundedRect(cx - panelW / 2, cy - panelH / 2 - 20, panelW, panelH, 3);
-    panel.lineStyle(1, Colors.goldDim, 1.0);
-    panel.strokeRoundedRect(cx - panelW / 2, cy - panelH / 2 - 20, panelW, panelH, 3);
-    panel.lineStyle(1, Colors.goldBright, 0.07);
-    panel.lineBetween(cx - panelW / 2 + 4, cy - panelH / 2 - 19, cx + panelW / 2 - 4, cy - panelH / 2 - 19);
+    this.usernameInput = v.querySelector<HTMLInputElement>('#lv-username')!;
+    this.passwordInput = v.querySelector<HTMLInputElement>('#lv-password')!;
+    this.errorEl = v.querySelector<HTMLElement>('#lv-error')!;
 
-    // Title
-    this.add.text(cx, cy - 130, 'ELARION', {
-      fontFamily: Fonts.display,
-      fontSize: '42px',
-      color: Colors.goldBrightStr,
-      fontStyle: 'bold',
-    }).setOrigin(0.5);
+    v.querySelectorAll<HTMLButtonElement>('.login-tab').forEach((btn) => {
+      btn.addEventListener('click', () => this.switchTab(btn.dataset['tab'] as Tab));
+    });
 
-    // Tabs
-    this.loginTabText = this.add.text(cx - 60, cy - 80, 'LOGIN', {
-      fontFamily: Fonts.display,
-      fontSize: '12px',
-      color: Colors.goldPrimaryStr,
-      fontStyle: 'bold',
-    }).setOrigin(0.5).setInteractive({ cursor: 'pointer' });
+    v.querySelector<HTMLButtonElement>('.login-submit')!
+      .addEventListener('click', () => void this.submit());
 
-    this.registerTabText = this.add.text(cx + 60, cy - 80, 'REGISTER', {
-      fontFamily: Fonts.display,
-      fontSize: '12px',
-      color: Colors.textMuted,
-    }).setOrigin(0.5).setInteractive({ cursor: 'pointer' });
+    v.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') void this.submit();
+    });
 
-    // Tab underlines
-    this.loginTabUnderline = this.add.rectangle(cx - 60, cy - 70, 52, 2, Colors.goldPrimary).setOrigin(0.5, 0);
-    this.registerTabUnderline = this.add.rectangle(cx + 60, cy - 70, 66, 2, Colors.goldPrimary, 0).setOrigin(0.5, 0);
-
-    // Divider
-    const divider = this.add.graphics();
-    divider.lineStyle(1, Colors.goldSubtle, 0.6);
-    divider.lineBetween(cx - panelW / 2 + 16, cy - 68, cx + panelW / 2 - 16, cy - 68);
-
-    // Input labels
-    this.add.text(cx - 110, cy - 54, 'Username', {
-      fontFamily: Fonts.display,
-      fontSize: '11px',
-      color: Colors.textSecondary,
-    }).setOrigin(0, 0.5);
-
-    this.add.text(cx - 110, cy - 4, 'Password', {
-      fontFamily: Fonts.display,
-      fontSize: '11px',
-      color: Colors.textSecondary,
-    }).setOrigin(0, 0.5);
-
-    // HTML inputs
-    this.usernameInput = this.createInput('text', 'Enter username', cx, cy - 29);
-    this.passwordInput = this.createInput('password', 'Enter password', cx, cy + 22);
-
-    // Submit button
-    const btnW = 160;
-    const btnH = 36;
-    const btnX = cx - btnW / 2;
-    const btnY = cy + 60;
-
-    const btnBg = this.add.graphics();
-    const drawBtn = (hover: boolean) => {
-      btnBg.clear();
-      btnBg.fillStyle(hover ? Colors.bgPanelAlt : Colors.bgPanel, 1.0);
-      btnBg.fillRoundedRect(btnX, btnY, btnW, btnH, 3);
-      btnBg.lineStyle(1, hover ? Colors.goldBright : Colors.goldPrimary, 1.0);
-      btnBg.strokeRoundedRect(btnX, btnY, btnW, btnH, 3);
-    };
-    drawBtn(false);
-
-    const btnLabel = this.add.text(cx, btnY + btnH / 2, 'ENTER', {
-      fontFamily: Fonts.display,
-      fontSize: '13px',
-      color: Colors.goldPrimaryStr,
-      fontStyle: 'bold',
-    }).setOrigin(0.5);
-
-    const btnHitArea = this.add.rectangle(cx, btnY + btnH / 2, btnW, btnH)
-      .setOrigin(0.5)
-      .setInteractive({ cursor: 'pointer' });
-
-    btnHitArea.on('pointerover',  () => drawBtn(true));
-    btnHitArea.on('pointerout',   () => drawBtn(false));
-    btnHitArea.on('pointerdown',  () => void this.submit());
-
-    // Error text
-    this.errorText = this.add.text(cx, cy + 118, '', {
-      fontFamily: Fonts.body,
-      fontSize: '12px',
-      color: '#e74c3c',
-      wordWrap: { width: 300 },
-    }).setOrigin(0.5);
-
-    // Tab events
-    this.loginTabText.on('pointerdown', () => this.switchTab('login'));
-    this.registerTabText.on('pointerdown', () => this.switchTab('register'));
-
-    void panel;
-    void divider;
-    void btnLabel;
+    this.usernameInput.focus();
   }
 
   private switchTab(tab: Tab): void {
     this.activeTab = tab;
-    if (tab === 'login') {
-      this.loginTabText.setStyle({ color: Colors.goldPrimaryStr, fontStyle: 'bold' });
-      this.registerTabText.setStyle({ color: Colors.textMuted, fontStyle: 'normal' });
-      this.loginTabUnderline.setAlpha(1);
-      this.registerTabUnderline.setAlpha(0);
-    } else {
-      this.registerTabText.setStyle({ color: Colors.goldPrimaryStr, fontStyle: 'bold' });
-      this.loginTabText.setStyle({ color: Colors.textMuted, fontStyle: 'normal' });
-      this.registerTabUnderline.setAlpha(1);
-      this.loginTabUnderline.setAlpha(0);
-    }
+    this.view!.querySelectorAll<HTMLButtonElement>('.login-tab').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset['tab'] === tab);
+    });
     this.clearError();
-  }
-
-  private createInput(type: string, placeholder: string, cx: number, cy: number): HTMLInputElement {
-    const el = document.createElement('input');
-    el.type = type;
-    el.placeholder = placeholder;
-    el.style.cssText = `
-      position: absolute;
-      width: 220px;
-      padding: 8px 12px;
-      font-family: var(--font-body);
-      font-size: 14px;
-      background: var(--color-bg-inset);
-      color: var(--color-text-primary);
-      border: 1px solid var(--color-gold-subtle);
-      border-radius: 2px;
-      outline: none;
-      box-sizing: border-box;
-      transition: border-color 0.2s;
-    `;
-    el.addEventListener('focus', () => { el.style.borderColor = 'var(--color-gold-primary)'; });
-    el.addEventListener('blur',  () => { el.style.borderColor = 'var(--color-gold-subtle)'; });
-
-    const canvas = this.game.canvas;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = rect.width / this.scale.width;
-    const scaleY = rect.height / this.scale.height;
-    el.style.left = `${rect.left + (cx - 110) * scaleX}px`;
-    el.style.top  = `${rect.top  + (cy - 16) * scaleY}px`;
-
-    document.body.appendChild(el);
-    this.events.once('shutdown', () => el.remove());
-
-    return el;
   }
 
   private async submit(): Promise<void> {
     this.clearError();
-    const username = this.usernameInput.value.trim();
-    const password = this.passwordInput.value;
+    const username = this.usernameInput!.value.trim();
+    const password = this.passwordInput!.value;
 
     if (!username || !password) {
       this.showError('Please enter username and password.');
@@ -197,18 +83,14 @@ export class LoginScene extends Phaser.Scene {
 
     const wsHost = import.meta.env['VITE_WS_HOST'] ?? 'localhost:4000';
     const client = new WSClient(`ws://${wsHost}/game?token=`);
-
     await client.connect();
 
     client.on<AuthSuccessPayload>('auth.success', (payload) => {
       SessionStore.save(payload.token);
       client.disconnect();
-
       if (payload.has_character) {
-        this.cleanupInputs();
         this.scene.start('GameScene', { token: payload.token });
       } else {
-        this.cleanupInputs();
         this.scene.start('CharacterCreateScene', { token: payload.token });
       }
     });
@@ -233,15 +115,27 @@ export class LoginScene extends Phaser.Scene {
   }
 
   private showError(msg: string): void {
-    this.errorText.setText(msg);
+    if (this.errorEl) {
+      this.errorEl.textContent = msg;
+      this.errorEl.style.display = 'block';
+    }
   }
 
   private clearError(): void {
-    this.errorText.setText('');
+    if (this.errorEl) {
+      this.errorEl.textContent = '';
+      this.errorEl.style.display = 'none';
+    }
   }
 
-  private cleanupInputs(): void {
-    this.usernameInput.remove();
-    this.passwordInput.remove();
+  private hideView(): void {
+    if (this.view) {
+      this.view.style.display = 'none';
+      this.view.innerHTML = '';
+    }
+    this.view = null;
+    this.usernameInput = null;
+    this.passwordInput = null;
+    this.errorEl = null;
   }
 }

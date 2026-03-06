@@ -37,6 +37,18 @@
       background: #0f0d0a;
     }
     #game canvas { display: block; }
+
+    /* ── UI overlay: single HTML mount point over the canvas ── */
+    #ui-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 100;
+    }
+    #ui-overlay > * {
+      pointer-events: auto;
+    }
+
     #inventory-panel {
       position: absolute;
       left: 0;
@@ -90,9 +102,7 @@
       font-size: 24px;
       cursor: pointer;
     }
-    .building-panel__close:hover {
-      color: #e8dcc8;
-    }
+    .building-panel__close:hover { color: #e8dcc8; }
     .building-panel__title {
       font-family: 'Cinzel', serif;
       color: #c9a55c;
@@ -103,14 +113,292 @@
       color: #a89880;
       font-style: italic;
     }
+
+    /* ── Screen overlays (login, character create) ── */
+    .screen-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--color-bg-deepest);
+      z-index: 500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Login screen */
+    .login-title {
+      font-family: var(--font-display);
+      font-size: 42px;
+      font-weight: bold;
+      color: var(--color-gold-bright);
+      letter-spacing: 0.1em;
+      margin-bottom: 4px;
+    }
+    .login-panel {
+      width: 340px;
+      background: var(--color-bg-panel);
+      border: 1px solid var(--color-gold-dim);
+      border-radius: 3px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .login-tabs {
+      display: flex;
+      gap: 32px;
+    }
+    .login-tab {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      font-family: var(--font-display);
+      font-size: 12px;
+      color: var(--color-text-muted);
+      cursor: pointer;
+      padding: 0 0 6px;
+      letter-spacing: 0.05em;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .login-tab.is-active {
+      color: var(--color-gold-primary);
+      font-weight: bold;
+      border-bottom-color: var(--color-gold-primary);
+    }
+    .login-divider {
+      border: none;
+      border-top: 1px solid var(--color-gold-subtle);
+      margin: 0;
+    }
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .login-label {
+      font-family: var(--font-display);
+      font-size: 11px;
+      color: var(--color-text-secondary);
+      display: block;
+      margin-top: 6px;
+    }
+    .login-label:first-child { margin-top: 0; }
+    .login-input {
+      display: block;
+      width: 100%;
+      padding: 8px 12px;
+      font-family: var(--font-body);
+      font-size: 14px;
+      background: var(--color-bg-inset);
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-gold-subtle);
+      border-radius: 2px;
+      outline: none;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+      margin-top: 4px;
+    }
+    .login-input:focus { border-color: var(--color-gold-primary); }
+    .login-submit {
+      display: block;
+      width: 160px;
+      margin: 4px auto 0;
+      padding: 10px;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: bold;
+      color: var(--color-gold-primary);
+      background: var(--color-bg-panel);
+      border: 1px solid var(--color-gold-primary);
+      border-radius: 3px;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .login-submit:hover {
+      background: var(--color-bg-panel-alt);
+      border-color: var(--color-gold-bright);
+      color: var(--color-gold-bright);
+    }
+    .login-error {
+      font-family: var(--font-body);
+      font-size: 12px;
+      color: #e74c3c;
+      text-align: center;
+      margin: 0;
+      display: none;
+    }
+
+    /* Character create screen */
+    .cc-title {
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-weight: bold;
+      color: var(--color-gold-bright);
+      letter-spacing: 0.06em;
+    }
+    .cc-divider {
+      border: none;
+      border-top: 1px solid var(--color-gold-subtle);
+      width: 240px;
+      margin: 0;
+    }
+    .char-cards {
+      display: flex;
+      gap: 16px;
+      margin-top: 8px;
+    }
+    .char-card {
+      width: 160px;
+      background: var(--color-bg-panel);
+      border: 1px solid var(--color-gold-dim);
+      border-radius: 3px;
+      padding: 16px 12px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .char-card:hover {
+      background: var(--color-bg-panel-alt);
+    }
+    .char-card.is-selected {
+      background: var(--color-bg-panel-alt);
+      border-color: var(--color-gold-primary);
+    }
+    .char-card-name {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: bold;
+      color: var(--color-gold-primary);
+      text-align: center;
+      letter-spacing: 0.06em;
+    }
+    .char-card.is-selected .char-card-name {
+      color: var(--color-gold-bright);
+    }
+    .char-card-sep {
+      border: none;
+      border-top: 1px solid var(--color-gold-subtle);
+      opacity: 0.5;
+      margin: 0;
+    }
+    .char-card-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .stat-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .stat-label {
+      font-family: var(--font-display);
+      font-size: 10px;
+      color: var(--color-text-secondary);
+      width: 26px;
+      flex-shrink: 0;
+    }
+    .stat-bar-track {
+      flex: 1;
+      height: 3px;
+      background: var(--color-bg-inset);
+      border-radius: 1px;
+      overflow: hidden;
+    }
+    .stat-bar-fill {
+      height: 100%;
+      border-radius: 1px;
+      opacity: 0.8;
+    }
+    .stat-value {
+      font-family: var(--font-number);
+      font-size: 13px;
+      width: 24px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .char-card-desc {
+      font-family: var(--font-body);
+      font-size: 11px;
+      color: var(--color-text-muted);
+      font-style: italic;
+      text-align: center;
+      line-height: 1.4;
+    }
+    .cc-name-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .cc-name-label {
+      font-family: var(--font-display);
+      font-size: 13px;
+      color: var(--color-text-secondary);
+    }
+    .cc-name-input {
+      width: 220px;
+      padding: 8px 12px;
+      font-family: var(--font-body);
+      font-size: 14px;
+      background: var(--color-bg-inset);
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-gold-subtle);
+      border-radius: 2px;
+      outline: none;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+      text-align: center;
+    }
+    .cc-name-input:focus { border-color: var(--color-gold-primary); }
+    .cc-submit {
+      width: 200px;
+      padding: 10px;
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: bold;
+      color: var(--color-gold-primary);
+      background: var(--color-bg-panel);
+      border: 1px solid var(--color-gold-primary);
+      border-radius: 3px;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .cc-submit:hover {
+      background: var(--color-bg-panel-alt);
+      border-color: var(--color-gold-bright);
+      color: var(--color-gold-bright);
+    }
+    .cc-error {
+      font-family: var(--font-body);
+      font-size: 12px;
+      color: #e74c3c;
+      text-align: center;
+      margin: 0;
+      display: none;
+    }
   </style>
 </head>
 <body>
   <div id="top-bar"></div>
   <div id="game">
-    <div id="inventory-panel"></div>
+    <div id="ui-overlay">
+      <div id="inventory-panel"></div>
+    </div>
   </div>
   <div id="bottom-bar"></div>
+
+  <!-- Screen overlays — shown/hidden by LoginScene and CharacterCreateScene -->
+  <div id="login-view" class="screen-overlay"></div>
+  <div id="char-create-view" class="screen-overlay"></div>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
