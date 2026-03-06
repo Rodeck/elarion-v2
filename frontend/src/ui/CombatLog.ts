@@ -8,7 +8,7 @@ export class CombatLog {
   constructor(container: HTMLElement = document.body) {
     this.panel = document.createElement('div');
     this.panel.style.cssText = `
-      width: clamp(160px, 35%, 340px);
+      width: clamp(200px, 40%, 510px);
       height: 100%;
       flex-shrink: 0;
       background: rgba(20, 18, 14, 0.95);

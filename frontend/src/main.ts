@@ -6,17 +6,14 @@ import { GameScene } from './scenes/GameScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: 800,
-  height: 600,
   pixelArt: true,
   antialias: false,
   roundPixels: true,
   backgroundColor: '#1a1814',
-  parent: 'game',
+  parent: 'canvas-area',
   scene: [BootScene, LoginScene, CharacterCreateScene, GameScene],
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    mode: Phaser.Scale.RESIZE,
   },
 };
 

@@ -15,9 +15,6 @@ export class LogoutButton {
     this.button.title = 'Log out';
     this.button.innerHTML = LOGOUT_ICON_SVG;
     this.button.style.cssText = `
-      position: absolute;
-      top: 12px;
-      right: 20px;
       display: flex;
       align-items: center;
       justify-content: center;

@@ -1,6 +1,7 @@
 import { findPath } from './city-pathfinding';
 import { getCityMapCache } from './city-map-loader';
 import { broadcastToZone } from './zone-broadcasts';
+import { movePlayerToNode } from './zone-registry';
 import { findByAccountId, updateCharacter } from '../../db/queries/characters';
 import { query } from '../../db/connection';
 import { log } from '../../logger';
@@ -234,6 +235,9 @@ export async function handleCityMove(session: AuthenticatedSession, payload: unk
           error: err instanceof Error ? err.message : String(err),
         });
       });
+
+      // Update in-memory registry so late-joining players see the correct position
+      movePlayerToNode(characterId, stepNodeId, node.x, node.y);
 
       // Broadcast city.player_moved to all players in the zone
       broadcastToZone(zoneId, 'city.player_moved', {

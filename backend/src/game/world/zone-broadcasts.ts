@@ -1,6 +1,7 @@
 import * as ws from 'ws';
 import { getZonePlayers } from './zone-registry';
 import type { PlayerState } from './zone-registry';
+import { log } from '../../logger';
 
 function sendJson(socket: ws.WebSocket, type: string, payload: unknown): void {
   if (socket.readyState === ws.WebSocket.OPEN) {
@@ -16,6 +17,14 @@ export function broadcastToZone(zoneId: number, type: string, payload: unknown, 
 }
 
 export function broadcastPlayerEntered(zoneId: number, newPlayer: PlayerState): void {
+  const others = getZonePlayers(zoneId).filter((p) => p.characterId !== newPlayer.characterId);
+  log('debug', 'zone-broadcasts', 'player_entered_zone_broadcast', {
+    entering: newPlayer.characterId,
+    entering_name: newPlayer.name,
+    zone_id: zoneId,
+    notifying_count: others.length,
+    notifying: others.map((p) => p.characterId),
+  });
   broadcastToZone(
     zoneId,
     'player.entered_zone',
@@ -27,6 +36,7 @@ export function broadcastPlayerEntered(zoneId: number, newPlayer: PlayerState): 
         level: newPlayer.level,
         pos_x: newPlayer.posX,
         pos_y: newPlayer.posY,
+        current_node_id: newPlayer.currentNodeId,
       },
     },
     newPlayer.characterId, // don't send to the entering player

@@ -7,6 +7,7 @@ export interface PlayerState {
   level: number;
   posX: number;
   posY: number;
+  currentNodeId: number | null;
   socket: ws.WebSocket;
 }
 
@@ -42,6 +43,18 @@ export function movePlayer(characterId: string, x: number, y: number): void {
   for (const players of registry.values()) {
     const state = players.get(characterId);
     if (state) {
+      state.posX = x;
+      state.posY = y;
+      return;
+    }
+  }
+}
+
+export function movePlayerToNode(characterId: string, nodeId: number, x: number, y: number): void {
+  for (const players of registry.values()) {
+    const state = players.get(characterId);
+    if (state) {
+      state.currentNodeId = nodeId;
       state.posX = x;
       state.posY = y;
       return;

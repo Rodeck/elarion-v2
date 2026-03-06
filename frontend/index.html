@@ -20,23 +20,39 @@
       flex-direction: column;
     }
     #top-bar {
-      height: 15vh;
-      min-height: 80px;
-      max-height: 120px;
+      height: 48px;
+      min-height: 48px;
+      max-height: 48px;
       background: #1a1814;
       border-bottom: 1px solid #5c4d3d;
       flex-shrink: 0;
       display: flex;
-      align-items: stretch;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 20px;
+      position: relative;
     }
     #game {
       flex: 1;
       min-height: 0;
       overflow: hidden;
+      display: flex;
+      flex-direction: row;
+    }
+    #canvas-area {
+      flex: 1;
+      min-width: 0;
       position: relative;
+      overflow: hidden;
       background: #0f0d0a;
     }
-    #game canvas { display: block; }
+    #canvas-area canvas { display: block; }
+    #building-panel-slot {
+      width: clamp(200px, 40%, 510px);
+      flex-shrink: 0;
+      border-left: 1px solid #5a4a2a;
+      overflow: hidden;
+    }
 
     /* ── UI overlay: single HTML mount point over the canvas ── */
     #ui-overlay {
@@ -50,22 +66,24 @@
     }
 
     #inventory-panel {
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 286px;
+      width: 430px;
+      flex-shrink: 0;
       background: rgba(10, 9, 7, 0.93);
       border-right: 1px solid #5a4a2a;
       overflow-y: auto;
       display: none;
       flex-direction: column;
-      z-index: 10;
+    }
+    #stats-slot {
+      flex-shrink: 0;
+      width: 430px;
+      border-right: 1px solid #5c4d3d;
+      overflow: hidden;
     }
     #bottom-bar {
-      height: 20vh;
-      min-height: 100px;
-      max-height: 200px;
+      height: 22vh;
+      min-height: 140px;
+      max-height: 220px;
       background: #1a1814;
       border-top: 1px solid #5c4d3d;
       flex-shrink: 0;
@@ -389,11 +407,15 @@
 <body>
   <div id="top-bar"></div>
   <div id="game">
-    <div id="ui-overlay">
-      <div id="inventory-panel"></div>
+    <div id="inventory-panel"></div>
+    <div id="canvas-area">
+      <div id="ui-overlay"></div>
     </div>
+    <div id="building-panel-slot"></div>
   </div>
-  <div id="bottom-bar"></div>
+  <div id="bottom-bar">
+    <div id="stats-slot"></div>
+  </div>
 
   <!-- Screen overlays — shown/hidden by LoginScene and CharacterCreateScene -->
   <div id="login-view" class="screen-overlay"></div>

@@ -10,7 +10,7 @@ import { getCityMapCache } from '../../game/world/city-map-loader';
 import { getSpawnNodeForZone } from '../../db/queries/city-maps';
 import { query } from '../../db/connection';
 
-let getZonePlayers: ((zoneId: number) => { characterId: string; name: string; classId: number; level: number; posX: number; posY: number }[]) | null = null;
+let getZonePlayers: ((zoneId: number) => { characterId: string; name: string; classId: number; level: number; posX: number; posY: number; currentNodeId: number | null }[]) | null = null;
 
 export function setZonePlayersGetter(fn: typeof getZonePlayers): void {
   getZonePlayers = fn;
@@ -28,34 +28,8 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
 
   const cls = await findClassById(character.class_id);
 
-  // Register the player in the zone registry and notify others in the zone
-  const playerState = {
-    characterId: character.id,
-    name: character.name,
-    classId: character.class_id,
-    level: character.level,
-    posX: character.pos_x,
-    posY: character.pos_y,
-    socket: session.socket,
-  };
-  addPlayer(character.zone_id, playerState);
-  onClientReconnect(character.id); // cancel any pending disconnect grace timer
-  broadcastPlayerEntered(character.zone_id, playerState);
-
-  const players = getZonePlayers
-    ? getZonePlayers(character.zone_id)
-        .filter((p) => p.characterId !== character.id)
-        .map((p) => ({
-          id: p.characterId,
-          name: p.name,
-          class_id: p.classId,
-          level: p.level,
-          pos_x: p.posX,
-          pos_y: p.posY,
-        }))
-    : [];
-
-  // Determine map type and build city map data if applicable
+  // Determine map type and resolve authoritative node position first,
+  // so playerState registered in the zone has the correct currentNodeId.
   const cityCache = getCityMapCache(character.zone_id);
   const mapType = cityCache ? 'city' : 'tile';
 
@@ -92,11 +66,42 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
     }
   }
 
+  // Register the player in the zone registry and notify others in the zone
+  const playerState = {
+    characterId: character.id,
+    name: character.name,
+    classId: character.class_id,
+    level: character.level,
+    posX: character.pos_x,
+    posY: character.pos_y,
+    currentNodeId: currentNodeId,
+    socket: session.socket,
+  };
+  addPlayer(character.zone_id, playerState);
+  onClientReconnect(character.id); // cancel any pending disconnect grace timer
+  broadcastPlayerEntered(character.zone_id, playerState);
+
+  const players = getZonePlayers
+    ? getZonePlayers(character.zone_id)
+        .filter((p) => p.characterId !== character.id)
+        .map((p) => ({
+          id: p.characterId,
+          name: p.name,
+          class_id: p.classId,
+          level: p.level,
+          pos_x: p.posX,
+          pos_y: p.posY,
+          current_node_id: p.currentNodeId,
+        }))
+    : [];
+
   log('info', 'world-state', 'sent', {
-    accountId: session.accountId,
+    characterId: character.id,
+    characterName: character.name,
     zone_id: character.zone_id,
     map_type: mapType,
-    players: players.length,
+    players_count: players.length,
+    players_ids: players.map((p) => `${p.id}(${p.name})`),
   });
 
   const worldStatePayload: Record<string, unknown> = {

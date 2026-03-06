@@ -63,6 +63,11 @@ export class GameScene extends Phaser.Scene {
 
   // Travel transition state
   private awaitingTravelWorldState = false;
+  // True from initial connect until first world.state, and again during travel.
+  // Gates the player.entered_zone buffer so events that arrive before world.state
+  // are replayed once the map is ready.
+  private awaitingWorldState = true;
+  private pendingEnteredZone: PlayerEnteredZonePayload[] = [];
 
   // City map state
   private isCityMap = false;
@@ -97,11 +102,12 @@ export class GameScene extends Phaser.Scene {
       this.client.send('inventory.delete_item', { slot_id: slotId });
     });
 
-    const uiOverlay = document.getElementById('ui-overlay')!;
-    this.buildingPanel = new BuildingPanel(uiOverlay, (payload) => {
+    const buildingSlot = document.getElementById('building-panel-slot')!;
+    this.buildingPanel = new BuildingPanel(buildingSlot, (payload) => {
       if (payload.action_type === 'travel') {
         this.cameras.main.fadeOut(600, 0, 0, 0);
         this.awaitingTravelWorldState = true;
+        this.awaitingWorldState = true;
       }
       this.client.send('city.building_action', payload);
     });
@@ -118,6 +124,7 @@ export class GameScene extends Phaser.Scene {
     this.client.on<WorldStatePayload>('world.state', (payload) => {
       const isTravelArrival = this.awaitingTravelWorldState;
       this.awaitingTravelWorldState = false;
+      this.awaitingWorldState = false;
 
       this.myCharacter = payload.my_character;
 
@@ -159,16 +166,11 @@ export class GameScene extends Phaser.Scene {
 
       // Place other players
       for (const p of payload.players) {
-        if (this.isCityMap) {
-          const nodeId = p.current_node_id ?? this.cityMapData!.spawn_node_id;
-          const node = this.cityMapData!.nodes.find(n => n.id === nodeId);
-          if (node) {
-            this.addRemotePlayerAtPixel(p.id, p.name, node.x, node.y);
-          }
-        } else {
-          this.addRemotePlayer(p.id, p.name, p.pos_x, p.pos_y);
-        }
+        this.spawnRemotePlayer(p);
       }
+
+      // Flush any player.entered_zone events that arrived before this world.state
+      this.pendingEnteredZone.splice(0).forEach((ev) => this.spawnRemotePlayer(ev.character));
     });
 
     this.client.on<PlayerMovedPayload>('player.moved', (payload) => {
@@ -206,16 +208,12 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.client.on<PlayerEnteredZonePayload>('player.entered_zone', (payload) => {
-      const p = payload.character;
-      if (this.isCityMap) {
-        const nodeId = p.current_node_id ?? this.cityMapData!.spawn_node_id;
-        const node = this.cityMapData!.nodes.find(n => n.id === nodeId);
-        if (node) {
-          this.addRemotePlayerAtPixel(p.id, p.name, node.x, node.y);
-        }
-      } else {
-        this.addRemotePlayer(p.id, p.name, p.pos_x, p.pos_y);
+      if (this.awaitingWorldState) {
+        // world.state hasn't arrived yet (initial login or travel) — buffer and replay after
+        this.pendingEnteredZone.push(payload);
+        return;
       }
+      this.spawnRemotePlayer(payload.character);
     });
 
     this.client.on<PlayerLeftZonePayload>('player.left_zone', (payload) => {
@@ -315,6 +313,7 @@ export class GameScene extends Phaser.Scene {
       if (this.awaitingTravelWorldState) {
         this.cameras.main.fadeIn(300, 0, 0, 0);
         this.awaitingTravelWorldState = false;
+        this.awaitingWorldState = false;
       }
       this.buildingPanel.showRejection(payload.reason);
     });
@@ -739,12 +738,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private buildStatsBar(): void {
+    this.statsBar?.destroy();
+    this.logoutButton?.destroy();
+
     const c = this.myCharacter;
     const level = c.level;
     const xpThreshold = XP_THRESHOLDS[level - 1] ?? 9999;
-    const topBar = document.getElementById('top-bar')!;
+    const statsSlot = document.getElementById('stats-slot')!;
     this.statsBar = new StatsBar(
-      topBar,
+      statsSlot,
       c.name,
       `Class ${c.class_id}`,
       level,
@@ -753,7 +755,7 @@ export class GameScene extends Phaser.Scene {
       c.experience,
       xpThreshold,
     );
-    this.logoutButton = new LogoutButton(topBar, () => this.handleLogout());
+    this.logoutButton = new LogoutButton(document.getElementById('top-bar')!, () => this.handleLogout());
   }
 
   private handleLogout(): void {
@@ -808,6 +810,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ── Remote players ──────────────────────────────────────────────
+
+  private spawnRemotePlayer(p: CharacterData): void {
+    if (this.isCityMap && this.cityMapData) {
+      const nodeId = p.current_node_id ?? this.cityMapData.spawn_node_id;
+      const node = this.cityMapData.nodes.find(n => n.id === nodeId);
+      if (node) {
+        this.addRemotePlayerAtPixel(p.id, p.name, node.x, node.y);
+      }
+    } else {
+      this.addRemotePlayer(p.id, p.name, p.pos_x, p.pos_y);
+    }
+  }
 
   private addRemotePlayer(id: string, name: string, posX: number, posY: number): void {
     if (this.remotePlayers.has(id)) return;

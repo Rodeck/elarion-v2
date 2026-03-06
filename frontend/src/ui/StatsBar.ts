@@ -25,21 +25,19 @@ export class StatsBar {
       width: 100%;
       height: 100%;
       display: flex;
-      align-items: center;
-      padding: 0 24px;
-      gap: 28px;
+      flex-direction: column;
+      justify-content: center;
+      padding: 10px 16px;
+      gap: 8px;
+      box-sizing: border-box;
     `;
 
-    // Vertical separator helper
-    const sep = () => {
-      const d = document.createElement('div');
-      d.style.cssText = 'width: 1px; height: 48px; background: rgba(92,77,61,0.5); flex-shrink: 0;';
-      return d;
-    };
+    // ── Header row: name block (left) + level badge (right) ──────
+    const headerRow = document.createElement('div');
+    headerRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px;';
 
-    // ── Name & Class ─────────────────────────────────────────────
-    const nameSection = document.createElement('div');
-    nameSection.style.cssText = 'flex-shrink: 0; min-width: 110px;';
+    const nameBlock = document.createElement('div');
+    nameBlock.style.cssText = 'min-width: 0; flex: 1;';
 
     this.nameEl = document.createElement('span');
     this.nameEl.style.cssText = `
@@ -51,7 +49,6 @@ export class StatsBar {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 160px;
     `;
     this.nameEl.textContent = name;
 
@@ -59,21 +56,22 @@ export class StatsBar {
     classEl.style.cssText = `
       display: block;
       font-family: var(--font-display);
-      font-size: 11px;
-      color: var(--color-text-secondary);
+      font-size: 10px;
+      color: var(--color-text-muted);
       margin-top: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     `;
     classEl.textContent = className;
 
-    nameSection.appendChild(this.nameEl);
-    nameSection.appendChild(classEl);
+    nameBlock.appendChild(this.nameEl);
+    nameBlock.appendChild(classEl);
 
-    // ── Level Badge ───────────────────────────────────────────────
     const levelBadge = document.createElement('div');
     levelBadge.style.cssText = `
       flex-shrink: 0;
-      width: 48px;
-      height: 48px;
+      width: 40px;
+      height: 40px;
       background: rgba(37,33,25,0.8);
       border: 1px solid var(--color-gold-dim);
       border-radius: 50%;
@@ -96,7 +94,7 @@ export class StatsBar {
     this.levelEl = document.createElement('span');
     this.levelEl.style.cssText = `
       font-family: var(--font-number);
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 600;
       color: var(--color-gold-bright);
       line-height: 1;
@@ -105,6 +103,9 @@ export class StatsBar {
 
     levelBadge.appendChild(lvLabel);
     levelBadge.appendChild(this.levelEl);
+
+    headerRow.appendChild(nameBlock);
+    headerRow.appendChild(levelBadge);
 
     // ── HP Bar ────────────────────────────────────────────────────
     const { el: hpEl, fill: hpFill, valueText: hpText } = this.createBarSection(
@@ -125,12 +126,8 @@ export class StatsBar {
     this.xpTextEl = xpText;
 
     // ── Assemble ──────────────────────────────────────────────────
-    this.container.appendChild(nameSection);
-    this.container.appendChild(sep());
-    this.container.appendChild(levelBadge);
-    this.container.appendChild(sep());
+    this.container.appendChild(headerRow);
     this.container.appendChild(hpEl);
-    this.container.appendChild(sep());
     this.container.appendChild(xpEl);
 
     mountEl.appendChild(this.container);
@@ -145,14 +142,14 @@ export class StatsBar {
     trackColor: string,
   ): { el: HTMLDivElement; fill: HTMLDivElement; valueText: HTMLSpanElement } {
     const el = document.createElement('div');
-    el.style.cssText = 'flex: 1; min-width: 100px; max-width: 280px;';
+    el.style.cssText = 'width: 100%;';
 
     const header = document.createElement('div');
     header.style.cssText = `
       display: flex;
       justify-content: space-between;
       align-items: baseline;
-      margin-bottom: 5px;
+      margin-bottom: 4px;
     `;
 
     const labelEl = document.createElement('span');

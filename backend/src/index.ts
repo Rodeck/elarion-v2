@@ -47,6 +47,7 @@ async function bootstrap(): Promise<void> {
       level: p.level,
       posX: p.posX,
       posY: p.posY,
+      currentNodeId: p.currentNodeId,
     })),
   );
 
