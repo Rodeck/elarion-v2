@@ -8,6 +8,12 @@ import { sendToSession } from '../server';
 import type { AuthenticatedSession } from '../server';
 import { getCityMapCache } from '../../game/world/city-map-loader';
 import { getSpawnNodeForZone } from '../../db/queries/city-maps';
+import {
+  getSquiresForCharacter,
+  createSquire,
+  getUnnotifiedCompletedExpeditions,
+  markExpeditionNotified,
+} from '../../db/queries/squires';
 import { query } from '../../db/connection';
 
 let getZonePlayers: ((zoneId: number) => { characterId: string; name: string; classId: number; level: number; posX: number; posY: number; currentNodeId: number | null }[]) | null = null;
@@ -144,4 +150,36 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
 
   // Send inventory state immediately after world state
   await sendInventoryState(session);
+
+  // Backfill: characters created before migration 012 have no squire — assign one now
+  const existingSquires = await getSquiresForCharacter(character.id);
+  if (existingSquires.length === 0) {
+    const names = ['Aldric', 'Brand', 'Cade', 'Daveth', 'Edgar', 'Finn', 'Gareth', 'Hadwyn'];
+    const squireName = names[Math.floor(Math.random() * names.length)]!;
+    await createSquire(character.id, squireName);
+    log('info', 'squire', 'squire.created', {
+      character_id: character.id,
+      squire_name: squireName,
+      reason: 'backfill_on_connect',
+    });
+  }
+
+  // Notify player of any expeditions that completed while they were offline
+  if (character.id) {
+    const completed = await getUnnotifiedCompletedExpeditions(character.id);
+    for (const row of completed) {
+      sendToSession(session, 'expedition.completed', {
+        expedition_id: row.id,
+        squire_name: row.squire_name,
+        building_name: row.building_name,
+      });
+      await markExpeditionNotified(row.id);
+      log('info', 'expedition', 'expedition.notify_on_connect', {
+        character_id: character.id,
+        expedition_id: row.id,
+        squire_name: row.squire_name,
+        building_name: row.building_name,
+      });
+    }
+  }
 }

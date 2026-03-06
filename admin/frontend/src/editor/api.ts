@@ -65,12 +65,23 @@ export interface ExploreActionConfig {
   monsters: ExploreMonsterEntry[];
 }
 
-export type BuildingActionConfig = TravelActionConfig | ExploreActionConfig;
+export interface ExpeditionItemEntry {
+  item_def_id: number;
+  base_quantity: number;
+}
+
+export interface ExpeditionActionConfig {
+  base_gold: number;
+  base_exp: number;
+  items: ExpeditionItemEntry[];
+}
+
+export type BuildingActionConfig = TravelActionConfig | ExploreActionConfig | ExpeditionActionConfig;
 
 export interface BuildingAction {
   id: number;
   building_id: number;
-  action_type: 'travel' | 'explore';
+  action_type: 'travel' | 'explore' | 'expedition';
   sort_order: number;
   config: BuildingActionConfig;
   created_at: string;
@@ -370,7 +381,7 @@ export async function createBuildingAction(
   mapId: number,
   buildingId: number,
   data: {
-    action_type: 'travel' | 'explore';
+    action_type: 'travel' | 'explore' | 'expedition';
     sort_order?: number;
     config: BuildingActionConfig;
   },

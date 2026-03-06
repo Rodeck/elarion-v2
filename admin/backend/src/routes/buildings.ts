@@ -13,6 +13,7 @@ import {
   type TravelActionConfig,
   type ExploreActionConfig,
 } from '../../../../backend/src/db/queries/city-maps';
+import type { ExpeditionActionConfig } from '../../../../backend/src/db/queries/squires';
 import { getMonsterById } from '../../../../backend/src/db/queries/monsters';
 import { query } from '../../../../backend/src/db/connection';
 
@@ -254,8 +255,8 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
     config: Record<string, unknown>;
   };
 
-  if (action_type !== 'travel' && action_type !== 'explore') {
-    return res.status(400).json({ error: 'action_type must be "travel" or "explore"' });
+  if (action_type !== 'travel' && action_type !== 'explore' && action_type !== 'expedition') {
+    return res.status(400).json({ error: 'action_type must be "travel", "explore", or "expedition"' });
   }
 
   try {
@@ -279,8 +280,7 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
       const action = await createBuildingAction(buildingId, 'travel', travelConfig, sort_order ?? 0);
       log('info', 'Created travel action', { building_id: buildingId, action_id: action.id, admin: req.username });
       return res.status(201).json({ action });
-    } else {
-      // explore
+    } else if (action_type === 'explore') {
       const cfg = config as { encounter_chance?: unknown; monsters?: unknown[] };
       const encounterChance = Number(cfg.encounter_chance);
       if (!Number.isInteger(encounterChance) || encounterChance < 0 || encounterChance > 100) {
@@ -311,6 +311,55 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
       const action = await createBuildingAction(buildingId, 'explore', exploreConfig, sort_order ?? 0);
       log('info', 'Created explore action', { building_id: buildingId, action_id: action.id, admin: req.username });
       return res.status(201).json({ action });
+    } else {
+      // expedition
+      const cfg = config as { base_gold?: unknown; base_exp?: unknown; items?: unknown[] };
+      const baseGold = Number(cfg.base_gold);
+      const baseExp = Number(cfg.base_exp);
+      if (!Number.isInteger(baseGold) || baseGold < 0) {
+        return res.status(400).json({ error: 'base_gold must be a non-negative integer' });
+      }
+      if (!Number.isInteger(baseExp) || baseExp < 0) {
+        return res.status(400).json({ error: 'base_exp must be a non-negative integer' });
+      }
+      const items = cfg.items ?? [];
+      if (!Array.isArray(items)) {
+        return res.status(400).json({ error: 'items must be an array' });
+      }
+      const validatedItems: { item_def_id: number; base_quantity: number }[] = [];
+      for (const entry of items) {
+        const e = entry as { item_def_id?: unknown; base_quantity?: unknown };
+        if (!Number.isInteger(e.item_def_id)) {
+          return res.status(400).json({ error: 'each item entry must have a valid item_def_id' });
+        }
+        if (!Number.isInteger(e.base_quantity) || (e.base_quantity as number) < 1) {
+          return res.status(400).json({ error: 'each item entry base_quantity must be a positive integer' });
+        }
+        const itemRow = await query<{ id: number }>(
+          'SELECT id FROM item_definitions WHERE id = $1',
+          [e.item_def_id],
+        );
+        if (itemRow.rows.length === 0) {
+          return res.status(400).json({ error: `item_def_id ${e.item_def_id} does not exist` });
+        }
+        validatedItems.push({ item_def_id: e.item_def_id as number, base_quantity: e.base_quantity as number });
+      }
+
+      const expeditionConfig: ExpeditionActionConfig = {
+        base_gold: baseGold,
+        base_exp: baseExp,
+        items: validatedItems,
+      };
+      const action = await createBuildingAction(buildingId, 'expedition' as 'travel', expeditionConfig as unknown as TravelActionConfig, sort_order ?? 0);
+      log('info', 'Created expedition action', {
+        building_id: buildingId,
+        action_id: action.id,
+        base_gold: baseGold,
+        base_exp: baseExp,
+        item_count: validatedItems.length,
+        admin: req.username,
+      });
+      return res.status(201).json({ action });
     }
   } catch (err) {
     log('error', 'Failed to create building action', { building_id: buildingId, error: String(err) });
@@ -328,24 +377,68 @@ buildingsRouter.put('/:id/buildings/:buildingId/actions/:actionId', async (req: 
 
   const { sort_order, config } = req.body as {
     sort_order?: number;
-    config?: { target_zone_id: number; target_node_id: number };
+    config?: Record<string, unknown>;
   };
 
   try {
-    if (config) {
-      const targetZone = await getMapById(config.target_zone_id);
-      if (!targetZone) return res.status(400).json({ error: 'target_zone_id references a non-existent zone' });
-      const nodeRow = await query<{ id: number }>(
-        'SELECT id FROM path_nodes WHERE id = $1 AND zone_id = $2',
-        [config.target_node_id, config.target_zone_id],
-      );
-      if (nodeRow.rows.length === 0) return res.status(400).json({ error: 'target_node_id does not exist in target_zone_id' });
+    // Fetch existing action to determine its type before validating config
+    const existingRow = await query<{ action_type: string }>(
+      'SELECT action_type FROM building_actions WHERE id = $1',
+      [actionId],
+    );
+    if (existingRow.rows.length === 0) return res.status(404).json({ error: 'Action not found' });
+    const actionType = existingRow.rows[0]!.action_type;
+
+    let validatedConfig: TravelActionConfig | undefined;
+
+    if (config !== undefined) {
+      if (actionType === 'expedition') {
+        const expConfig = config as { base_gold?: unknown; base_exp?: unknown; items?: unknown };
+        if (typeof expConfig.base_gold !== 'number' || !Number.isInteger(expConfig.base_gold) || expConfig.base_gold < 0) {
+          return res.status(400).json({ error: 'base_gold must be a non-negative integer' });
+        }
+        if (typeof expConfig.base_exp !== 'number' || !Number.isInteger(expConfig.base_exp) || expConfig.base_exp < 0) {
+          return res.status(400).json({ error: 'base_exp must be a non-negative integer' });
+        }
+        if (!Array.isArray(expConfig.items)) {
+          return res.status(400).json({ error: 'items must be an array' });
+        }
+        for (const item of expConfig.items as { item_def_id?: unknown; base_quantity?: unknown }[]) {
+          if (typeof item.item_def_id !== 'number' || !Number.isInteger(item.item_def_id)) {
+            return res.status(400).json({ error: 'Each item must have an integer item_def_id' });
+          }
+          if (typeof item.base_quantity !== 'number' || !Number.isInteger(item.base_quantity) || item.base_quantity < 1) {
+            return res.status(400).json({ error: 'Each item must have base_quantity >= 1' });
+          }
+          const itemRow = await query<{ id: number }>('SELECT id FROM item_definitions WHERE id = $1', [item.item_def_id]);
+          if (itemRow.rows.length === 0) {
+            return res.status(400).json({ error: `item_def_id ${item.item_def_id} does not exist` });
+          }
+        }
+        const expeditionConfig: ExpeditionActionConfig = {
+          base_gold: expConfig.base_gold as number,
+          base_exp: expConfig.base_exp as number,
+          items: (expConfig.items as { item_def_id: number; base_quantity: number }[]).map(i => ({
+            item_def_id: i.item_def_id,
+            base_quantity: i.base_quantity,
+          })),
+        };
+        validatedConfig = expeditionConfig as unknown as TravelActionConfig;
+        log('info', 'expedition_action_updated', { building_id: buildingId, action_id: actionId, admin: req.username });
+      } else {
+        const travelConfig = config as { target_zone_id?: number; target_node_id?: number };
+        const targetZone = await getMapById(travelConfig.target_zone_id!);
+        if (!targetZone) return res.status(400).json({ error: 'target_zone_id references a non-existent zone' });
+        const nodeRow = await query<{ id: number }>(
+          'SELECT id FROM path_nodes WHERE id = $1 AND zone_id = $2',
+          [travelConfig.target_node_id, travelConfig.target_zone_id],
+        );
+        if (nodeRow.rows.length === 0) return res.status(400).json({ error: 'target_node_id does not exist in target_zone_id' });
+        validatedConfig = { target_zone_id: travelConfig.target_zone_id!, target_node_id: travelConfig.target_node_id! };
+      }
     }
 
-    const action = await updateBuildingAction(actionId, {
-      sort_order,
-      config: config ? { target_zone_id: config.target_zone_id, target_node_id: config.target_node_id } : undefined,
-    });
+    const action = await updateBuildingAction(actionId, { sort_order, config: validatedConfig });
     if (!action) return res.status(404).json({ error: 'Action not found' });
     log('info', 'Updated building action', { building_id: buildingId, action_id: actionId, admin: req.username });
     return res.json({ action });

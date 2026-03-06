@@ -1,0 +1,224 @@
+import { findByAccountId } from '../../db/queries/characters';
+import { getCityMapCache } from '../world/city-map-loader';
+import { getBuildingById, getBuildingActions } from '../../db/queries/city-maps';
+import {
+  getSquiresForCharacter,
+  getActiveExpeditionForSquire,
+  createExpedition,
+  getExpeditionById,
+  markExpeditionCollected,
+} from '../../db/queries/squires';
+import type { ExpeditionActionConfig } from '../../db/queries/squires';
+import { computeRewardSnapshot } from './expedition-service';
+import { awardXp } from '../progression/xp-service';
+import { grantItemToCharacter } from '../inventory/inventory-grant-service';
+import { query } from '../../db/connection';
+import { log } from '../../logger';
+import { sendToSession } from '../../websocket/server';
+import type { AuthenticatedSession } from '../../websocket/server';
+import type { ExpeditionDispatchPayload, ExpeditionCollectPayload } from '@elarion/protocol';
+
+export async function handleExpeditionDispatch(
+  session: AuthenticatedSession,
+  payload: unknown,
+): Promise<void> {
+  const { building_id, action_id, duration_hours } = payload as ExpeditionDispatchPayload;
+
+  if (!session.characterId) {
+    sendToSession(session, 'server.error', { code: 'CHARACTER_REQUIRED', message: 'Character required.' });
+    return;
+  }
+
+  const characterId = session.characterId;
+  const character = await findByAccountId(session.accountId);
+  if (!character) {
+    sendToSession(session, 'server.error', { code: 'INTERNAL_ERROR', message: 'Character not found.' });
+    return;
+  }
+
+  // Gate: must be on a city map
+  const cityCache = getCityMapCache(character.zone_id);
+  if (!cityCache) {
+    sendToSession(session, 'expedition.dispatch_rejected', { reason: 'NOT_CITY_MAP' });
+    return;
+  }
+
+  // Gate: must not be in combat
+  if ((character as unknown as { in_combat: boolean }).in_combat) {
+    sendToSession(session, 'expedition.dispatch_rejected', { reason: 'IN_COMBAT' });
+    return;
+  }
+
+  const currentNodeId = (character as unknown as { current_node_id: number | null }).current_node_id;
+
+  // Gate: must be at the building
+  const building = await getBuildingById(building_id);
+  if (!building || building.zone_id !== character.zone_id || building.node_id !== currentNodeId) {
+    sendToSession(session, 'expedition.dispatch_rejected', { reason: 'NOT_AT_BUILDING' });
+    return;
+  }
+
+  // Gate: action must be an expedition action on this building
+  const actions = await getBuildingActions(building_id);
+  const action = actions.find((a) => a.id === action_id && (a.action_type as string) === 'expedition');
+  if (!action) {
+    sendToSession(session, 'expedition.dispatch_rejected', { reason: 'NO_EXPEDITION_CONFIG' });
+    return;
+  }
+
+  const expeditionConfig = action.config as unknown as ExpeditionActionConfig;
+
+  // Gate: must have an idle squire
+  const squires = await getSquiresForCharacter(characterId);
+  if (squires.length === 0) {
+    sendToSession(session, 'expedition.dispatch_rejected', { reason: 'NO_SQUIRE_AVAILABLE' });
+    return;
+  }
+
+  let idleSquire = null;
+  for (const squire of squires) {
+    const active = await getActiveExpeditionForSquire(squire.id);
+    if (!active) {
+      idleSquire = squire;
+      break;
+    }
+  }
+
+  if (!idleSquire) {
+    sendToSession(session, 'expedition.dispatch_rejected', { reason: 'NO_SQUIRE_AVAILABLE' });
+    return;
+  }
+
+  // Gate: valid duration
+  if (duration_hours !== 1 && duration_hours !== 3 && duration_hours !== 6) {
+    sendToSession(session, 'expedition.dispatch_rejected', { reason: 'INVALID_DURATION' });
+    return;
+  }
+
+  // Compute and store reward snapshot
+  const snapshot = await computeRewardSnapshot(expeditionConfig, duration_hours);
+  const expedition = await createExpedition(
+    idleSquire.id,
+    characterId,
+    building_id,
+    action_id,
+    duration_hours,
+    snapshot,
+  );
+
+  sendToSession(session, 'expedition.dispatched', {
+    expedition_id: expedition.id,
+    squire_name: idleSquire.name,
+    building_name: building.name,
+    duration_hours,
+    completes_at: expedition.completes_at.toISOString(),
+  });
+
+  log('info', 'expedition', 'expedition_dispatched', {
+    character_id: characterId,
+    squire_id: idleSquire.id,
+    squire_name: idleSquire.name,
+    building_id,
+    action_id,
+    duration_hours,
+    expedition_id: expedition.id,
+    completes_at: expedition.completes_at.toISOString(),
+  });
+}
+
+export async function handleExpeditionCollect(
+  session: AuthenticatedSession,
+  payload: unknown,
+): Promise<void> {
+  const { expedition_id } = payload as ExpeditionCollectPayload;
+
+  if (!session.characterId) {
+    sendToSession(session, 'server.error', { code: 'CHARACTER_REQUIRED', message: 'Character required.' });
+    return;
+  }
+
+  const characterId = session.characterId;
+
+  const expedition = await getExpeditionById(expedition_id);
+
+  if (!expedition) {
+    sendToSession(session, 'expedition.collect_rejected', { expedition_id, reason: 'NOT_FOUND' });
+    return;
+  }
+
+  if (expedition.character_id !== characterId) {
+    sendToSession(session, 'expedition.collect_rejected', { expedition_id, reason: 'NOT_OWNER' });
+    return;
+  }
+
+  if (expedition.collected_at !== null) {
+    sendToSession(session, 'expedition.collect_rejected', { expedition_id, reason: 'ALREADY_COLLECTED' });
+    return;
+  }
+
+  if (expedition.completes_at > new Date()) {
+    sendToSession(session, 'expedition.collect_rejected', { expedition_id, reason: 'NOT_COMPLETE' });
+    return;
+  }
+
+  // Mark collected first (idempotency guard)
+  await markExpeditionCollected(expedition_id);
+
+  // Get squire name for response
+  const squireRow = await query<{ name: string }>('SELECT name FROM squires WHERE id = $1', [expedition.squire_id]);
+  const squireName = squireRow.rows[0]?.name ?? 'Unknown';
+
+  const snapshot = expedition.reward_snapshot;
+  let itemsSkipped = false;
+
+  // Grant gold
+  if (snapshot.gold > 0) {
+    await query('UPDATE characters SET gold = gold + $1 WHERE id = $2', [snapshot.gold, characterId]);
+  }
+
+  // Grant XP
+  if (snapshot.exp > 0) {
+    await awardXp(characterId, snapshot.exp);
+  }
+
+  // Grant items
+  const grantedItems: { item_def_id: number; name: string; quantity: number }[] = [];
+  for (const item of snapshot.items) {
+    const slotCountRow = await query<{ count: string }>(
+      'SELECT COUNT(*) AS count FROM inventory_items WHERE character_id = $1',
+      [characterId],
+    );
+    const slotCount = parseInt(slotCountRow.rows[0]?.count ?? '0', 10);
+    if (slotCount >= 20) {
+      itemsSkipped = true;
+      log('info', 'expedition', 'collect_item_skipped_full_inventory', {
+        character_id: characterId,
+        item_def_id: item.item_def_id,
+        expedition_id,
+      });
+      break;
+    }
+    await grantItemToCharacter(session, characterId, item.item_def_id, item.quantity);
+    grantedItems.push({ item_def_id: item.item_def_id, name: item.name, quantity: item.quantity });
+  }
+
+  sendToSession(session, 'expedition.collect_result', {
+    squire_name: squireName,
+    rewards: {
+      gold: snapshot.gold,
+      exp: snapshot.exp,
+      items: grantedItems,
+    },
+    items_skipped: itemsSkipped,
+  });
+
+  log('info', 'expedition', 'expedition_collected', {
+    character_id: characterId,
+    expedition_id,
+    squire_name: squireName,
+    gold: snapshot.gold,
+    exp: snapshot.exp,
+    items_count: grantedItems.length,
+    items_skipped: itemsSkipped,
+  });
+}

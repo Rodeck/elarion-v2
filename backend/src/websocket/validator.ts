@@ -39,6 +39,14 @@ const schemas: Record<string, Schema> = {
   'city.move': {
     target_node_id: { type: 'number', required: true },
   },
+  'expedition.dispatch': {
+    building_id: { type: 'number', required: true },
+    action_id: { type: 'number', required: true },
+    duration_hours: { type: 'number', required: true },
+  },
+  'expedition.collect': {
+    expedition_id: { type: 'number', required: true },
+  },
 };
 
 export interface ValidationResult {

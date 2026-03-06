@@ -4,6 +4,7 @@ import {
   CityMapEdge,
   CityMapBuilding,
   BuildingActionDto,
+  type ExpeditionBuildingActionDto,
 } from '@elarion/protocol';
 import {
   getMapsByType,
@@ -61,6 +62,14 @@ function toProtocolBuilding(
           label: 'Explore',
           config: { encounter_chance: cfg.encounter_chance },
         };
+      }
+      if ((a.action_type as string) === 'expedition') {
+        const dto: ExpeditionBuildingActionDto = {
+          id: a.id,
+          action_type: 'expedition',
+          label: 'Expedition',
+        };
+        return dto;
       }
       // travel
       const cfg = a.config as TravelActionConfig;

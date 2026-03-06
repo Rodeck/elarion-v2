@@ -33,6 +33,12 @@ import type {
   InventoryItemDeletedPayload,
   InventoryDeleteRejectedPayload,
   InventoryFullPayload,
+  ExpeditionStateDto,
+  ExpeditionDispatchedPayload,
+  ExpeditionDispatchRejectedPayload,
+  ExpeditionCompletedPayload,
+  ExpeditionCollectResultPayload,
+  ExpeditionCollectRejectedPayload,
 } from '@elarion/protocol';
 
 const TILE_SIZE = 32;
@@ -68,6 +74,9 @@ export class GameScene extends Phaser.Scene {
   // are replayed once the map is ready.
   private awaitingWorldState = true;
   private pendingEnteredZone: PlayerEnteredZonePayload[] = [];
+
+  // Expedition state cache: building_id → last known expedition state
+  private expeditionStateByBuilding = new Map<number, ExpeditionStateDto>();
 
   // City map state
   private isCityMap = false;
@@ -110,6 +119,12 @@ export class GameScene extends Phaser.Scene {
         this.awaitingWorldState = true;
       }
       this.client.send('city.building_action', payload);
+    });
+    this.buildingPanel.setOnExpeditionDispatch((buildingId, actionId, durationHours) => {
+      this.client.send('expedition.dispatch', { building_id: buildingId, action_id: actionId, duration_hours: durationHours });
+    });
+    this.buildingPanel.setOnExpeditionCollect((expeditionId) => {
+      this.client.send('expedition.collect', { expedition_id: expeditionId });
     });
 
     void this.client.connect().then(() => {
@@ -303,9 +318,12 @@ export class GameScene extends Phaser.Scene {
 
     this.client.on<CityBuildingArrivedPayload>('city.building_arrived', (payload) => {
       this.pendingBuildingId = null;
+      if (payload.expedition_state) {
+        this.expeditionStateByBuilding.set(payload.building_id, payload.expedition_state);
+      }
       const building = this.cityMapData?.buildings.find((b) => b.id === payload.building_id);
       if (building) {
-        this.buildingPanel.show(building);
+        this.buildingPanel.show(building, payload.expedition_state);
       }
     });
 
@@ -341,6 +359,35 @@ export class GameScene extends Phaser.Scene {
 
     this.client.on<InventoryFullPayload>('inventory.full', (payload) => {
       this.chatBox.addSystemMessage(`Inventory full — could not receive ${payload.item_name}`);
+    });
+
+    // Expedition handlers
+    this.client.on<ExpeditionDispatchedPayload>('expedition.dispatched', (payload) => {
+      this.buildingPanel.showExpeditionDispatched(payload);
+    });
+
+    this.client.on<ExpeditionDispatchRejectedPayload>('expedition.dispatch_rejected', (payload) => {
+      this.buildingPanel.showExpeditionRejection(payload.reason);
+    });
+
+    this.client.on<ExpeditionCompletedPayload>('expedition.completed', (payload) => {
+      this.chatBox.addSystemMessage(
+        `${payload.squire_name} finished expedition at ${payload.building_name}. Visit the building to collect rewards.`,
+      );
+    });
+
+    this.client.on<ExpeditionCollectResultPayload>('expedition.collect_result', (payload) => {
+      this.buildingPanel.showExpeditionCollectResult(payload);
+    });
+
+    this.client.on<ExpeditionCollectRejectedPayload>('expedition.collect_rejected', (payload) => {
+      const messages: Record<string, string> = {
+        NOT_FOUND: 'Expedition not found.',
+        NOT_OWNER: 'This is not your expedition.',
+        NOT_COMPLETE: 'The expedition has not finished yet.',
+        ALREADY_COLLECTED: 'Rewards already collected.',
+      };
+      this.chatBox.addSystemMessage(messages[payload.reason] ?? 'Could not collect expedition rewards.');
     });
   }
 
@@ -554,8 +601,8 @@ export class GameScene extends Phaser.Scene {
       if (clickedBuilding) {
         const targetNodeId = clickedBuilding.node_id;
         if (targetNodeId === this.myCharacter.current_node_id) {
-          // Already at this building — show panel immediately
-          this.buildingPanel.show(clickedBuilding);
+          // Already at this building — show panel with cached expedition state if available
+          this.buildingPanel.show(clickedBuilding, this.expeditionStateByBuilding.get(clickedBuilding.id));
           return;
         }
         this.pendingBuildingId = clickedBuilding.id;
