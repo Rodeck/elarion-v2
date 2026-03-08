@@ -277,14 +277,15 @@ export async function createBuilding(
 ): Promise<Building> {
   const result = await query<Building>(
     `INSERT INTO buildings
-       (zone_id, node_id, name, label_offset_x, label_offset_y,
+       (zone_id, node_id, name, description, label_offset_x, label_offset_y,
         hotspot_type, hotspot_x, hotspot_y, hotspot_w, hotspot_h, hotspot_r)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING *`,
     [
       zoneId,
       data.node_id,
       data.name,
+      data.description ?? null,
       data.label_offset_x ?? null,
       data.label_offset_y ?? null,
       data.hotspot_type ?? null,

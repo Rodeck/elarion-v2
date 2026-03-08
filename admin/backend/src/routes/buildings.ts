@@ -52,6 +52,7 @@ buildingsRouter.post('/:id/buildings', async (req: Request, res: Response) => {
   const {
     node_id,
     name,
+    description,
     label_offset_x,
     label_offset_y,
     hotspot_type,
@@ -113,6 +114,7 @@ buildingsRouter.post('/:id/buildings', async (req: Request, res: Response) => {
     const building = await createBuilding(mapId, {
       node_id,
       name: name.trim(),
+      description: typeof description === 'string' ? description : undefined,
       label_offset_x,
       label_offset_y,
       hotspot_type,
