@@ -12,6 +12,9 @@ import { authRouter } from './routes/auth';
 import { itemsRouter } from './routes/items';
 import { monstersRouter } from './routes/monsters';
 import { adminToolsRouter } from './routes/admin-tools';
+import { imagePromptsRouter } from './routes/image-prompts';
+import { adminConfigRouter } from './routes/admin-config';
+import { aiGenerateRouter } from './routes/ai-generate';
 
 const app = express();
 
@@ -45,6 +48,13 @@ app.use('/api/maps', uploadRouter);
 app.use('/api/items', itemsRouter);
 app.use('/api/monsters', monstersRouter);
 app.use('/api/admin-tools', adminToolsRouter);
+app.use('/api/image-prompts', imagePromptsRouter);
+app.use('/api/admin-config', adminConfigRouter);
+app.use('/api/ai', aiGenerateRouter);
+
+if (!process.env['OPENROUTER_API_KEY']) {
+  console.log(JSON.stringify({ level: 'warn', event: 'openrouter_key_missing', msg: 'OPENROUTER_API_KEY not set — AI image generation will return 503', timestamp: new Date().toISOString() }));
+}
 
 app.listen(config.editorPort, () => {
   console.log(JSON.stringify({

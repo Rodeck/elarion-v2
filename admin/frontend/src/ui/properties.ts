@@ -254,11 +254,11 @@ export class PropertiesPanel {
     const wrapper = document.createElement('div');
     wrapper.appendChild(row);
 
-    if (action.action_type === 'expedition') {
+    if (action.action_type === 'explore' || action.action_type === 'expedition') {
       const editBtn = document.createElement('button');
       editBtn.className = 'btn btn--secondary btn--small';
       editBtn.textContent = '✎';
-      editBtn.title = 'Edit expedition config';
+      editBtn.title = `Edit ${action.action_type} config`;
 
       const editForm = document.createElement('div');
       editForm.style.display = 'none';
@@ -267,6 +267,17 @@ export class PropertiesPanel {
         const isOpen = editForm.style.display !== 'none';
         if (isOpen) {
           editForm.style.display = 'none';
+        } else if (action.action_type === 'explore') {
+          editForm.innerHTML = '<em style="font-size:11px;color:#404666;">Loading...</em>';
+          editForm.style.display = '';
+          void listMonsters().then((monsters) => {
+            editForm.innerHTML = '';
+            this.renderEditExploreForm(editForm, action, monsters, mapId, buildingId, labelEl, () => {
+              editForm.style.display = 'none';
+            });
+          }).catch(() => {
+            editForm.innerHTML = '<em style="font-size:11px;color:#f87171;">Failed to load monsters.</em>';
+          });
         } else {
           editForm.innerHTML = '';
           editForm.style.display = '';
@@ -281,6 +292,136 @@ export class PropertiesPanel {
     }
 
     return wrapper;
+  }
+
+  private renderEditExploreForm(
+    container: HTMLElement,
+    action: BuildingAction,
+    monsters: MonsterResponse[],
+    mapId: number,
+    buildingId: number,
+    labelEl: HTMLElement,
+    onClose: () => void,
+  ): void {
+    const cfg = action.config as ExploreActionConfig;
+    container.style.cssText = 'border:1px solid #1e2232;border-radius:6px;padding:8px;margin-top:4px;margin-bottom:4px;background:#0c0e14;';
+
+    container.appendChild(this.label('Encounter Chance (1–100%)', `edit-chance-${action.id}`));
+    const chanceInput = document.createElement('input');
+    chanceInput.id = `edit-chance-${action.id}`;
+    chanceInput.type = 'number';
+    chanceInput.min = '1';
+    chanceInput.max = '100';
+    chanceInput.value = String(cfg.encounter_chance);
+    container.appendChild(chanceInput);
+
+    container.appendChild(this.label('Monster Table', `edit-monsters-${action.id}`));
+    const monsterEntriesEl = document.createElement('div');
+    monsterEntriesEl.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-bottom:4px;';
+    container.appendChild(monsterEntriesEl);
+
+    const monsterEntries: ExploreMonsterEntry[] = cfg.monsters.map((m) => ({ ...m }));
+
+    const buildMonsterRow = (entry: ExploreMonsterEntry): HTMLElement => {
+      const entryRow = document.createElement('div');
+      entryRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
+
+      const mSel = document.createElement('select');
+      mSel.style.flex = '1';
+      monsters.forEach((m) => {
+        const opt = document.createElement('option');
+        opt.value = String(m.id);
+        opt.textContent = m.name;
+        opt.selected = m.id === entry.monster_id;
+        mSel.appendChild(opt);
+      });
+      mSel.addEventListener('change', () => { entry.monster_id = parseInt(mSel.value, 10); });
+
+      const wInput = document.createElement('input');
+      wInput.type = 'number';
+      wInput.min = '1';
+      wInput.value = String(entry.weight);
+      wInput.style.width = '52px';
+      wInput.title = 'Weight';
+      wInput.placeholder = 'Wt';
+      wInput.addEventListener('input', () => { entry.weight = parseInt(wInput.value, 10) || 1; });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'btn btn--danger btn--small';
+      removeBtn.type = 'button';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', () => {
+        const idx = monsterEntries.indexOf(entry);
+        if (idx !== -1) monsterEntries.splice(idx, 1);
+        entryRow.remove();
+      });
+
+      entryRow.appendChild(mSel);
+      entryRow.appendChild(wInput);
+      entryRow.appendChild(removeBtn);
+      return entryRow;
+    };
+
+    for (const entry of monsterEntries) {
+      monsterEntriesEl.appendChild(buildMonsterRow(entry));
+    }
+
+    const addMonsterBtn = document.createElement('button');
+    addMonsterBtn.className = 'btn btn--secondary';
+    addMonsterBtn.type = 'button';
+    addMonsterBtn.textContent = '+ Add Monster';
+    addMonsterBtn.style.cssText = 'width:100%;font-size:11px;margin-bottom:4px;';
+    addMonsterBtn.addEventListener('click', () => {
+      if (monsters.length === 0) { alert('No monsters defined yet. Create monsters first.'); return; }
+      const entry: ExploreMonsterEntry = { monster_id: monsters[0]!.id, weight: 1 };
+      monsterEntries.push(entry);
+      monsterEntriesEl.appendChild(buildMonsterRow(entry));
+    });
+    container.appendChild(addMonsterBtn);
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:6px;margin-top:6px;';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn btn--primary';
+    saveBtn.textContent = 'Save';
+    saveBtn.style.flex = '1';
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      const encounterChance = parseInt(chanceInput.value, 10);
+      if (isNaN(encounterChance) || encounterChance < 1 || encounterChance > 100) {
+        alert('Encounter chance must be between 1 and 100.');
+        saveBtn.disabled = false;
+        return;
+      }
+      if (monsterEntries.length === 0) {
+        alert('Add at least one monster to the table.');
+        saveBtn.disabled = false;
+        return;
+      }
+      try {
+        const updated = await updateBuildingAction(mapId, buildingId, action.id, {
+          config: { encounter_chance: encounterChance, monsters: monsterEntries } as ExploreActionConfig,
+        });
+        action.config = updated.config;
+        const n = monsterEntries.length;
+        labelEl.textContent = `Explore (${encounterChance}% chance, ${n} monster${n !== 1 ? 's' : ''})`;
+        onClose();
+      } catch (err) {
+        alert(`Failed to save: ${(err as Error).message}`);
+        saveBtn.disabled = false;
+      }
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.flex = '1';
+    cancelBtn.addEventListener('click', onClose);
+
+    btnRow.appendChild(saveBtn);
+    btnRow.appendChild(cancelBtn);
+    container.appendChild(btnRow);
   }
 
   private renderEditExpeditionForm(

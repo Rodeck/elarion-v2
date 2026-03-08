@@ -425,6 +425,28 @@ buildingsRouter.put('/:id/buildings/:buildingId/actions/:actionId', async (req: 
         };
         validatedConfig = expeditionConfig as unknown as TravelActionConfig;
         log('info', 'expedition_action_updated', { building_id: buildingId, action_id: actionId, admin: req.username });
+      } else if (actionType === 'explore') {
+        const exploreConfig = config as { encounter_chance?: unknown; monsters?: unknown };
+        if (typeof exploreConfig.encounter_chance !== 'number' || exploreConfig.encounter_chance < 1 || exploreConfig.encounter_chance > 100) {
+          return res.status(400).json({ error: 'encounter_chance must be between 1 and 100' });
+        }
+        if (!Array.isArray(exploreConfig.monsters) || exploreConfig.monsters.length === 0) {
+          return res.status(400).json({ error: 'monsters must be a non-empty array' });
+        }
+        for (const m of exploreConfig.monsters as { monster_id?: unknown; weight?: unknown }[]) {
+          if (typeof m.monster_id !== 'number' || !Number.isInteger(m.monster_id)) {
+            return res.status(400).json({ error: 'Each monster entry must have an integer monster_id' });
+          }
+          if (typeof m.weight !== 'number' || !Number.isInteger(m.weight) || m.weight < 1) {
+            return res.status(400).json({ error: 'Each monster entry must have weight >= 1' });
+          }
+          const monsterRow = await query<{ id: number }>('SELECT id FROM monsters WHERE id = $1', [m.monster_id]);
+          if (monsterRow.rows.length === 0) {
+            return res.status(400).json({ error: `monster_id ${m.monster_id} does not exist` });
+          }
+        }
+        validatedConfig = { encounter_chance: exploreConfig.encounter_chance, monsters: exploreConfig.monsters } as unknown as TravelActionConfig;
+        log('info', 'explore_action_updated', { building_id: buildingId, action_id: actionId, admin: req.username });
       } else {
         const travelConfig = config as { target_zone_id?: number; target_node_id?: number };
         const targetZone = await getMapById(travelConfig.target_zone_id!);

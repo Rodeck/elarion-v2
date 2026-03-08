@@ -11,6 +11,7 @@ import {
   type MonsterLootEntry,
   type ItemDefinitionResponse,
 } from '../editor/api';
+import { ImageGenDialog } from './image-gen-dialog';
 
 export class MonsterManager {
   private container!: HTMLElement;
@@ -18,6 +19,7 @@ export class MonsterManager {
   private items: ItemDefinitionResponse[] = [];
   private editingMonsterId: number | null = null;
   private expandedMonsterId: number | null = null;
+  private acceptedBase64: string | null = null;
 
   init(container: HTMLElement): void {
     this.container = container;
@@ -63,8 +65,13 @@ export class MonsterManager {
                 <input id="mm-xp" type="number" min="0" value="10" />
               </div>
             </div>
-            <label for="mm-icon">Icon (PNG, max 2 MB)</label>
-            <input id="mm-icon" type="file" accept="image/png" style="color:#8a94b0;font-size:0.8125rem;" />
+            <label>Icon (PNG, max 2 MB)</label>
+            <div class="file-upload-row" style="margin-bottom:0.5rem;">
+              <button type="button" class="btn btn--secondary" id="mm-choose-btn">Choose File</button>
+              <button type="button" class="btn btn--secondary" id="mm-ai-gen-btn" disabled>Generate with AI</button>
+              <span id="mm-icon-filename" class="file-name-text">No file chosen</span>
+              <input id="mm-icon" type="file" accept="image/png" style="display:none;" />
+            </div>
             <div id="mm-icon-preview" style="display:none;margin-top:6px;">
               <p style="font-size:0.75rem;color:#5a6280;margin:0 0 4px;">Current icon:</p>
               <img id="mm-icon-img" src="" alt="icon"
@@ -115,6 +122,29 @@ export class MonsterManager {
     });
     this.container.querySelector('#mm-loot-add-btn')!.addEventListener('click', () => {
       void this.handleAddLoot();
+    });
+    const iconInput = this.container.querySelector<HTMLInputElement>('#mm-icon')!;
+    this.container.querySelector('#mm-choose-btn')!.addEventListener('click', () => iconInput.click());
+    iconInput.addEventListener('change', () => {
+      const file = iconInput.files?.[0];
+      const nameEl = this.container.querySelector<HTMLElement>('#mm-icon-filename')!;
+      nameEl.textContent = file ? file.name : 'No file chosen';
+      if (file) {
+        const preview = this.container.querySelector<HTMLElement>('#mm-icon-preview')!;
+        const img = this.container.querySelector<HTMLImageElement>('#mm-icon-img')!;
+        img.src = URL.createObjectURL(file);
+        preview.style.display = '';
+        this.acceptedBase64 = null;
+      }
+    });
+
+    this.container.querySelector('#mm-ai-gen-btn')!.addEventListener('click', () => {
+      void this.handleAiGen();
+    });
+    const nameInput = this.container.querySelector<HTMLInputElement>('#mm-name')!;
+    nameInput.addEventListener('input', () => {
+      const aiBtn = this.container.querySelector<HTMLButtonElement>('#mm-ai-gen-btn')!;
+      aiBtn.disabled = !nameInput.value.trim();
     });
   }
 
@@ -316,6 +346,9 @@ export class MonsterManager {
     fd.append('hp', String(hp));
     fd.append('xp_reward', String(xpReward));
     if (iconFile) fd.append('icon', iconFile);
+    if (!iconFile && this.acceptedBase64) {
+      fd.append('icon_base64', this.acceptedBase64);
+    }
 
     const saveBtn = this.container.querySelector<HTMLButtonElement>('#mm-save-btn')!;
     saveBtn.disabled = true;
@@ -450,6 +483,24 @@ export class MonsterManager {
     }
   }
 
+  private async handleAiGen(): Promise<void> {
+    const name = (this.container.querySelector<HTMLInputElement>('#mm-name')?.value ?? '').trim();
+    if (!name) return;
+    const dialog = new ImageGenDialog();
+    await dialog.open(name, (base64) => {
+      this.acceptedBase64 = base64;
+      const preview = this.container.querySelector<HTMLElement>('#mm-icon-preview')!;
+      const img = this.container.querySelector<HTMLImageElement>('#mm-icon-img')!;
+      img.src = `data:image/png;base64,${base64}`;
+      preview.style.display = '';
+      // Clear file input
+      const iconInput = this.container.querySelector<HTMLInputElement>('#mm-icon')!;
+      iconInput.value = '';
+      const nameEl = this.container.querySelector<HTMLElement>('#mm-icon-filename');
+      if (nameEl) nameEl.textContent = 'AI generated';
+    });
+  }
+
   private refreshCardLoot(monsterId: number): void {
     if (this.expandedMonsterId !== monsterId) return;
     const card = this.container.querySelector<HTMLElement>(`[data-id="${monsterId}"]`);
@@ -462,6 +513,7 @@ export class MonsterManager {
 
   private cancelEdit(): void {
     this.editingMonsterId = null;
+    this.acceptedBase64 = null;
 
     this.container.querySelector<HTMLElement>('#mm-form-title')!.textContent = 'Add New Monster';
     this.container.querySelector<HTMLElement>('#mm-save-btn')!.textContent = 'Add Monster';
@@ -478,6 +530,8 @@ export class MonsterManager {
     (this.container.querySelector<HTMLInputElement>('#mm-hp'))!.value = '20';
     (this.container.querySelector<HTMLInputElement>('#mm-xp'))!.value = '10';
     (this.container.querySelector<HTMLInputElement>('#mm-icon'))!.value = '';
+    const nameEl = this.container.querySelector<HTMLElement>('#mm-icon-filename');
+    if (nameEl) nameEl.textContent = 'No file chosen';
   }
 
   private async handleDelete(id: number): Promise<void> {
