@@ -47,6 +47,13 @@ const schemas: Record<string, Schema> = {
   'expedition.collect': {
     expedition_id: { type: 'number', required: true },
   },
+  'equipment.equip': {
+    slot_id:   { type: 'number', required: true },
+    slot_name: { type: 'string', required: true, enumValues: ['helmet', 'chestplate', 'left_arm', 'right_arm', 'greaves', 'bracer', 'boots'] },
+  },
+  'equipment.unequip': {
+    slot_name: { type: 'string', required: true, enumValues: ['helmet', 'chestplate', 'left_arm', 'right_arm', 'greaves', 'bracer', 'boots'] },
+  },
 };
 
 export interface ValidationResult {

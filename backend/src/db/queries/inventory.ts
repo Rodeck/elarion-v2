@@ -175,6 +175,7 @@ export async function getInventoryWithDefinitions(characterId: string): Promise<
      FROM inventory_items ii
      JOIN item_definitions d ON d.id = ii.item_def_id
      WHERE ii.character_id = $1
+       AND ii.equipped_slot IS NULL
      ORDER BY ii.created_at ASC`,
     [characterId],
   );
@@ -183,10 +184,39 @@ export async function getInventoryWithDefinitions(characterId: string): Promise<
 
 export async function getInventorySlotCount(characterId: string): Promise<number> {
   const result = await query<{ count: string }>(
-    `SELECT COUNT(*) AS count FROM inventory_items WHERE character_id = $1`,
+    `SELECT COUNT(*) AS count FROM inventory_items WHERE character_id = $1 AND equipped_slot IS NULL`,
     [characterId],
   );
   return parseInt(result.rows[0]?.count ?? '0', 10);
+}
+
+// ---------------------------------------------------------------------------
+// Effective stats query
+// ---------------------------------------------------------------------------
+
+export interface CharacterEffectiveStats {
+  effective_attack:  number;
+  effective_defence: number;
+}
+
+export async function getCharacterEffectiveStats(characterId: string): Promise<CharacterEffectiveStats> {
+  const result = await query<{ effective_attack: string; effective_defence: string }>(
+    `SELECT
+       c.attack_power + COALESCE(SUM(d.attack), 0)   AS effective_attack,
+       c.defence      + COALESCE(SUM(d.defence), 0)  AS effective_defence
+     FROM characters c
+     LEFT JOIN inventory_items ii
+       ON ii.character_id = c.id AND ii.equipped_slot IS NOT NULL
+     LEFT JOIN item_definitions d ON d.id = ii.item_def_id
+     WHERE c.id = $1
+     GROUP BY c.id, c.attack_power, c.defence`,
+    [characterId],
+  );
+  const row = result.rows[0];
+  return {
+    effective_attack:  parseInt(row?.effective_attack  ?? '0', 10),
+    effective_defence: parseInt(row?.effective_defence ?? '0', 10),
+  };
 }
 
 export async function findStackableSlot(characterId: string, itemDefId: number): Promise<InventoryItem | null> {

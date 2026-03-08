@@ -5,7 +5,7 @@ import { ChatBox } from '../ui/ChatBox';
 import { CombatLog } from '../ui/CombatLog';
 import { BuildingPanel } from '../ui/BuildingPanel';
 import { LogoutButton } from '../ui/LogoutButton';
-import { InventoryPanel } from '../ui/InventoryPanel';
+import { LeftPanel } from '../ui/LeftPanel';
 import { SessionStore } from '../auth/SessionStore';
 import { AnimatedSprite } from '../entities/AnimatedSprite';
 import { getSprite } from '../entities/SpriteRegistry';
@@ -39,6 +39,10 @@ import type {
   ExpeditionCompletedPayload,
   ExpeditionCollectResultPayload,
   ExpeditionCollectRejectedPayload,
+  EquipmentStatePayload,
+  EquipmentChangedPayload,
+  EquipmentEquipRejectedPayload,
+  EquipmentUnequipRejectedPayload,
 } from '@elarion/protocol';
 
 const TILE_SIZE = 32;
@@ -54,7 +58,7 @@ export class GameScene extends Phaser.Scene {
   private chatBox!: ChatBox;
   private combatLog!: CombatLog;
   private buildingPanel!: BuildingPanel;
-  private inventoryPanel!: InventoryPanel;
+  private leftPanel!: LeftPanel;
 
   // Remote players: characterId → sprite
   private remotePlayers = new Map<string, Phaser.GameObjects.Container>();
@@ -107,9 +111,18 @@ export class GameScene extends Phaser.Scene {
 
     const inventoryEl = document.getElementById('inventory-panel')!;
     inventoryEl.style.display = 'flex';
-    this.inventoryPanel = new InventoryPanel(inventoryEl, (slotId) => {
-      this.client.send('inventory.delete_item', { slot_id: slotId });
-    });
+    this.leftPanel = new LeftPanel(
+      inventoryEl,
+      (slotId, slotName) => {
+        this.client.send('equipment.equip', { slot_id: slotId, slot_name: slotName });
+      },
+      (slotName) => {
+        this.client.send('equipment.unequip', { slot_name: slotName });
+      },
+      (slotId) => {
+        this.client.send('inventory.delete_item', { slot_id: slotId });
+      },
+    );
 
     const buildingSlot = document.getElementById('building-panel-slot')!;
     this.buildingPanel = new BuildingPanel(buildingSlot, (payload) => {
@@ -342,23 +355,46 @@ export class GameScene extends Phaser.Scene {
 
     // Inventory handlers
     this.client.on<InventoryStatePayload>('inventory.state', (payload) => {
-      this.inventoryPanel.renderInventory(payload.slots, payload.capacity);
+      this.leftPanel.onInventoryState(payload);
     });
 
     this.client.on<InventoryItemDeletedPayload>('inventory.item_deleted', (payload) => {
-      this.inventoryPanel.removeSlot(payload.slot_id);
+      this.leftPanel.onInventoryItemDeleted(payload.slot_id);
     });
 
     this.client.on<InventoryDeleteRejectedPayload>('inventory.delete_rejected', (payload) => {
-      this.inventoryPanel.showDeleteError(payload.slot_id);
+      this.leftPanel.showDeleteError(payload.slot_id);
     });
 
     this.client.on<InventoryItemReceivedPayload>('inventory.item_received', (payload) => {
-      this.inventoryPanel.addOrUpdateSlot(payload.slot);
+      this.leftPanel.onInventoryItemReceived(payload);
     });
 
     this.client.on<InventoryFullPayload>('inventory.full', (payload) => {
       this.chatBox.addSystemMessage(`Inventory full — could not receive ${payload.item_name}`);
+      this.leftPanel.onInventoryFull(payload);
+    });
+
+    // Equipment handlers
+    this.client.on<EquipmentStatePayload>('equipment.state', (payload) => {
+      this.leftPanel.onEquipmentState(payload);
+    });
+
+    this.client.on<EquipmentChangedPayload>('equipment.changed', (payload) => {
+      this.leftPanel.onEquipmentChanged(payload);
+      this.statsBar.updateStats(payload.effective_attack, payload.effective_defence);
+      if (this.myCharacter) {
+        this.myCharacter.attack_power = payload.effective_attack;
+        this.myCharacter.defence = payload.effective_defence;
+      }
+    });
+
+    this.client.on<EquipmentEquipRejectedPayload>('equipment.equip_rejected', (payload) => {
+      this.leftPanel.onEquipRejected(payload);
+    });
+
+    this.client.on<EquipmentUnequipRejectedPayload>('equipment.unequip_rejected', (payload) => {
+      this.leftPanel.onUnequipRejected(payload);
     });
 
     // Expedition handlers
@@ -802,6 +838,8 @@ export class GameScene extends Phaser.Scene {
       c.max_hp,
       c.experience,
       xpThreshold,
+      c.attack_power,
+      c.defence,
     );
     this.logoutButton = new LogoutButton(document.getElementById('top-bar')!, () => this.handleLogout());
   }

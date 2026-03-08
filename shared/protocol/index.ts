@@ -404,7 +404,11 @@ export type AnyServerMessage =
   | ExpeditionDispatchRejectedMessage
   | ExpeditionCompletedMessage
   | ExpeditionCollectResultMessage
-  | ExpeditionCollectRejectedMessage;
+  | ExpeditionCollectRejectedMessage
+  | EquipmentStateMessage
+  | EquipmentChangedMessage
+  | EquipmentEquipRejectedMessage
+  | EquipmentUnequipRejectedMessage;
 
 export type AnyClientMessage =
   | AuthRegisterMessage
@@ -416,7 +420,9 @@ export type AnyClientMessage =
   | CityBuildingActionMessage
   | InventoryDeleteItemMessage
   | ExpeditionDispatchMessage
-  | ExpeditionCollectMessage;
+  | ExpeditionCollectMessage
+  | EquipmentEquipMessage
+  | EquipmentUnequipMessage;
 
 // ---------------------------------------------------------------------------
 // Inventory: shared sub-types
@@ -424,7 +430,8 @@ export type AnyClientMessage =
 
 export type ItemCategory =
   | 'resource' | 'food' | 'heal' | 'weapon'
-  | 'boots' | 'shield' | 'greaves' | 'bracer' | 'tool';
+  | 'boots' | 'shield' | 'greaves' | 'bracer' | 'tool'
+  | 'helmet' | 'chestplate';
 
 export type WeaponSubtype =
   | 'one_handed' | 'two_handed' | 'dagger' | 'wand' | 'staff' | 'bow';
@@ -550,3 +557,80 @@ export type ExpeditionDispatchRejectedMessage  = WsMessage<ExpeditionDispatchRej
 export type ExpeditionCompletedMessage         = WsMessage<ExpeditionCompletedPayload>;
 export type ExpeditionCollectResultMessage     = WsMessage<ExpeditionCollectResultPayload>;
 export type ExpeditionCollectRejectedMessage   = WsMessage<ExpeditionCollectRejectedPayload>;
+
+// ---------------------------------------------------------------------------
+// Equipment: shared sub-types
+// ---------------------------------------------------------------------------
+
+export type EquipSlot =
+  | 'helmet'
+  | 'chestplate'
+  | 'left_arm'
+  | 'right_arm'
+  | 'greaves'
+  | 'bracer'
+  | 'boots';
+
+export interface EquipmentSlotsDto {
+  helmet:     InventorySlotDto | null;
+  chestplate: InventorySlotDto | null;
+  left_arm:   InventorySlotDto | null;
+  right_arm:  InventorySlotDto | null;
+  greaves:    InventorySlotDto | null;
+  bracer:     InventorySlotDto | null;
+  boots:      InventorySlotDto | null;
+}
+
+// Equipment: Client → Server payloads
+export interface EquipmentEquipPayload {
+  slot_id:   number;
+  slot_name: EquipSlot;
+}
+
+export interface EquipmentUnequipPayload {
+  slot_name: EquipSlot;
+}
+
+// Equipment: Server → Client payloads
+export interface EquipmentStatePayload {
+  slots: EquipmentSlotsDto;
+}
+
+export interface EquipmentChangedPayload {
+  slots:             EquipmentSlotsDto;
+  effective_attack:  number;
+  effective_defence: number;
+  inventory_added:   InventorySlotDto[];
+  inventory_removed: number[];
+}
+
+export type EquipRejectReason =
+  | 'ITEM_NOT_FOUND'
+  | 'WRONG_SLOT_TYPE'
+  | 'TWO_HANDED_BLOCKS'
+  | 'INVENTORY_FULL'
+  | 'NOT_AUTHENTICATED';
+
+export interface EquipmentEquipRejectedPayload {
+  slot_id:   number;
+  slot_name: EquipSlot;
+  reason:    EquipRejectReason;
+}
+
+export type UnequipRejectReason =
+  | 'SLOT_EMPTY'
+  | 'INVENTORY_FULL'
+  | 'NOT_AUTHENTICATED';
+
+export interface EquipmentUnequipRejectedPayload {
+  slot_name: EquipSlot;
+  reason:    UnequipRejectReason;
+}
+
+// Equipment: message type aliases
+export type EquipmentEquipMessage           = WsMessage<EquipmentEquipPayload>;
+export type EquipmentUnequipMessage         = WsMessage<EquipmentUnequipPayload>;
+export type EquipmentStateMessage           = WsMessage<EquipmentStatePayload>;
+export type EquipmentChangedMessage         = WsMessage<EquipmentChangedPayload>;
+export type EquipmentEquipRejectedMessage   = WsMessage<EquipmentEquipRejectedPayload>;
+export type EquipmentUnequipRejectedMessage = WsMessage<EquipmentUnequipRejectedPayload>;

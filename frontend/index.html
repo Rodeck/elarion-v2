@@ -70,9 +70,37 @@
       flex-shrink: 0;
       background: rgba(10, 9, 7, 0.93);
       border-right: 1px solid #5a4a2a;
-      overflow-y: auto;
+      overflow: hidden;
       display: none;
       flex-direction: column;
+    }
+
+    /* ── Left panel tab bar ── */
+    .left-panel__tabs {
+      display: flex;
+      flex-shrink: 0;
+      background: #1a1814;
+      border-bottom: 1px solid #3a2e1a;
+    }
+    .left-panel__tab {
+      flex: 1;
+      padding: 8px;
+      background: none;
+      border: none;
+      color: #a89880;
+      cursor: pointer;
+      font-family: Cinzel, serif;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .left-panel__tab.is-active {
+      color: #d4a84b;
+      border-bottom-color: #d4a84b;
+    }
+    .left-panel__tab:hover:not(.is-active) {
+      color: #c8b08a;
     }
     #stats-slot {
       flex-shrink: 0;
