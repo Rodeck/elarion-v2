@@ -47,7 +47,7 @@ function log(level: string, msg: string, extra: Record<string, unknown> = {}) {
 // Multer setup — memory storage, PNG only, max 2 MB
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 2 * 1024 * 1024, fieldSize: 4 * 1024 * 1024 }, // 4 MB fields for icon_base64
   fileFilter(_req, file, cb) {
     if (file.mimetype === 'image/png') {
       cb(null, true);
@@ -132,6 +132,16 @@ monstersRouter.post('/', upload.single('icon'), async (req: Request, res: Respon
     fs.writeFileSync(path.join(ICONS_DIR, iconFilename), req.file.buffer);
   }
 
+  if (!iconFilename && req.body.icon_base64 && typeof req.body.icon_base64 === 'string') {
+    const buf = Buffer.from(req.body.icon_base64 as string, 'base64');
+    if (!validatePngMagicBytes(buf)) {
+      return res.status(400).json({ error: 'icon_base64 is not a valid PNG' });
+    }
+    iconFilename = `${randomUUID()}.png`;
+    fs.mkdirSync(ICONS_DIR, { recursive: true });
+    fs.writeFileSync(path.join(ICONS_DIR, iconFilename), buf);
+  }
+
   try {
     const monster = await createMonster({
       name: name.trim(),
@@ -199,6 +209,17 @@ monstersRouter.put('/:id', upload.single('icon'), async (req: Request, res: Resp
     newIconFilename = `${randomUUID()}.png`;
     fs.mkdirSync(ICONS_DIR, { recursive: true });
     fs.writeFileSync(path.join(ICONS_DIR, newIconFilename), req.file.buffer);
+    data.icon_filename = newIconFilename;
+  }
+
+  if (!newIconFilename && req.body.icon_base64 && typeof req.body.icon_base64 === 'string') {
+    const buf = Buffer.from(req.body.icon_base64 as string, 'base64');
+    if (!validatePngMagicBytes(buf)) {
+      return res.status(400).json({ error: 'icon_base64 is not a valid PNG' });
+    }
+    newIconFilename = `${randomUUID()}.png`;
+    fs.mkdirSync(ICONS_DIR, { recursive: true });
+    fs.writeFileSync(path.join(ICONS_DIR, newIconFilename), buf);
     data.icon_filename = newIconFilename;
   }
 

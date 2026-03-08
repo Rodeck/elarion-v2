@@ -576,3 +576,94 @@ export async function grantItem(
     body: JSON.stringify({ character_id: characterId, item_def_id: itemDefId, quantity }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Image Prompt Templates
+// ---------------------------------------------------------------------------
+
+const IMAGE_PROMPTS_BASE = '/api/image-prompts';
+
+export interface ImagePromptTemplate {
+  id: number;
+  name: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getImagePrompts(): Promise<ImagePromptTemplate[]> {
+  return request<ImagePromptTemplate[]>(IMAGE_PROMPTS_BASE);
+}
+
+export async function getImagePromptById(id: number): Promise<ImagePromptTemplate> {
+  return request<ImagePromptTemplate>(`${IMAGE_PROMPTS_BASE}/${id}`);
+}
+
+export async function createImagePrompt(data: { name: string; body: string }): Promise<ImagePromptTemplate> {
+  return request<ImagePromptTemplate>(IMAGE_PROMPTS_BASE, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateImagePrompt(
+  id: number,
+  data: { name?: string; body?: string },
+): Promise<ImagePromptTemplate> {
+  return request<ImagePromptTemplate>(`${IMAGE_PROMPTS_BASE}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteImagePrompt(id: number): Promise<void> {
+  return request<void>(`${IMAGE_PROMPTS_BASE}/${id}`, { method: 'DELETE' });
+}
+
+// ---------------------------------------------------------------------------
+// Admin Config
+// ---------------------------------------------------------------------------
+
+const ADMIN_CONFIG_BASE = '/api/admin-config';
+
+export const VALID_IMAGE_GEN_MODELS = [
+  'google/gemini-2.5-flash-image',
+  'google/gemini-2.5-flash-image-preview',
+  'google/gemini-3-pro-image-preview',
+  'google/gemini-3.1-flash-image-preview',
+  'openai/gpt-5-image-mini',
+  'openai/gpt-5-image',
+] as const;
+
+export async function getAdminConfig(): Promise<Record<string, string>> {
+  return request<Record<string, string>>(ADMIN_CONFIG_BASE);
+}
+
+export async function updateAdminConfig(data: Record<string, string>): Promise<Record<string, string>> {
+  return request<Record<string, string>>(ADMIN_CONFIG_BASE, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// AI Image Generation
+// ---------------------------------------------------------------------------
+
+const AI_BASE = '/api/ai';
+
+export interface GenerateImageResult {
+  base64: string;
+  resolved_prompt: string;
+  model_used: string;
+}
+
+export async function generateImageFromPrompt(
+  promptId: number,
+  variables: Record<string, string>,
+): Promise<GenerateImageResult> {
+  return request<GenerateImageResult>(`${AI_BASE}/generate-image`, {
+    method: 'POST',
+    body: JSON.stringify({ prompt_id: promptId, variables }),
+  });
+}

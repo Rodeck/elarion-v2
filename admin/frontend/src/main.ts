@@ -2,6 +2,8 @@ import { MapListView } from './ui/map-list';
 import { ItemManager } from './ui/item-manager';
 import { MonsterManager } from './ui/monster-manager';
 import { AdminTools } from './ui/admin-tools';
+import { ImagePromptManager } from './ui/image-prompt-manager';
+import { AdminConfigManager } from './ui/admin-config-manager';
 import { Toolbar } from './ui/toolbar';
 import { MapCanvas } from './editor/canvas';
 import { EditorModeManager } from './editor/modes';
@@ -31,6 +33,8 @@ let mapListView: MapListView | null = null;
 let itemManager: ItemManager | null = null;
 let monsterManager: MonsterManager | null = null;
 let adminTools: AdminTools | null = null;
+let imagePromptManager: ImagePromptManager | null = null;
+let adminConfigManager: AdminConfigManager | null = null;
 let toolbar: Toolbar | null = null;
 let canvas: MapCanvas | null = null;
 let modeManager: EditorModeManager | null = null;
@@ -95,11 +99,13 @@ function destroyAll(): void {
   itemManager = null;
   monsterManager = null;
   adminTools = null;
+  imagePromptManager = null;
+  adminConfigManager = null;
   destroyEditor();
   app.innerHTML = '';
 }
 
-async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-tools' = 'maps'): Promise<void> {
+async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' = 'maps'): Promise<void> {
   destroyAll();
 
   // Tab bar
@@ -110,6 +116,8 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     <button class="btn ${activeTab === 'items' ? 'btn--active' : ''}" id="tab-items">Items</button>
     <button class="btn ${activeTab === 'monsters' ? 'btn--active' : ''}" id="tab-monsters">Monsters</button>
     <button class="btn ${activeTab === 'admin-tools' ? 'btn--active' : ''}" id="tab-admin-tools">Admin Tools</button>
+    <button class="btn ${activeTab === 'image-prompts' ? 'btn--active' : ''}" id="tab-image-prompts">Image Prompts</button>
+    <button class="btn ${activeTab === 'config' ? 'btn--active' : ''}" id="tab-config">Config</button>
     <div style="flex:1"></div>
     <span style="font-size:0.75rem;color:#2d3347;align-self:center;padding-right:0.5rem;letter-spacing:0.05em;font-weight:600;">ELARION ADMIN</span>
   `;
@@ -136,15 +144,29 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
   adminToolsPanel.style.display = activeTab === 'admin-tools' ? '' : 'none';
   app.appendChild(adminToolsPanel);
 
-  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools'): void {
+  const imagePromptsPanel = document.createElement('div');
+  imagePromptsPanel.id = 'image-prompts-manager';
+  imagePromptsPanel.style.display = activeTab === 'image-prompts' ? '' : 'none';
+  app.appendChild(imagePromptsPanel);
+
+  const adminConfigPanel = document.createElement('div');
+  adminConfigPanel.id = 'admin-config';
+  adminConfigPanel.style.display = activeTab === 'config' ? '' : 'none';
+  app.appendChild(adminConfigPanel);
+
+  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config'): void {
     mapEditorPanel.style.display = tab === 'maps' ? '' : 'none';
     itemManagerPanel.style.display = tab === 'items' ? '' : 'none';
     monsterManagerPanel.style.display = tab === 'monsters' ? '' : 'none';
     adminToolsPanel.style.display = tab === 'admin-tools' ? '' : 'none';
+    imagePromptsPanel.style.display = tab === 'image-prompts' ? '' : 'none';
+    adminConfigPanel.style.display = tab === 'config' ? '' : 'none';
     tabBar.querySelector('#tab-maps')!.classList.toggle('btn--active', tab === 'maps');
     tabBar.querySelector('#tab-items')!.classList.toggle('btn--active', tab === 'items');
     tabBar.querySelector('#tab-monsters')!.classList.toggle('btn--active', tab === 'monsters');
     tabBar.querySelector('#tab-admin-tools')!.classList.toggle('btn--active', tab === 'admin-tools');
+    tabBar.querySelector('#tab-image-prompts')!.classList.toggle('btn--active', tab === 'image-prompts');
+    tabBar.querySelector('#tab-config')!.classList.toggle('btn--active', tab === 'config');
   }
 
   tabBar.querySelector('#tab-maps')!.addEventListener('click', () => setActiveTab('maps'));
@@ -176,6 +198,24 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     }
   });
 
+  tabBar.querySelector('#tab-image-prompts')!.addEventListener('click', async () => {
+    setActiveTab('image-prompts');
+    if (!imagePromptManager) {
+      imagePromptManager = new ImagePromptManager();
+      imagePromptManager.init(imagePromptsPanel);
+      await imagePromptManager.load();
+    }
+  });
+
+  tabBar.querySelector('#tab-config')!.addEventListener('click', async () => {
+    setActiveTab('config');
+    if (!adminConfigManager) {
+      adminConfigManager = new AdminConfigManager();
+      adminConfigManager.init(adminConfigPanel);
+      await adminConfigManager.load();
+    }
+  });
+
   // Initialize map list
   mapListView = new MapListView(mapEditorPanel);
   mapListView.setOnEditMap((mapId) => {
@@ -196,6 +236,14 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     adminTools = new AdminTools();
     adminTools.init(adminToolsPanel);
     await adminTools.load();
+  } else if (activeTab === 'image-prompts') {
+    imagePromptManager = new ImagePromptManager();
+    imagePromptManager.init(imagePromptsPanel);
+    await imagePromptManager.load();
+  } else if (activeTab === 'config') {
+    adminConfigManager = new AdminConfigManager();
+    adminConfigManager.init(adminConfigPanel);
+    await adminConfigManager.load();
   }
 }
 

@@ -20,7 +20,7 @@ const ICONS_DIR = path.resolve(__dirname, '../../../../backend/assets/items/icon
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB
+  limits: { fileSize: 2 * 1024 * 1024, fieldSize: 4 * 1024 * 1024 }, // 2 MB file, 4 MB fields (for icon_base64)
   fileFilter: (_req, file, cb) => {
     if (file.mimetype === 'image/png') cb(null, true);
     else cb(null, false);
@@ -187,6 +187,18 @@ itemsRouter.post('/', upload.single('icon'), async (req: Request, res: Response)
     fs.writeFileSync(iconPath, req.file.buffer);
   }
 
+  if (!req.file && body['icon_base64'] && typeof body['icon_base64'] === 'string') {
+    const buf = Buffer.from(body['icon_base64'] as string, 'base64');
+    if (!isValidPng(buf)) {
+      log('warn', 'item_icon_rejected', { reason: 'invalid_png_base64', admin: req.username });
+      return res.status(400).json({ error: 'icon_base64 is not a valid PNG' });
+    }
+    iconFilename = `${crypto.randomUUID()}.png`;
+    iconPath = path.resolve(ICONS_DIR, iconFilename);
+    fs.mkdirSync(ICONS_DIR, { recursive: true });
+    fs.writeFileSync(iconPath, buf);
+  }
+
   try {
     const item = await createItemDefinition({
       name: (body['name'] as string).trim(),
@@ -248,6 +260,22 @@ itemsRouter.put('/:id', upload.single('icon'), async (req: Request, res: Respons
     newIconPath = path.resolve(ICONS_DIR, iconFilename);
     fs.mkdirSync(ICONS_DIR, { recursive: true });
     fs.writeFileSync(newIconPath, req.file.buffer);
+  }
+
+  if (!req.file && body['icon_base64'] && typeof body['icon_base64'] === 'string') {
+    const buf = Buffer.from(body['icon_base64'] as string, 'base64');
+    if (!isValidPng(buf)) {
+      log('warn', 'item_icon_rejected', { reason: 'invalid_png_base64', admin: req.username, item_id: id });
+      return res.status(400).json({ error: 'icon_base64 is not a valid PNG' });
+    }
+    if (existing.icon_filename) {
+      const oldPath = path.resolve(ICONS_DIR, existing.icon_filename);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+    iconFilename = `${crypto.randomUUID()}.png`;
+    newIconPath = path.resolve(ICONS_DIR, iconFilename);
+    fs.mkdirSync(ICONS_DIR, { recursive: true });
+    fs.writeFileSync(newIconPath, buf);
   }
 
   const updateData: Record<string, unknown> = {};

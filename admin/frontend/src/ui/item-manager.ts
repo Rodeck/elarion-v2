@@ -5,6 +5,7 @@ import {
   deleteItem,
   type ItemDefinitionResponse,
 } from '../editor/api';
+import { ImageGenDialog } from './image-gen-dialog';
 
 const VALID_CATEGORIES = [
   'resource', 'food', 'heal', 'weapon',
@@ -25,6 +26,7 @@ export class ItemManager {
   private items: ItemDefinitionResponse[] = [];
   private currentCategory: string = 'all';
   private editingId: number | null = null;
+  private acceptedBase64: string | null = null;
 
   init(container: HTMLElement): void {
     this.container = container;
@@ -100,6 +102,7 @@ export class ItemManager {
               <label>Icon (PNG, max 2 MB)</label>
               <div class="file-upload-row">
                 <button type="button" class="btn btn--secondary" id="choose-icon-btn">Choose File</button>
+                <button type="button" class="btn btn--secondary" id="ai-gen-btn">Generate with AI</button>
                 <span id="icon-filename" class="file-name-text">No file chosen</span>
                 <input id="item-icon" name="icon" type="file" accept="image/png" style="display:none;" />
               </div>
@@ -182,6 +185,34 @@ export class ItemManager {
       }
     });
 
+    const aiGenBtn = this.container.querySelector<HTMLButtonElement>('#ai-gen-btn')!;
+    const itemNameInput = this.container.querySelector<HTMLInputElement>('#item-name')!;
+
+    // Disable AI gen button when name is empty
+    const updateAiBtn = () => {
+      aiGenBtn.disabled = !itemNameInput.value.trim();
+    };
+    itemNameInput.addEventListener('input', updateAiBtn);
+    updateAiBtn();
+
+    aiGenBtn.addEventListener('click', async () => {
+      const name = itemNameInput.value.trim();
+      if (!name) return;
+      const dialog = new ImageGenDialog();
+      await dialog.open(name, (base64) => {
+        this.acceptedBase64 = base64;
+        // Show preview from data URI
+        const preview = this.container.querySelector<HTMLElement>('#icon-preview')!;
+        const img = preview.querySelector<HTMLImageElement>('#current-icon-img')!;
+        img.src = `data:image/png;base64,${base64}`;
+        preview.style.display = '';
+        const nameEl = this.container.querySelector<HTMLElement>('#icon-filename');
+        if (nameEl) nameEl.textContent = 'AI generated';
+        // Clear the file input so it doesn't override
+        iconInput.value = '';
+      });
+    });
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       await this.handleFormSubmit(form);
@@ -216,6 +247,13 @@ export class ItemManager {
     const iconFile = formData.get('icon') as File;
     if (!iconFile || iconFile.size === 0) formData.delete('icon');
 
+    // If AI-generated image was accepted and no file selected, append base64
+    const iconFile2 = formData.get('icon') as File;
+    if ((!iconFile2 || iconFile2.size === 0) && this.acceptedBase64) {
+      formData.delete('icon');
+      formData.append('icon_base64', this.acceptedBase64);
+    }
+
     try {
       if (this.editingId !== null) {
         const updated = await updateItem(this.editingId, formData);
@@ -238,6 +276,7 @@ export class ItemManager {
 
   private resetForm(): void {
     this.editingId = null;
+    this.acceptedBase64 = null;
     const form = this.container.querySelector<HTMLFormElement>('#item-form')!;
     form.reset();
     this.container.querySelector<HTMLElement>('#item-form-title')!.textContent = 'Add New Item';
@@ -358,14 +397,33 @@ export class ItemManager {
   }
 
   private formatStats(item: ItemDefinitionResponse): string {
-    const parts: string[] = [];
-    if (item.weapon_subtype) parts.push(`Subtype: ${this.subtypeLabel(item.weapon_subtype)}`);
-    if (item.attack != null) parts.push(`ATK: ${item.attack}`);
-    if (item.defence != null) parts.push(`DEF: ${item.defence}`);
-    if (item.heal_power != null) parts.push(`Heal: ${item.heal_power}`);
-    if (item.food_power != null) parts.push(`Food: ${item.food_power}`);
-    if (item.stack_size != null) parts.push(`Stack: ${item.stack_size}`);
-    return parts.join(', ') || '—';
+    const pills: string[] = [];
+    if (item.stack_size != null)  pills.push(this.pill(`Stack: ${item.stack_size}`,  '#2a3048', '#9ba8d0'));
+    if (item.weapon_subtype)      pills.push(this.subtypePill(item.weapon_subtype));
+    if (item.attack != null)      pills.push(this.pill(`ATK: ${item.attack}`,        '#4a1a1a', '#ff9090'));
+    if (item.defence != null)     pills.push(this.pill(`DEF: ${item.defence}`,       '#1a2e50', '#80aaff'));
+    if (item.heal_power != null)  pills.push(this.pill(`Heal: ${item.heal_power}`,   '#0e3d22', '#70e89a'));
+    if (item.food_power != null)  pills.push(this.pill(`Food: ${item.food_power}`,   '#3d2800', '#ffbe5c'));
+    return pills.length
+      ? `<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">${pills.join('')}</div>`
+      : '—';
+  }
+
+  private pill(label: string, bg: string, fg: string): string {
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.7rem;font-weight:600;letter-spacing:0.02em;background:${bg};color:${fg};white-space:nowrap;">${this.escHtml(label)}</span>`;
+  }
+
+  private subtypePill(subtype: string): string {
+    const cfg: Record<string, [string, string, string]> = {
+      one_handed: ['One-Handed', '#4a3800', '#ffd050'],
+      two_handed: ['Two-Handed', '#0e2448', '#6ea8fe'],
+      dagger:     ['Dagger',     '#30124a', '#c084fc'],
+      wand:       ['Wand',       '#003838', '#5eead4'],
+      staff:      ['Staff',      '#0f3320', '#6ee7a0'],
+      bow:        ['Bow',        '#3d1e00', '#fb923c'],
+    };
+    const [label, bg, fg] = cfg[subtype] ?? [this.subtypeLabel(subtype), '#2a2a3e', '#c8c8e0'];
+    return this.pill(label, bg, fg);
   }
 
   private labelFor(category: string): string {
