@@ -209,7 +209,7 @@ export class InventoryPanel {
       const img = document.createElement('img');
       img.src = slot.definition.icon_url;
       img.alt = slot.definition.name;
-      img.style.cssText = 'position:absolute;inset:12%;object-fit:contain;display:block;';
+      img.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:76%;height:76%;object-fit:contain;';
       img.onerror = () => {
         img.style.display = 'none';
         cell.appendChild(this.buildIconPlaceholder(slot.definition.category));
@@ -259,23 +259,27 @@ export class InventoryPanel {
     if (def.defence != null) stats.push(`Defence: ${def.defence}`);
     if (def.heal_power != null) stats.push(`Heal: ${def.heal_power}`);
     if (def.food_power != null) stats.push(`Food: ${def.food_power}`);
-    if (slot.quantity > 1) stats.push(`Qty: ${slot.quantity}`);
 
     // Map raw DB category to display label
     const categoryLabel = this.resolveDisplayCategory(def.category);
+    const displayName = slot.quantity > 1
+      ? `${this.escHtml(def.name)} x${slot.quantity}`
+      : this.escHtml(def.name);
 
     this.detailEl.innerHTML = `
-      <div style="font-family:'Cinzel',serif;font-size:15px;color:#d4a84b;margin-bottom:4px;">${this.escHtml(def.name)}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div style="font-family:'Cinzel',serif;font-size:15px;color:#d4a84b;">${displayName}</div>
+        <button class="inv-delete-btn" data-slot="${slot.slot_id}" style="font-size:16px;background:none;border:none;color:#c06060;cursor:pointer;padding:2px 4px;line-height:1;opacity:0.7;" title="Delete item">&#128465;</button>
+      </div>
       <div style="font-size:11px;color:#7a6a52;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">${categoryLabel}</div>
       ${def.description ? `<div style="font-size:13px;color:#a89880;font-style:italic;margin-bottom:6px;font-family:'Crimson Text',serif;">${this.escHtml(def.description)}</div>` : ''}
       ${stats.length > 0 ? `<div style="font-size:13px;color:#c8b88a;margin-bottom:8px;">${stats.join(' · ')}</div>` : ''}
-      <button class="inv-delete-btn" data-slot="${slot.slot_id}" style="font-size:13px;background:#3a1a1a;border:1px solid #7a3a3a;color:#e87878;padding:3px 10px;cursor:pointer;border-radius:2px;">Delete</button>
     `;
 
     const deleteBtn = this.detailEl.querySelector<HTMLButtonElement>('.inv-delete-btn')!;
     deleteBtn.addEventListener('click', () => {
       deleteBtn.disabled = true;
-      deleteBtn.textContent = 'Deleting…';
+      deleteBtn.style.opacity = '0.3';
       this.onDeleteItem(slot.slot_id);
     });
 
@@ -292,7 +296,7 @@ export class InventoryPanel {
     const btn = this.detailEl.querySelector<HTMLButtonElement>('.inv-delete-btn');
     if (btn) {
       btn.disabled = false;
-      btn.textContent = 'Delete';
+      btn.style.opacity = '1';
       btn.style.color = '#ff4444';
     }
   }

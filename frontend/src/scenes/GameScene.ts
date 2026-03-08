@@ -374,6 +374,7 @@ export class GameScene extends Phaser.Scene {
       this.chatBox.addSystemMessage(
         `${payload.squire_name} finished expedition at ${payload.building_name}. Visit the building to collect rewards.`,
       );
+      this.buildingPanel.handleExpeditionCompleted(payload);
     });
 
     this.client.on<ExpeditionCollectResultPayload>('expedition.collect_result', (payload) => {

@@ -43,80 +43,95 @@ export class ItemManager {
 
   private render(): void {
     this.container.innerHTML = `
-      <div class="item-manager">
-        <h2>Items</h2>
+      <div class="item-manager-layout">
 
-        <div class="item-filter-bar" id="item-filter-bar">
-          <button class="btn btn--active" data-cat="all">All</button>
-          ${VALID_CATEGORIES.map((c) => `<button class="btn" data-cat="${c}">${this.labelFor(c)}</button>`).join('')}
-        </div>
+        <!-- ── Left col: form ── -->
+        <div class="item-form-col">
+          <h2>Items</h2>
+          <div class="item-form-card">
+            <h3 id="item-form-title">Add New Item</h3>
+            <p id="item-error" class="error" style="display:none"></p>
+            <form id="item-form" autocomplete="off">
+              <label for="item-name">Name *</label>
+              <input id="item-name" name="name" type="text" maxlength="64" required placeholder="Item name" />
 
-        <div id="item-list-container">
-          <p style="color:#3d4262;font-size:0.875rem;">Loading...</p>
-        </div>
+              <label for="item-desc">Description</label>
+              <textarea id="item-desc" name="description" rows="2" placeholder="Optional description"></textarea>
 
-        <div class="item-form-section">
-          <h3 id="item-form-title">Add New Item</h3>
-          <p id="item-error" class="error" style="display:none"></p>
-          <form id="item-form" autocomplete="off">
-            <label for="item-name">Name *</label>
-            <input id="item-name" name="name" type="text" maxlength="64" required placeholder="Item name" />
-
-            <label for="item-desc">Description</label>
-            <textarea id="item-desc" name="description" rows="2" placeholder="Optional description"></textarea>
-
-            <label for="item-category">Category *</label>
-            <select id="item-category" name="category" required>
-              <option value="">— select —</option>
-              ${VALID_CATEGORIES.map((c) => `<option value="${c}">${this.labelFor(c)}</option>`).join('')}
-            </select>
-
-            <div id="field-weapon_subtype" style="display:none">
-              <label for="item-weapon-subtype">Weapon Subtype *</label>
-              <select id="item-weapon-subtype" name="weapon_subtype">
+              <label for="item-category">Category *</label>
+              <select id="item-category" name="category" required>
                 <option value="">— select —</option>
-                ${VALID_WEAPON_SUBTYPES.map((s) => `<option value="${s}">${this.subtypeLabel(s)}</option>`).join('')}
+                ${VALID_CATEGORIES.map((c) => `<option value="${c}">${this.labelFor(c)}</option>`).join('')}
               </select>
-            </div>
 
-            <div id="field-attack" style="display:none">
-              <label for="item-attack">Attack</label>
-              <input id="item-attack" name="attack" type="number" min="0" style="width:120px" />
-            </div>
+              <div id="field-weapon_subtype" style="display:none">
+                <label for="item-weapon-subtype">Weapon Subtype *</label>
+                <select id="item-weapon-subtype" name="weapon_subtype">
+                  <option value="">— select —</option>
+                  ${VALID_WEAPON_SUBTYPES.map((s) => `<option value="${s}">${this.subtypeLabel(s)}</option>`).join('')}
+                </select>
+              </div>
 
-            <div id="field-defence" style="display:none">
-              <label for="item-defence">Defence</label>
-              <input id="item-defence" name="defence" type="number" min="0" style="width:120px" />
-            </div>
+              <div id="field-attack" style="display:none">
+                <label for="item-attack">Attack</label>
+                <input id="item-attack" name="attack" type="number" min="0" style="width:120px" />
+              </div>
 
-            <div id="field-heal_power" style="display:none">
-              <label for="item-heal">Heal Power</label>
-              <input id="item-heal" name="heal_power" type="number" min="0" style="width:120px" />
-            </div>
+              <div id="field-defence" style="display:none">
+                <label for="item-defence">Defence</label>
+                <input id="item-defence" name="defence" type="number" min="0" style="width:120px" />
+              </div>
 
-            <div id="field-food_power" style="display:none">
-              <label for="item-food">Food Power</label>
-              <input id="item-food" name="food_power" type="number" min="0" style="width:120px" />
-            </div>
+              <div id="field-heal_power" style="display:none">
+                <label for="item-heal">Heal Power</label>
+                <input id="item-heal" name="heal_power" type="number" min="0" style="width:120px" />
+              </div>
 
-            <div id="field-stack_size" style="display:none">
-              <label for="item-stack">Stack Size *</label>
-              <input id="item-stack" name="stack_size" type="number" min="1" style="width:120px" />
-            </div>
+              <div id="field-food_power" style="display:none">
+                <label for="item-food">Food Power</label>
+                <input id="item-food" name="food_power" type="number" min="0" style="width:120px" />
+              </div>
 
-            <label for="item-icon">Icon (PNG, max 2 MB)</label>
-            <input id="item-icon" name="icon" type="file" accept="image/png" style="color:#8a94b0;font-size:0.8125rem;" />
-            <div id="icon-preview" style="display:none;margin-top:6px;">
-              <p style="font-size:0.8rem;color:#5a6280;margin:0 0 4px;">Current icon:</p>
-              <img id="current-icon-img" src="" alt="icon" style="height:40px;width:40px;object-fit:contain;border-radius:4px;border:1px solid #1e2232;" />
-            </div>
+              <div id="field-stack_size" style="display:none">
+                <label for="item-stack">Stack Size *</label>
+                <input id="item-stack" name="stack_size" type="number" min="1" style="width:120px" />
+              </div>
 
-            <div class="form-actions">
-              <button type="button" class="btn" id="item-form-cancel" style="display:none">Cancel</button>
-              <button type="submit" class="btn btn--primary" id="item-form-submit">Add Item</button>
-            </div>
-          </form>
+              <label>Icon (PNG, max 2 MB)</label>
+              <div class="file-upload-row">
+                <button type="button" class="btn btn--secondary" id="choose-icon-btn">Choose File</button>
+                <span id="icon-filename" class="file-name-text">No file chosen</span>
+                <input id="item-icon" name="icon" type="file" accept="image/png" style="display:none;" />
+              </div>
+              <div id="icon-preview" style="display:none;margin-top:10px;">
+                <p style="font-size:0.7rem;color:#404666;text-transform:uppercase;letter-spacing:0.06em;margin:0 0 6px;font-weight:600;">Icon Preview</p>
+                <div class="inv-slot-preview-wrap">
+                  <div class="inv-slot-cell">
+                    <img id="current-icon-img" src="" alt="icon" />
+                  </div>
+                  <span style="font-size:0.75rem;color:#5a6280;line-height:1.5;">As it appears<br>in the inventory</span>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button type="button" class="btn" id="item-form-cancel" style="display:none">Cancel</button>
+                <button type="submit" class="btn btn--primary" id="item-form-submit">Add Item</button>
+              </div>
+            </form>
+          </div>
         </div>
+
+        <!-- ── Right col: filter + list ── -->
+        <div class="item-list-col">
+          <div class="item-filter-bar" id="item-filter-bar">
+            <button class="btn btn--active" data-cat="all">All</button>
+            ${VALID_CATEGORIES.map((c) => `<button class="btn" data-cat="${c}">${this.labelFor(c)}</button>`).join('')}
+          </div>
+          <div id="item-list-container">
+            <p style="color:#3d4262;font-size:0.875rem;">Loading...</p>
+          </div>
+        </div>
+
       </div>
     `;
 
@@ -149,6 +164,22 @@ export class ItemManager {
     const cancelBtn = this.container.querySelector<HTMLButtonElement>('#item-form-cancel')!;
     cancelBtn.addEventListener('click', () => {
       this.resetForm();
+    });
+
+    const iconInput = form.querySelector<HTMLInputElement>('[name="icon"]')!;
+    const chooseBtn = this.container.querySelector<HTMLButtonElement>('#choose-icon-btn')!;
+    chooseBtn.addEventListener('click', () => iconInput.click());
+    iconInput.addEventListener('change', () => {
+      const file = iconInput.files?.[0];
+      const nameEl = this.container.querySelector<HTMLElement>('#icon-filename');
+      if (nameEl) nameEl.textContent = file ? file.name : 'No file chosen';
+      if (file) {
+        const url = URL.createObjectURL(file);
+        const preview = this.container.querySelector<HTMLElement>('#icon-preview')!;
+        const img = preview.querySelector<HTMLImageElement>('#current-icon-img')!;
+        img.src = url;
+        preview.style.display = '';
+      }
     });
 
     form.addEventListener('submit', async (e) => {
@@ -214,6 +245,8 @@ export class ItemManager {
     this.container.querySelector<HTMLElement>('#item-form-cancel')!.style.display = 'none';
     this.container.querySelector<HTMLElement>('#item-error')!.style.display = 'none';
     this.container.querySelector<HTMLElement>('#icon-preview')!.style.display = 'none';
+    const nameEl = this.container.querySelector<HTMLElement>('#icon-filename');
+    if (nameEl) nameEl.textContent = 'No file chosen';
     this.updateConditionalFields(form, '');
   }
 
@@ -251,8 +284,6 @@ export class ItemManager {
     this.container.querySelector<HTMLElement>('#item-form-submit')!.textContent = 'Save Changes';
     this.container.querySelector<HTMLElement>('#item-form-cancel')!.style.display = '';
     this.container.querySelector<HTMLElement>('#item-error')!.style.display = 'none';
-
-    form.scrollIntoView({ behavior: 'smooth' });
   }
 
   private renderList(): void {

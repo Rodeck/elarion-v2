@@ -5,6 +5,7 @@ import type {
   ExpeditionStateDto,
   ExpeditionDispatchedPayload,
   ExpeditionCollectResultPayload,
+  ExpeditionCompletedPayload,
 } from '@elarion/protocol';
 import { CombatModal } from './CombatModal';
 
@@ -21,6 +22,8 @@ export class BuildingPanel {
   private onExpeditionCollect: ExpeditionCollectCallback | null = null;
   private combatModal: CombatModal;
   private progressIntervals: number[] = [];
+  private currentBuilding: CityMapBuilding | null = null;
+  private currentExpeditionState: ExpeditionStateDto | undefined;
 
   constructor(parent: HTMLElement, onAction: ActionCallback) {
     this.onAction = onAction;
@@ -81,6 +84,8 @@ export class BuildingPanel {
 
   private renderEmpty(): void {
     this.clearProgressIntervals();
+    this.currentBuilding = null;
+    this.currentExpeditionState = undefined;
     this.headerEl.innerHTML = '';
     const title = document.createElement('h2');
     title.style.cssText = 'margin:0;font-size:13px;letter-spacing:0.08em;color:#4a3a22;';
@@ -97,6 +102,8 @@ export class BuildingPanel {
 
   private renderBuilding(building: CityMapBuilding, expeditionState?: ExpeditionStateDto): void {
     this.clearProgressIntervals();
+    this.currentBuilding = building;
+    this.currentExpeditionState = expeditionState;
     // Header
     this.headerEl.innerHTML = '';
     const title = document.createElement('h2');
@@ -189,6 +196,7 @@ export class BuildingPanel {
     buildingId: number,
     actionId: number,
     state: ExpeditionStateDto | undefined,
+    rewardMessage?: string,
   ): HTMLElement {
     const section = document.createElement('div');
     section.dataset['expeditionSection'] = String(actionId);
@@ -201,6 +209,13 @@ export class BuildingPanel {
     section.appendChild(title);
 
     if (!state || state.squire_status === 'idle') {
+      if (rewardMessage) {
+        const reward = document.createElement('p');
+        reward.style.cssText = 'margin:0 0 8px;font-family:"Crimson Text",serif;font-size:12px;color:#b8e870;';
+        reward.textContent = rewardMessage;
+        section.appendChild(reward);
+      }
+
       const squireLabel = document.createElement('p');
       squireLabel.style.cssText = 'margin:0 0 10px;font-family:"Crimson Text",serif;font-size:13px;color:#a89060;';
       squireLabel.textContent = state ? `${state.squire_name} is ready to depart.` : 'Your squire awaits.';
@@ -328,16 +343,50 @@ export class BuildingPanel {
     );
   }
 
+  handleExpeditionCompleted(payload: ExpeditionCompletedPayload): void {
+    if (!this.currentExpeditionState) return;
+    this.currentExpeditionState = {
+      ...this.currentExpeditionState,
+      squire_status: 'ready',
+      expedition_id: payload.expedition_id,
+      started_at: undefined,
+      completes_at: undefined,
+    };
+    this.refreshExpeditionSection();
+  }
+
   showExpeditionCollectResult(payload: ExpeditionCollectResultPayload): void {
     const r = payload.rewards;
     const itemSummary = r.items.length > 0
       ? ` + ${r.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}`
       : '';
     const skipped = payload.items_skipped ? ' (some items skipped — inventory full)' : '';
-    this.appendFeedback(
-      `${payload.squire_name} returned with ${r.gold}g / ${r.exp}xp${itemSummary}${skipped}.`,
-      '#b8e870',
+    const rewardMsg = `${payload.squire_name} returned: ${r.gold}g / ${r.exp}xp${itemSummary}${skipped}`;
+
+    if (this.currentExpeditionState) {
+      this.currentExpeditionState = {
+        ...this.currentExpeditionState,
+        squire_status: 'idle',
+        expedition_id: undefined,
+        collectable_rewards: undefined,
+        started_at: undefined,
+        completes_at: undefined,
+      };
+      this.refreshExpeditionSection(rewardMsg);
+    } else {
+      this.appendFeedback(rewardMsg, '#b8e870');
+    }
+  }
+
+  private refreshExpeditionSection(rewardMessage?: string): void {
+    const section = this.bodyEl.querySelector<HTMLElement>('[data-expedition-section]');
+    if (!section || !this.currentBuilding) return;
+    const actionId = parseInt(section.dataset['expeditionSection'] ?? '0', 10);
+    this.clearProgressIntervals();
+    const newSection = this.renderExpeditionSection(
+      this.currentBuilding.id, actionId, this.currentExpeditionState, rewardMessage,
     );
+    section.replaceWith(newSection);
   }
 
   showExpeditionRejection(reason: string): void {
