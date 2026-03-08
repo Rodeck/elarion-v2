@@ -159,7 +159,10 @@ export class InventoryPanel {
 
   removeSlot(slotId: number): void {
     const cell = this.gridEl.querySelector<HTMLElement>(`[data-slot-id="${slotId}"]`);
-    if (cell) cell.replaceWith(this.buildEmptyCell());
+    if (cell) {
+      cell.remove();
+      this.gridEl.appendChild(this.buildEmptyCell());
+    }
     this.slots = this.slots.filter((s) => s.slot_id !== slotId);
     if (this.activeSlotId === slotId) this.hideDetailPanel();
   }

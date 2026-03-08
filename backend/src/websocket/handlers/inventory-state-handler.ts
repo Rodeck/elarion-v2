@@ -3,6 +3,7 @@ import type { AuthenticatedSession } from '../server';
 import { log } from '../../logger';
 import { config } from '../../config';
 import { getInventoryWithDefinitions } from '../../db/queries/inventory';
+import { sendEquipmentState } from './equipment-state-handler';
 import type { InventorySlotDto, ItemCategory, WeaponSubtype } from '../../../../shared/protocol/index';
 
 const INVENTORY_CAPACITY = 20;
@@ -45,4 +46,6 @@ export async function sendInventoryState(session: AuthenticatedSession): Promise
     character_id: session.characterId,
     slot_count: slots.length,
   });
+
+  await sendEquipmentState(session);
 }

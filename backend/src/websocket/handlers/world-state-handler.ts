@@ -1,5 +1,6 @@
 import { findByAccountId, findClassById } from '../../db/queries/characters';
 import { sendInventoryState } from './inventory-state-handler';
+import { getCharacterEffectiveStats } from '../../db/queries/inventory';
 import { addPlayer } from '../../game/world/zone-registry';
 import { broadcastPlayerEntered } from '../../game/world/zone-broadcasts';
 import { onClientReconnect } from '../disconnect-handler';
@@ -101,6 +102,9 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
         }))
     : [];
 
+  // Compute effective stats (base + equipped item bonuses)
+  const effectiveStats = await getCharacterEffectiveStats(character.id);
+
   log('info', 'world-state', 'sent', {
     characterId: character.id,
     characterName: character.name,
@@ -108,6 +112,8 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
     map_type: mapType,
     players_count: players.length,
     players_ids: players.map((p) => `${p.id}(${p.name})`),
+    effective_attack: effectiveStats.effective_attack,
+    effective_defence: effectiveStats.effective_defence,
   });
 
   const worldStatePayload: Record<string, unknown> = {
@@ -123,8 +129,8 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
       experience: character.experience,
       max_hp: character.max_hp,
       current_hp: character.current_hp,
-      attack_power: character.attack_power,
-      defence: character.defence,
+      attack_power: effectiveStats.effective_attack,
+      defence: effectiveStats.effective_defence,
       zone_id: character.zone_id,
       pos_x: character.pos_x,
       pos_y: character.pos_y,

@@ -6,6 +6,8 @@ export class StatsBar {
   private hpTextEl: HTMLSpanElement;
   private xpFillEl: HTMLDivElement;
   private xpTextEl: HTMLSpanElement;
+  private attackEl: HTMLSpanElement | null = null;
+  private defenceEl: HTMLSpanElement | null = null;
   private maxHp = 1;
 
   constructor(
@@ -17,6 +19,8 @@ export class StatsBar {
     maxHp: number,
     xp: number,
     xpThreshold: number,
+    attack?: number,
+    defence?: number,
   ) {
     this.maxHp = maxHp;
 
@@ -125,15 +129,48 @@ export class StatsBar {
     this.xpFillEl = xpFill;
     this.xpTextEl = xpText;
 
+    // ── Combat Stats Row ──────────────────────────────────────────
+    const statsRow = document.createElement('div');
+    statsRow.style.cssText = 'display:flex;gap:12px;';
+
+    const attackBlock = document.createElement('div');
+    attackBlock.style.cssText = 'display:flex;align-items:center;gap:4px;';
+    const atkLabel = document.createElement('span');
+    atkLabel.style.cssText = 'font-family:var(--font-display);font-size:9px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1px;';
+    atkLabel.textContent = 'ATK';
+    this.attackEl = document.createElement('span');
+    this.attackEl.style.cssText = 'font-family:var(--font-number);font-size:12px;color:#e8c878;';
+    this.attackEl.dataset['statsType'] = 'attack';
+    attackBlock.appendChild(atkLabel);
+    attackBlock.appendChild(this.attackEl);
+
+    const defBlock = document.createElement('div');
+    defBlock.style.cssText = 'display:flex;align-items:center;gap:4px;';
+    const defLabel = document.createElement('span');
+    defLabel.style.cssText = 'font-family:var(--font-display);font-size:9px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1px;';
+    defLabel.textContent = 'DEF';
+    this.defenceEl = document.createElement('span');
+    this.defenceEl.style.cssText = 'font-family:var(--font-number);font-size:12px;color:#78a8e8;';
+    this.defenceEl.dataset['statsType'] = 'defence';
+    defBlock.appendChild(defLabel);
+    defBlock.appendChild(this.defenceEl);
+
+    statsRow.appendChild(attackBlock);
+    statsRow.appendChild(defBlock);
+
     // ── Assemble ──────────────────────────────────────────────────
     this.container.appendChild(headerRow);
     this.container.appendChild(hpEl);
     this.container.appendChild(xpEl);
+    this.container.appendChild(statsRow);
 
     mountEl.appendChild(this.container);
 
     this.setHp(hp, maxHp);
     this.setXp(xp, xpThreshold);
+    if (attack !== undefined && defence !== undefined) {
+      this.updateStats(attack, defence);
+    }
   }
 
   private createBarSection(
@@ -218,6 +255,11 @@ export class StatsBar {
 
   setLevel(level: number): void {
     this.levelEl.textContent = String(level);
+  }
+
+  updateStats(attack: number, defence: number): void {
+    if (this.attackEl) this.attackEl.textContent = String(attack);
+    if (this.defenceEl) this.defenceEl.textContent = String(defence);
   }
 
   destroy(): void {
