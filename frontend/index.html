@@ -65,6 +65,20 @@
       pointer-events: auto;
     }
 
+    /* ── Map vignette: darkens screen edges when on city map ── */
+    #map-vignette {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+      background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.72) 100%);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+    #map-vignette.visible {
+      opacity: 1;
+    }
+
     #inventory-panel {
       width: 430px;
       flex-shrink: 0;
@@ -437,6 +451,7 @@
   <div id="game">
     <div id="inventory-panel"></div>
     <div id="canvas-area">
+      <div id="map-vignette"></div>
       <div id="ui-overlay"></div>
     </div>
     <div id="building-panel-slot"></div>

@@ -164,6 +164,7 @@ export class GameScene extends Phaser.Scene {
         this.cityBuildingLabels = [];
         this.cityHotspotGraphics?.destroy();
         this.cityHotspotGraphics = null;
+        this.setMapVignette(false);
         this.cityNodeMarkers.forEach((m) => m.destroy());
         this.cityNodeMarkers = [];
         this.pathPreviewGraphics?.destroy();
@@ -474,6 +475,9 @@ export class GameScene extends Phaser.Scene {
       // Set camera bounds to image dimensions
       this.cameras.main.setBounds(0, 0, cityMap.image_width, cityMap.image_height);
 
+      // Render vignette overlay
+      this.setMapVignette(true);
+
       // Render building hotspots as subtle highlights
       this.renderBuildingHotspots(cityMap.buildings);
 
@@ -503,6 +507,7 @@ export class GameScene extends Phaser.Scene {
       this.cityBgSprite.setDisplaySize(cityMap.image_width, cityMap.image_height);
 
       this.cameras.main.setBounds(0, 0, cityMap.image_width, cityMap.image_height);
+      this.setMapVignette(true);
       this.renderBuildingHotspots(cityMap.buildings);
       this.renderBuildingLabels(cityMap.nodes, cityMap.buildings);
       this.renderCityNodeMarkers();
@@ -518,6 +523,10 @@ export class GameScene extends Phaser.Scene {
       this.load.once('complete', startRender);
       this.load.start();
     }
+  }
+
+  private setMapVignette(visible: boolean): void {
+    document.getElementById('map-vignette')?.classList.toggle('visible', visible);
   }
 
   private renderBuildingHotspots(buildings: CityMapBuilding[]): void {
@@ -552,9 +561,16 @@ export class GameScene extends Phaser.Scene {
         {
           fontFamily: 'Cinzel, serif',
           fontSize: '13px',
-          color: '#c9a55c',
-          stroke: '#0f0d0a',
-          strokeThickness: 3,
+          color: '#e8c87a',
+          stroke: '#0a0806',
+          strokeThickness: 5,
+          shadow: {
+            offsetX: 0,
+            offsetY: 1,
+            color: '#000000',
+            blur: 4,
+            fill: true,
+          },
         },
       ).setOrigin(0.5).setDepth(5);
 
