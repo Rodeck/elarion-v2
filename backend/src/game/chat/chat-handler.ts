@@ -7,6 +7,7 @@ import { log } from '../../logger';
 import { sendToSession } from '../../websocket/server';
 import type { AuthenticatedSession } from '../../websocket/server';
 import type { ChatSendPayload } from '@elarion/protocol';
+import { handleAdminCommand } from '../admin/admin-command-handler';
 
 export async function handleChatSend(session: AuthenticatedSession, payload: unknown): Promise<void> {
   const { channel, message } = payload as ChatSendPayload;
@@ -16,6 +17,27 @@ export async function handleChatSend(session: AuthenticatedSession, payload: unk
       code: 'CHARACTER_REQUIRED',
       message: 'You need a character to chat.',
     });
+    return;
+  }
+
+  // Admin command interception
+  if (message.startsWith('/')) {
+    if (!session.isAdmin) {
+      log('warn', 'admin', 'admin_command_rejected', {
+        event: 'admin_command',
+        account_id: session.accountId,
+        character_id: session.characterId,
+        command: message.split(/\s+/)[0],
+        success: false,
+        reason: 'NOT_ADMIN',
+      });
+      sendToSession(session, 'admin.command_result', {
+        success: false,
+        message: 'You do not have permission to use this command.',
+      });
+      return;
+    }
+    await handleAdminCommand(session, message);
     return;
   }
 

@@ -6,6 +6,7 @@ export interface Account {
   password_hash: string;
   created_at: Date;
   banned_at: Date | null;
+  is_admin: boolean;
 }
 
 export async function insertAccount(username: string, passwordHash: string): Promise<Account> {
@@ -20,7 +21,7 @@ export async function insertAccount(username: string, passwordHash: string): Pro
 
 export async function findByUsername(username: string): Promise<Account | null> {
   const result = await query<Account>(
-    `SELECT id, username, password_hash, created_at, banned_at
+    `SELECT id, username, password_hash, created_at, banned_at, is_admin
      FROM accounts
      WHERE LOWER(username) = LOWER($1)`,
     [username],

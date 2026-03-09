@@ -12,6 +12,7 @@ import { dispatch } from './dispatcher';
 export interface AuthenticatedSession {
   accountId: string;
   characterId: string | null;
+  isAdmin: boolean;
   socket: ws.WebSocket;
 }
 
@@ -61,21 +62,21 @@ export function startWebSocketServer(): void {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
     const token = url.searchParams.get('token') ?? '';
 
-    const accept = (accountId: string, characterId: string | null): void => {
+    const accept = (accountId: string, characterId: string | null, isAdmin = false): void => {
       wss.handleUpgrade(req, socket, head, (client) => {
-        const session: AuthenticatedSession = { accountId, characterId, socket: client };
+        const session: AuthenticatedSession = { accountId, characterId, isAdmin, socket: client };
         wss.emit('connection', client, req, session);
       });
     };
 
     if (!token) {
       // Pre-auth connection — accountId is empty until auth.login/register succeeds
-      accept('', null);
+      accept('', null, false);
       return;
     }
 
     verifyToken(token)
-      .then((claims) => accept(claims.accountId, claims.characterId ?? null))
+      .then((claims) => accept(claims.accountId, claims.characterId ?? null, claims.isAdmin))
       .catch(() => {
         log('warn', 'ws', 'upgrade_rejected', { reason: 'invalid_jwt' });
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');

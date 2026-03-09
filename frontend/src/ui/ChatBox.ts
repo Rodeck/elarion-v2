@@ -16,6 +16,9 @@ export class ChatBox {
   private rateLimitTimer: ReturnType<typeof setInterval> | null = null;
   private rateLimitNotice: HTMLDivElement;
   private client: WSClient;
+  private history: string[] = [];
+  private historyIndex = -1;
+  private historyDraft = '';
 
   constructor(client: WSClient, container: HTMLElement = document.body) {
     this.client = client;
@@ -83,7 +86,22 @@ export class ChatBox {
     this.input.addEventListener('focus', () => { this.input.style.borderColor = 'var(--color-gold-primary)'; });
     this.input.addEventListener('blur',  () => { this.input.style.borderColor = 'var(--color-gold-subtle)'; });
     this.input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') this.sendMessage();
+      if (e.key === 'Enter') {
+        this.sendMessage();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (this.history.length === 0) return;
+        if (this.historyIndex === -1) this.historyDraft = this.input.value;
+        this.historyIndex = Math.min(this.historyIndex + 1, this.history.length - 1);
+        this.input.value = this.history[this.historyIndex]!;
+        this.input.setSelectionRange(this.input.value.length, this.input.value.length);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (this.historyIndex === -1) return;
+        this.historyIndex--;
+        this.input.value = this.historyIndex === -1 ? this.historyDraft : this.history[this.historyIndex]!;
+        this.input.setSelectionRange(this.input.value.length, this.input.value.length);
+      }
     });
 
     this.sendBtn = document.createElement('button');
@@ -206,6 +224,18 @@ export class ChatBox {
     while (list.children.length > 100) list.removeChild(list.firstChild!);
   }
 
+  addAdminMessage(success: boolean, message: string): void {
+    const list = this.activeChannel === 'global' ? this.globalList : this.localList;
+    const colour = success ? '#88ff88' : '#ff8888';
+    const prefix = success ? '[Admin ✓]' : '[Admin ✗]';
+    const line = document.createElement('div');
+    line.style.cssText = 'padding:2px 4px;';
+    line.innerHTML = `<span style="color:${colour};font-weight:600;font-family:var(--font-display);font-size:var(--type-small);">${prefix} ${this.escapeHtml(message)}</span>`;
+    list.appendChild(line);
+    list.scrollTop = list.scrollHeight;
+    while (list.children.length > 100) list.removeChild(list.firstChild!);
+  }
+
   showRateLimitNotice(retryAfterMs: number): void {
     if (this.rateLimitTimer) clearInterval(this.rateLimitTimer);
 
@@ -233,6 +263,11 @@ export class ChatBox {
   private sendMessage(): void {
     const text = this.input.value.trim();
     if (!text || this.sendBtn.disabled) return;
+
+    this.history.unshift(text);
+    if (this.history.length > 50) this.history.pop();
+    this.historyIndex = -1;
+    this.historyDraft = '';
 
     this.client.send('chat.send', { channel: this.activeChannel, message: text });
     this.input.value = '';
