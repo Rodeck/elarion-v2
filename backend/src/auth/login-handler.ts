@@ -42,10 +42,11 @@ export async function handleAuthLogin(session: AuthenticatedSession, payload: un
   }
 
   const character = await findByAccountId(account.id);
-  const token = await signToken(account.id, character?.id);
+  const token = await signToken(account.id, character?.id, account.is_admin);
 
   session.accountId = account.id;
   session.characterId = character?.id ?? null;
+  session.isAdmin = account.is_admin;
 
   log('info', 'auth', 'login_success', { accountId: account.id, has_character: !!character });
   sendToSession(session, 'auth.success', {

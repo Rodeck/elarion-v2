@@ -1,4 +1,4 @@
-﻿# elarion-v2 Development Guidelines
+# elarion-v2 Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-03-02
 
@@ -21,6 +21,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - PostgreSQL 16 (2 new tables); filesystem (same `backend/assets/` directories as existing icons) (010-ai-image-gen)
 - TypeScript 5.x (frontend + backend + shared) + Phaser 3.60 (frontend game canvas), `ws` library (WebSocket), `pg` (PostgreSQL client), Vite 5 (frontend build) (011-equipment-system)
 - PostgreSQL 16 — schema change via migration 014 (new column + category extension) (011-equipment-system)
+- TypeScript 5.x (frontend + backend + shared) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), `pg` (PostgreSQL client), `jose` (JWT) (012-admin-commands)
+- PostgreSQL 16 — no new tables; `accounts.is_admin` column already present (012-admin-commands)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -46,9 +48,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 012-admin-commands: Added TypeScript 5.x (frontend + backend + shared) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), `pg` (PostgreSQL client), `jose` (JWT)
 - 011-equipment-system: Added TypeScript 5.x (frontend + backend + shared) + Phaser 3.60 (frontend game canvas), `ws` library (WebSocket), `pg` (PostgreSQL client), Vite 5 (frontend build)
 - 010-ai-image-gen: Added TypeScript 5.x — admin backend (Node.js 20 LTS + Express 4), admin frontend (Vite 5, vanilla TS) + Express 4, `pg` (PostgreSQL client), `node-fetch` or native `fetch` (Node 18+) for OpenRouter HTTP calls; no new npm packages required
-- 009-squire-expeditions: Added TypeScript 5.x (all packages) + Phaser 3.60 (frontend), Node.js 20 LTS + ws (backend), Express 4 (admin backend), Vite 5 (frontends)
 
 
 

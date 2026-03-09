@@ -31,9 +31,11 @@ export class AdminTools {
 
     const heading = document.createElement('h2');
     heading.textContent = 'Admin Tools';
+    heading.style.marginBottom = '0';
     wrap.appendChild(heading);
 
     wrap.appendChild(this.buildGrantItemTool());
+    wrap.appendChild(this.buildCommandsReference());
     this.container.appendChild(wrap);
   }
 
@@ -136,6 +138,84 @@ export class AdminTools {
     });
 
     card.appendChild(form);
+    return card;
+  }
+
+  private buildCommandsReference(): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'admin-card';
+
+    const title = document.createElement('h3');
+    title.textContent = 'In-Game Admin Commands';
+    card.appendChild(title);
+
+    const intro = document.createElement('p');
+    intro.className = 'admin-note';
+    intro.textContent = 'Type these commands in the in-game chat. Only accounts with is_admin = true can use them.';
+    card.appendChild(intro);
+
+    const commands = [
+      {
+        syntax: '/level_up <player>',
+        description: 'Increases the named player\'s level by 1.',
+        examples: ['/level_up Roddeck'],
+      },
+      {
+        syntax: '/level_up <player> <count>',
+        description: 'Increases the named player\'s level by the specified count. Stats (HP, attack, defence) scale accordingly.',
+        examples: ['/level_up Roddeck 5', '/level_up Roddeck 10'],
+      },
+      {
+        syntax: '/item <player> <item_id> <quantity>',
+        description: 'Grants the specified quantity of an item (by numeric ID) to the named player\'s inventory. If the player is online the update is immediate.',
+        examples: ['/item Roddeck 1 1', '/item Roddeck 3 50'],
+      },
+      {
+        syntax: '/clear_inventory <player>',
+        description: 'Removes all items from the named player\'s inventory, including equipped items. If the player is online their inventory panel refreshes immediately.',
+        examples: ['/clear_inventory Roddeck'],
+      },
+    ];
+
+    const table = document.createElement('table');
+    table.className = 'commands-table';
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Syntax</th>
+          <th>Description</th>
+          <th>Examples</th>
+        </tr>
+      </thead>
+    `;
+
+    const tbody = document.createElement('tbody');
+    for (const cmd of commands) {
+      const tr = document.createElement('tr');
+
+      const tdSyntax = document.createElement('td');
+      tdSyntax.innerHTML = `<code>${cmd.syntax}</code>`;
+
+      const tdDesc = document.createElement('td');
+      tdDesc.textContent = cmd.description;
+
+      const tdExamples = document.createElement('td');
+      tdExamples.innerHTML = cmd.examples.map((e) => `<code>${e}</code>`).join('<br>');
+
+      tr.appendChild(tdSyntax);
+      tr.appendChild(tdDesc);
+      tr.appendChild(tdExamples);
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    card.appendChild(table);
+
+    const errorNote = document.createElement('p');
+    errorNote.className = 'admin-note';
+    errorNote.style.marginTop = '0.75rem';
+    errorNote.innerHTML = '<strong>Responses:</strong> Commands reply only to you (not broadcast). Green <code>[Admin ✓]</code> = success. Red <code>[Admin ✗]</code> = error with reason.';
+    card.appendChild(errorNote);
+
     return card;
   }
 

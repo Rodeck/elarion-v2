@@ -43,6 +43,7 @@ import type {
   EquipmentChangedPayload,
   EquipmentEquipRejectedPayload,
   EquipmentUnequipRejectedPayload,
+  AdminCommandResultPayload,
 } from '@elarion/protocol';
 
 const TILE_SIZE = 32;
@@ -270,6 +271,10 @@ export class GameScene extends Phaser.Scene {
 
     this.client.on<ChatMessagePayload>('chat.message', (payload) => {
       this.chatBox.appendMessage(payload.channel as 'local' | 'global', payload.sender_name, payload.message, payload.timestamp);
+    });
+
+    this.client.on<AdminCommandResultPayload>('admin.command_result', (payload) => {
+      this.chatBox.addAdminMessage(payload.success, payload.message);
     });
 
     // ── City-specific handlers ──────────────────────────────────────

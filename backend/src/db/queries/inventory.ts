@@ -253,6 +253,15 @@ export async function updateInventoryQuantity(slotId: number, quantity: number):
   return result.rows[0] ?? null;
 }
 
+/** Deletes all inventory rows for a character (including equipped items). Returns the count of deleted rows. */
+export async function clearAllInventory(characterId: string): Promise<number> {
+  const result = await query(
+    `DELETE FROM inventory_items WHERE character_id = $1`,
+    [characterId],
+  );
+  return result.rowCount ?? 0;
+}
+
 /** Returns true if a row was deleted, false if the slot was not found or doesn't belong to the character. */
 export async function deleteInventoryItem(slotId: number, characterId: string): Promise<boolean> {
   const result = await query(

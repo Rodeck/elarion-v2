@@ -7,10 +7,11 @@ const ALGORITHM = 'HS256';
 export interface JwtClaims {
   accountId: string;
   characterId?: string;
+  isAdmin: boolean;
 }
 
-export async function signToken(accountId: string, characterId?: string): Promise<string> {
-  const payload: JwtClaims = { accountId };
+export async function signToken(accountId: string, characterId?: string, isAdmin = false): Promise<string> {
+  const payload: JwtClaims = { accountId, isAdmin };
   if (characterId) payload.characterId = characterId;
 
   return new SignJWT(payload as unknown as Record<string, unknown>)
@@ -25,5 +26,6 @@ export async function verifyToken(token: string): Promise<JwtClaims> {
   return {
     accountId: payload['accountId'] as string,
     characterId: payload['characterId'] as string | undefined,
+    isAdmin: (payload['isAdmin'] as boolean) ?? false,
   };
 }

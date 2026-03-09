@@ -95,6 +95,14 @@ export async function findClassById(id: number): Promise<CharacterClass | null> 
   return result.rows[0] ?? null;
 }
 
+export async function findByName(name: string): Promise<Character | null> {
+  const result = await query<Character>(
+    `SELECT * FROM characters WHERE name = $1`,
+    [name],
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function updateCharacterNode(characterId: string, nodeId: number): Promise<void> {
   await query(
     `UPDATE characters SET current_node_id = $2, updated_at = now() WHERE id = $1`,

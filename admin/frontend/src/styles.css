@@ -805,8 +805,11 @@
 
   /* ── Admin Tools ─────────────────────────────────────────────── */
   .admin-tools-wrap {
-    max-width: 600px;
+    max-width: 860px;
     padding: 2.5rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
   }
   .admin-tools-wrap h2 {
     font-size: 1.375rem;
@@ -849,6 +852,52 @@
   }
   .feedback-text {
     font-size: 0.8125rem;
+  }
+  .commands-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+  }
+  .commands-table thead tr {
+    border-bottom: 1px solid #1e2232;
+  }
+  .commands-table th {
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #5a6280;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding: 0 0.75rem 0.6rem 0;
+  }
+  .commands-table td {
+    padding: 0.6rem 0.75rem 0.6rem 0;
+    vertical-align: top;
+    border-bottom: 1px solid #1a1e2b;
+    color: #c8ccd8;
+    line-height: 1.5;
+  }
+  .commands-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+  .commands-table code {
+    background: #0d1020;
+    border: 1px solid #1e2232;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.8em;
+    color: #d4a84b;
+    white-space: nowrap;
+  }
+  .admin-note code {
+    background: #0d1020;
+    border: 1px solid #1e2232;
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.85em;
+    color: #d4a84b;
   }
 
   /* ── Item Picker Modal ───────────────────────────────────────── */

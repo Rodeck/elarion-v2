@@ -634,3 +634,14 @@ export type EquipmentStateMessage           = WsMessage<EquipmentStatePayload>;
 export type EquipmentChangedMessage         = WsMessage<EquipmentChangedPayload>;
 export type EquipmentEquipRejectedMessage   = WsMessage<EquipmentEquipRejectedPayload>;
 export type EquipmentUnequipRejectedMessage = WsMessage<EquipmentUnequipRejectedPayload>;
+
+// ---------------------------------------------------------------------------
+// Admin Commands: Server → Client payloads
+// ---------------------------------------------------------------------------
+
+export interface AdminCommandResultPayload {
+  success: boolean;
+  message: string;
+}
+
+export type AdminCommandResultMessage = WsMessage<AdminCommandResultPayload>;
