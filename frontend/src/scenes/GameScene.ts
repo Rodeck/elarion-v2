@@ -5,6 +5,7 @@ import { ChatBox } from '../ui/ChatBox';
 import { CombatLog } from '../ui/CombatLog';
 import { BuildingPanel } from '../ui/BuildingPanel';
 import { LogoutButton } from '../ui/LogoutButton';
+import { DayNightBar } from '../ui/DayNightBar';
 import { LeftPanel } from '../ui/LeftPanel';
 import { SessionStore } from '../auth/SessionStore';
 import { AnimatedSprite } from '../entities/AnimatedSprite';
@@ -14,6 +15,8 @@ import type { Direction4, Direction8 } from '../types/sprite';
 import type {
   WorldStatePayload,
   CharacterData,
+  DayNightStateDto,
+  NightEncounterResultPayload,
   PlayerMovedPayload,
   PlayerEnteredZonePayload,
   PlayerLeftZonePayload,
@@ -60,6 +63,7 @@ export class GameScene extends Phaser.Scene {
   private combatLog!: CombatLog;
   private buildingPanel!: BuildingPanel;
   private leftPanel!: LeftPanel;
+  private dayNightBar: DayNightBar | null = null;
 
   // Remote players: characterId → sprite
   private remotePlayers = new Map<string, Phaser.GameObjects.Container>();
@@ -201,6 +205,13 @@ export class GameScene extends Phaser.Scene {
 
       // Flush any player.entered_zone events that arrived before this world.state
       this.pendingEnteredZone.splice(0).forEach((ev) => this.spawnRemotePlayer(ev.character));
+
+      // Mount / update DayNightBar
+      const gameEl = document.getElementById('canvas-area') ?? document.getElementById('game')!;
+      if (!this.dayNightBar) {
+        this.dayNightBar = new DayNightBar(gameEl);
+      }
+      this.dayNightBar.update(payload.day_night_state);
     });
 
     this.client.on<PlayerMovedPayload>('player.moved', (payload) => {
@@ -275,6 +286,15 @@ export class GameScene extends Phaser.Scene {
 
     this.client.on<AdminCommandResultPayload>('admin.command_result', (payload) => {
       this.chatBox.addAdminMessage(payload.success, payload.message);
+    });
+
+    this.client.on<DayNightStateDto>('world.day_night_changed', (payload) => {
+      this.dayNightBar?.update(payload);
+    });
+
+    this.client.on<NightEncounterResultPayload>('night.encounter_result', (payload) => {
+      // Reuse the explore CombatModal — adapt payload to the expected shape (action_id unused by modal)
+      this.buildingPanel.showExploreResult({ action_id: 0, ...payload });
     });
 
     // ── City-specific handlers ──────────────────────────────────────
@@ -873,6 +893,8 @@ export class GameScene extends Phaser.Scene {
     this.chatBox.destroy();
     this.combatLog.destroy();
     this.buildingPanel.destroy();
+    this.dayNightBar?.destroy();
+    this.dayNightBar = null;
     this.scene.start('LoginScene');
   }
 

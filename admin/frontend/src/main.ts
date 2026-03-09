@@ -4,6 +4,7 @@ import { MonsterManager } from './ui/monster-manager';
 import { AdminTools } from './ui/admin-tools';
 import { ImagePromptManager } from './ui/image-prompt-manager';
 import { AdminConfigManager } from './ui/admin-config-manager';
+import { EncounterTableManager } from './ui/encounter-table-manager';
 import { Toolbar } from './ui/toolbar';
 import { MapCanvas } from './editor/canvas';
 import { EditorModeManager } from './editor/modes';
@@ -279,6 +280,10 @@ async function showEditor(mapId: number): Promise<void> {
     return;
   }
 
+  // Encounter table manager — lazy, loaded into right panel on first Configuration open
+  let encounterTableManager: EncounterTableManager | null = null;
+  let configOpen = false;
+
   // Initialize canvas
   canvas = new MapCanvas(canvasContainer);
   canvas.setData(
@@ -442,6 +447,20 @@ async function showEditor(mapId: number): Promise<void> {
       }
     } catch (err) {
       alert(`Failed to set spawn: ${(err as Error).message}`);
+    }
+  });
+
+  toolbar.setOnConfiguration(() => {
+    configOpen = !configOpen;
+    toolbar!.setConfigurationActive(configOpen);
+    if (configOpen) {
+      propertiesContainer.innerHTML = `<div class="properties"><h3>Map Configuration</h3></div>`;
+      const body = propertiesContainer.querySelector<HTMLElement>('.properties')!;
+      encounterTableManager = new EncounterTableManager();
+      void encounterTableManager.initForZone(body, mapId);
+    } else {
+      propertiesContainer.innerHTML = '';
+      encounterTableManager = null;
     }
   });
 

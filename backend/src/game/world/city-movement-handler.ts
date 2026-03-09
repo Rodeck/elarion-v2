@@ -11,6 +11,7 @@ import {
 } from '../../db/queries/squires';
 import type { ExpeditionActionConfig } from '../../db/queries/squires';
 import { buildExpeditionStateDto } from '../expedition/expedition-service';
+import { rollNightEncounter } from './night-encounter-service';
 import { query } from '../../db/connection';
 import { log } from '../../logger';
 import { sendToSession } from '../../websocket/server';
@@ -283,6 +284,18 @@ export async function handleCityMove(session: AuthenticatedSession, payload: unk
         node_id: stepNodeId,
         step: i,
         total_steps: path.length - 1,
+      });
+
+      // Night encounter roll — cancel remaining movement on encounter
+      void rollNightEncounter(session, character, zoneId).then((encountered) => {
+        if (encountered && !movement.cancelled) {
+          cancelActiveMovement(characterId);
+        }
+      }).catch((err: unknown) => {
+        log('error', 'city-movement', 'night_encounter_error', {
+          characterId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       });
 
       // If the arrived node has a building, notify the moving player only

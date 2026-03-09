@@ -4,6 +4,7 @@ import { findByName, findClassById, updateCharacter } from '../../db/queries/cha
 import { getItemDefinitionById, clearAllInventory } from '../../db/queries/inventory';
 import { grantItemToCharacter } from '../inventory/inventory-grant-service';
 import { sendInventoryState } from '../../websocket/handlers/inventory-state-handler';
+import { forcePhase } from '../world/day-cycle-service';
 import { log } from '../../logger';
 
 // ---------------------------------------------------------------------------
@@ -30,8 +31,10 @@ export async function handleAdminCommand(session: AuthenticatedSession, rawMessa
     case '/level_up':        return handleLevelUp(session, args, reply);
     case '/item':            return handleGiveItem(session, args, reply);
     case '/clear_inventory': return handleClearInventory(session, args, reply);
+    case '/day':             return handleForcePhase(session, 'day', reply);
+    case '/night':           return handleForcePhase(session, 'night', reply);
     default:
-      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory`);
+      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night`);
   }
 }
 
@@ -200,4 +203,23 @@ async function handleClearInventory(session: AuthenticatedSession, args: string[
   });
 
   reply(true, `Cleared inventory of ${playerName} (${deletedCount} item${deletedCount !== 1 ? 's' : ''} removed).`);
+}
+
+// ---------------------------------------------------------------------------
+// /day | /night
+// ---------------------------------------------------------------------------
+
+async function handleForcePhase(session: AuthenticatedSession, phase: 'day' | 'night', reply: ReplyFn): Promise<void> {
+  forcePhase(phase);
+
+  log('info', 'admin', 'admin_command', {
+    event: 'admin_command',
+    admin_account_id: session.accountId,
+    admin_character_id: session.characterId,
+    command: phase === 'day' ? '/day' : '/night',
+    args: {},
+    success: true,
+  });
+
+  reply(true, `Day/night cycle forced to ${phase}.`);
 }

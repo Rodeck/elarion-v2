@@ -1,4 +1,5 @@
 import { findByAccountId, findClassById } from '../../db/queries/characters';
+import { getDto as getDayCycleDto } from '../../game/world/day-cycle-service';
 import { sendInventoryState } from './inventory-state-handler';
 import { getCharacterEffectiveStats } from '../../db/queries/inventory';
 import { addPlayer } from '../../game/world/zone-registry';
@@ -151,6 +152,8 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
       spawn_node_id: cityCache.mapData.spawn_node_id,
     };
   }
+
+  worldStatePayload.day_night_state = getDayCycleDto();
 
   sendToSession(session, 'world.state', worldStatePayload);
 

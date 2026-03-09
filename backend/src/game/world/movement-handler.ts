@@ -3,6 +3,7 @@ import { getPlayerState, movePlayer } from './zone-registry';
 import { broadcastToZone } from './zone-broadcasts';
 import { checkMoveRateLimit } from './movement-rate-limiter';
 import { updateCharacter } from '../../db/queries/characters';
+import { rollNightEncounterByAccount } from './night-encounter-service';
 import { log } from '../../logger';
 import { sendToSession } from '../../websocket/server';
 import type { AuthenticatedSession } from '../../websocket/server';
@@ -108,5 +109,13 @@ export async function handlePlayerMove(session: AuthenticatedSession, payload: u
     characterId: session.characterId,
     from: { x: fromX, y: fromY },
     to: { x: targetX, y: targetY },
+  });
+
+  // Night encounter roll (fire-and-forget — tile maps have no movement queue to cancel)
+  void rollNightEncounterByAccount(session, session.accountId, zoneId).catch((err: unknown) => {
+    log('error', 'movement', 'night_encounter_error', {
+      characterId: session.characterId,
+      error: err instanceof Error ? err.message : String(err),
+    });
   });
 }
