@@ -37,6 +37,8 @@ export class Toolbar {
   private onSetSpawn: (() => void) | null = null;
   private onSave: (() => void) | null = null;
   private onBack: (() => void) | null = null;
+  private onConfiguration: (() => void) | null = null;
+  private configButton!: HTMLButtonElement;
 
   constructor(parent: HTMLElement) {
     this.container = document.createElement('div');
@@ -130,6 +132,16 @@ export class Toolbar {
     spawnBtn.addEventListener('click', () => this.onSetSpawn?.());
     group.appendChild(spawnBtn);
 
+    // Configuration ----------------------------------------------------------
+    this.configButton = document.createElement('button');
+    this.configButton.className = 'toolbar-btn';
+    this.configButton.textContent = 'Configuration';
+    this.configButton.addEventListener('click', () => {
+      this.configButton.classList.toggle('toolbar-btn--active');
+      this.onConfiguration?.();
+    });
+    group.appendChild(this.configButton);
+
     // Save Map ---------------------------------------------------------------
     this.saveButton = document.createElement('button');
     this.saveButton.className = 'toolbar-btn toolbar-btn--save';
@@ -169,6 +181,14 @@ export class Toolbar {
 
   setOnBack(cb: () => void): void {
     this.onBack = cb;
+  }
+
+  setOnConfiguration(cb: () => void): void {
+    this.onConfiguration = cb;
+  }
+
+  setConfigurationActive(active: boolean): void {
+    this.configButton.classList.toggle('toolbar-btn--active', active);
   }
 
   enableSave(enabled: boolean): void {

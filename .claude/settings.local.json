@@ -31,7 +31,8 @@
       "Bash(powershell:*)",
       "Bash(sed:*)",
       "Bash(npx vite:*)",
-      "Bash(head:*)"
+      "Bash(head:*)",
+      "Bash(xargs grep:*)"
     ]
   }
 }

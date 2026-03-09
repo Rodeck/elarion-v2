@@ -667,3 +667,32 @@ export async function generateImageFromPrompt(
     body: JSON.stringify({ prompt_id: promptId, variables }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Encounter tables
+// ---------------------------------------------------------------------------
+
+export interface EncounterEntry {
+  id: number;
+  zone_id: number;
+  monster_id: number;
+  monster_name: string;
+  weight: number;
+}
+
+const ENCOUNTER_BASE = '/api/encounter-tables';
+
+export async function getEncounterTable(zoneId: number): Promise<EncounterEntry[]> {
+  return request<EncounterEntry[]>(`${ENCOUNTER_BASE}/${zoneId}`);
+}
+
+export async function upsertEncounterEntry(zoneId: number, monsterId: number, weight: number): Promise<EncounterEntry> {
+  return request<EncounterEntry>(`${ENCOUNTER_BASE}/${zoneId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ monster_id: monsterId, weight }),
+  });
+}
+
+export async function deleteEncounterEntry(entryId: number): Promise<void> {
+  await request<void>(`${ENCOUNTER_BASE}/entry/${entryId}`, { method: 'DELETE' });
+}

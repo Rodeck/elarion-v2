@@ -2,12 +2,15 @@ import { getMonsterById } from '../../db/queries/monsters';
 import { getLootByMonsterId } from '../../db/queries/monster-loot';
 import { awardXp } from '../progression/xp-service';
 import { grantItemToCharacter } from '../inventory/inventory-grant-service';
+import { getPhase } from '../world/day-cycle-service';
 import { log } from '../../logger';
 import { config } from '../../config';
 import type { AuthenticatedSession } from '../../websocket/server';
 import type { Character } from '../../db/queries/characters';
 import type { ExploreActionConfig } from '../../db/queries/city-maps';
 import type { BuildingExploreResultPayload, CombatRoundRecord, ItemDroppedDto } from '../../../../shared/protocol/index';
+
+const NIGHT_STAT_MULTIPLIER = 1.1;
 
 function buildMonsterIconUrl(filename: string | null): string | null {
   return filename ? `${config.adminBaseUrl}/monster-icons/${filename}` : null;
@@ -67,30 +70,40 @@ export async function resolveExplore(
     return { action_id: actionId, outcome: 'no_encounter' };
   }
 
+  // Apply 10% night stat bonus to the monster when it's night
+  const isNight = getPhase() === 'night';
+  const effectiveHp      = isNight ? Math.ceil(monster.hp * NIGHT_STAT_MULTIPLIER)      : monster.hp;
+  const effectiveAttack  = isNight ? Math.ceil(monster.attack * NIGHT_STAT_MULTIPLIER)  : monster.attack;
+  const effectiveDefense = isNight ? Math.ceil(monster.defense * NIGHT_STAT_MULTIPLIER) : monster.defense;
+
   log('info', 'explore', 'encounter_started', {
     characterId: character.id,
     actionId,
     monsterId: monster.id,
     monsterName: monster.name,
+    isNight,
+    effectiveHp,
+    effectiveAttack,
+    effectiveDefense,
   });
 
   // ── Combat loop ─────────────────────────────────────────────────────────────
   // Player starts at full HP (no persistent damage across encounters)
   let playerHp = character.max_hp;
-  let monsterHp = monster.hp;
+  let monsterHp = effectiveHp;
   const rounds: CombatRoundRecord[] = [];
 
   while (playerHp > 0 && monsterHp > 0) {
     const roundNum = rounds.length + 1;
 
     // Player attacks first
-    const playerDmg = Math.max(1, character.attack_power - monster.defense);
+    const playerDmg = Math.max(1, character.attack_power - effectiveDefense);
     monsterHp = Math.max(0, monsterHp - playerDmg);
 
     // Monster attacks back (only if still alive)
     let monsterDmg = 0;
     if (monsterHp > 0) {
-      monsterDmg = Math.max(1, monster.attack - character.defence);
+      monsterDmg = Math.max(1, effectiveAttack - character.defence);
       playerHp = Math.max(0, playerHp - monsterDmg);
     }
 
@@ -121,9 +134,9 @@ export async function resolveExplore(
         id: monster.id,
         name: monster.name,
         icon_url: buildMonsterIconUrl(monster.icon_filename),
-        max_hp: monster.hp,
-        attack: monster.attack,
-        defense: monster.defense,
+        max_hp: effectiveHp,
+        attack: effectiveAttack,
+        defense: effectiveDefense,
       },
       rounds,
       combat_result: 'loss',
@@ -165,9 +178,9 @@ export async function resolveExplore(
       id: monster.id,
       name: monster.name,
       icon_url: buildMonsterIconUrl(monster.icon_filename),
-      max_hp: monster.hp,
-      attack: monster.attack,
-      defense: monster.defense,
+      max_hp: effectiveHp,
+      attack: effectiveAttack,
+      defense: effectiveDefense,
     },
     rounds,
     combat_result: 'win',

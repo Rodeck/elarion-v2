@@ -15,6 +15,7 @@ import { adminToolsRouter } from './routes/admin-tools';
 import { imagePromptsRouter } from './routes/image-prompts';
 import { adminConfigRouter } from './routes/admin-config';
 import { aiGenerateRouter } from './routes/ai-generate';
+import { encounterTablesRouter } from './routes/encounter-tables';
 
 const app = express();
 
@@ -51,6 +52,7 @@ app.use('/api/admin-tools', adminToolsRouter);
 app.use('/api/image-prompts', imagePromptsRouter);
 app.use('/api/admin-config', adminConfigRouter);
 app.use('/api/ai', aiGenerateRouter);
+app.use('/api/encounter-tables', encounterTablesRouter);
 
 if (!process.env['OPENROUTER_API_KEY']) {
   console.log(JSON.stringify({ level: 'warn', event: 'openrouter_key_missing', msg: 'OPENROUTER_API_KEY not set — AI image generation will return 503', timestamp: new Date().toISOString() }));

@@ -47,6 +47,15 @@ export function sendToSession(session: AuthenticatedSession, type: string, paylo
   sendToSocket(session.socket, type, payload);
 }
 
+/** Broadcast a message to all authenticated connected sessions. */
+export function broadcastToAll(type: string, payload: unknown): void {
+  for (const [socket, session] of sessions) {
+    if (session.characterId && socket.readyState === ws.WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type, v: 1, payload }));
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Bootstrap
 // ---------------------------------------------------------------------------

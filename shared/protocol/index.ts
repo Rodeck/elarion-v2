@@ -261,6 +261,17 @@ export interface CharacterCreatedPayload {
   character: CharacterData;
 }
 
+// ---------------------------------------------------------------------------
+// Day/Night Cycle: shared sub-type
+// ---------------------------------------------------------------------------
+
+export interface DayNightStateDto {
+  phase: 'day' | 'night';
+  phase_started_at: number;   // Unix ms — when this phase began (server clock)
+  day_duration_ms: number;    // 2_700_000 (45 min)
+  night_duration_ms: number;  // 900_000  (15 min)
+}
+
 export interface WorldStatePayload {
   zone_id: number;
   zone_name: string;
@@ -268,6 +279,7 @@ export interface WorldStatePayload {
   players: PlayerSummary[];
   map_type: 'tile' | 'city';
   city_map?: CityMapData;
+  day_night_state: DayNightStateDto;
 }
 
 export interface PlayerMovedPayload {
@@ -408,7 +420,10 @@ export type AnyServerMessage =
   | EquipmentStateMessage
   | EquipmentChangedMessage
   | EquipmentEquipRejectedMessage
-  | EquipmentUnequipRejectedMessage;
+  | EquipmentUnequipRejectedMessage
+  | WorldDayNightChangedMessage
+  | NightEncounterResultMessage
+  | AdminCommandResultMessage;
 
 export type AnyClientMessage =
   | AuthRegisterMessage
@@ -636,6 +651,31 @@ export type EquipmentEquipRejectedMessage   = WsMessage<EquipmentEquipRejectedPa
 export type EquipmentUnequipRejectedMessage = WsMessage<EquipmentUnequipRejectedPayload>;
 
 // ---------------------------------------------------------------------------
+// Day/Night Cycle: Server → Client payloads
+// ---------------------------------------------------------------------------
+
+/** Broadcast to all clients on phase transition (and same shape used in world.state). */
+export type WorldDayNightChangedPayload = DayNightStateDto;
+
+/** Result of a random night travel encounter (city node step or tile move). */
+export interface NightEncounterResultPayload {
+  outcome: 'combat';  // only sent when combat actually triggered
+
+  monster: {
+    id: number;
+    name: string;
+    icon_url: string | null;
+    max_hp: number;    // includes 1.1× night bonus
+    attack: number;    // includes 1.1× night bonus
+    defense: number;   // includes 1.1× night bonus
+  };
+  rounds: CombatRoundRecord[];
+  combat_result: 'win' | 'loss';
+  xp_gained?: number;               // only when combat_result === 'win'
+  items_dropped?: ItemDroppedDto[]; // only when combat_result === 'win', may be empty
+}
+
+// ---------------------------------------------------------------------------
 // Admin Commands: Server → Client payloads
 // ---------------------------------------------------------------------------
 
@@ -645,3 +685,10 @@ export interface AdminCommandResultPayload {
 }
 
 export type AdminCommandResultMessage = WsMessage<AdminCommandResultPayload>;
+
+// ---------------------------------------------------------------------------
+// Day/Night Cycle: message type aliases
+// ---------------------------------------------------------------------------
+
+export type WorldDayNightChangedMessage = WsMessage<WorldDayNightChangedPayload>;
+export type NightEncounterResultMessage = WsMessage<NightEncounterResultPayload>;

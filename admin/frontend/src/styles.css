@@ -223,7 +223,7 @@
     flex-shrink: 0;
   }
   .editor-sidebar--right {
-    width: 320px;
+    width: 640px;
     border-right: none;
     border-left: 1px solid #1e2232;
   }
