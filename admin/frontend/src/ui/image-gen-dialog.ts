@@ -7,7 +7,7 @@ import {
 export class ImageGenDialog {
   private overlay: HTMLElement | null = null;
 
-  async open(entityName: string, onAccept: (base64: string) => void): Promise<void> {
+  async open(entityName: string, onAccept: (base64: string) => void, extraVariables?: Record<string, string>): Promise<void> {
     // Load prompts
     let prompts: ImagePromptTemplate[] = [];
     try {
@@ -34,6 +34,7 @@ export class ImageGenDialog {
     const resolved = firstPromptBody.replace(/<[A-Z_]+>/g, (m) => {
       const key = m.slice(1, -1);
       if (key.includes('NAME')) return entityName;
+      if (extraVariables && key in extraVariables) return extraVariables[key]!;
       return m;
     });
 
@@ -95,6 +96,7 @@ export class ImageGenDialog {
         const res = prompt.body.replace(/<[A-Z_]+>/g, (m) => {
           const key = m.slice(1, -1);
           if (key.includes('NAME')) return entityName;
+          if (extraVariables && key in extraVariables) return extraVariables[key]!;
           return m;
         });
         previewDiv.textContent = res;
@@ -114,6 +116,7 @@ export class ImageGenDialog {
       for (const ph of placeholders) {
         const key = ph.slice(1, -1);
         if (key.includes('NAME')) variables[key] = entityName;
+        else if (extraVariables && key in extraVariables) variables[key] = extraVariables[key]!;
         else variables[key] = entityName; // fallback: use entity name
       }
 

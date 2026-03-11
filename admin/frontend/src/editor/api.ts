@@ -669,6 +669,89 @@ export async function generateImageFromPrompt(
 }
 
 // ---------------------------------------------------------------------------
+// NPCs
+// ---------------------------------------------------------------------------
+
+const NPCS_BASE = '/api/npcs';
+
+export interface NpcResponse {
+  id: number;
+  name: string;
+  description: string;
+  icon_filename: string;
+  icon_url: string;
+  created_at: string;
+}
+
+export interface NpcUploadResult {
+  icon_filename: string;
+  icon_url: string;
+}
+
+export interface BuildingNpcEntry {
+  npc_id: number;
+  name: string;
+  icon_url: string;
+  sort_order: number;
+}
+
+export async function listNpcs(): Promise<NpcResponse[]> {
+  return request<NpcResponse[]>(NPCS_BASE);
+}
+
+export async function createNpc(data: {
+  name: string;
+  description: string;
+  icon_filename: string;
+}): Promise<NpcResponse> {
+  return request<NpcResponse>(NPCS_BASE, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateNpc(id: number, data: {
+  name?: string;
+  description?: string;
+  icon_filename?: string;
+}): Promise<NpcResponse> {
+  return request<NpcResponse>(`${NPCS_BASE}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteNpc(id: number): Promise<void> {
+  return request<void>(`${NPCS_BASE}/${id}`, { method: 'DELETE' });
+}
+
+export async function uploadNpcIcon(file: File): Promise<NpcUploadResult> {
+  const form = new FormData();
+  form.append('icon', file);
+  return request<NpcUploadResult>(`${NPCS_BASE}/upload`, { method: 'POST', body: form });
+}
+
+export async function listBuildingNpcs(mapId: number, buildingId: number): Promise<BuildingNpcEntry[]> {
+  const res = await request<{ npcs: BuildingNpcEntry[] }>(
+    `${BASE}/${mapId}/buildings/${buildingId}/npcs`,
+  );
+  return res.npcs;
+}
+
+export async function assignNpcToBuilding(mapId: number, buildingId: number, npcId: number): Promise<void> {
+  return request<void>(`${BASE}/${mapId}/buildings/${buildingId}/npcs`, {
+    method: 'POST',
+    body: JSON.stringify({ npc_id: npcId }),
+  });
+}
+
+export async function removeNpcFromBuilding(mapId: number, buildingId: number, npcId: number): Promise<void> {
+  return request<void>(`${BASE}/${mapId}/buildings/${buildingId}/npcs/${npcId}`, {
+    method: 'DELETE',
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Encounter tables
 // ---------------------------------------------------------------------------
 

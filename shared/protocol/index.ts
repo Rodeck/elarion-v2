@@ -115,6 +115,13 @@ export interface ExpeditionStateDto {
   duration_options?: ExpeditionDurationOption[]; // present when idle
 }
 
+export interface NpcDto {
+  id: number;
+  name: string;
+  description: string;
+  icon_url: string;
+}
+
 export interface CityMapBuilding {
   id: number;
   name: string;
@@ -123,6 +130,7 @@ export interface CityMapBuilding {
   label_x: number;
   label_y: number;
   actions: BuildingActionDto[];
+  npcs: NpcDto[];
   hotspot?: {
     type: 'rect' | 'circle';
     x: number;

@@ -8,9 +8,15 @@ import {
   listMaps,
   listNodes,
   listMonsters,
+  listNpcs,
+  listBuildingNpcs,
+  assignNpcToBuilding,
+  removeNpcFromBuilding,
   type BuildingAction,
   type MapSummary,
   type MonsterResponse,
+  type NpcResponse,
+  type BuildingNpcEntry,
   type TravelActionConfig,
   type ExploreActionConfig,
   type ExploreMonsterEntry,
@@ -159,6 +165,43 @@ export class PropertiesPanel {
 
     panel.appendChild(addBtn);
     panel.appendChild(addForm);
+
+    // ── NPCs section ─────────────────────────────────────────────────
+    const npcsSection = document.createElement('div');
+    npcsSection.style.marginTop = '12px';
+
+    const npcsHeader = document.createElement('label');
+    npcsHeader.textContent = 'NPCs';
+    npcsHeader.style.marginBottom = '4px';
+    npcsSection.appendChild(npcsHeader);
+
+    const npcsList = document.createElement('div');
+    npcsList.id = 'building-npcs-list';
+    npcsSection.appendChild(npcsList);
+
+    const npcAssignRow = document.createElement('div');
+    npcAssignRow.style.cssText = 'display:flex;gap:6px;margin-top:6px;';
+
+    const npcSelect = document.createElement('select');
+    npcSelect.id = 'npc-assign-select';
+    npcSelect.style.flex = '1';
+    const npcDefaultOpt = document.createElement('option');
+    npcDefaultOpt.value = '';
+    npcDefaultOpt.textContent = '— select NPC —';
+    npcSelect.appendChild(npcDefaultOpt);
+
+    const npcAssignBtn = document.createElement('button');
+    npcAssignBtn.className = 'btn btn--secondary';
+    npcAssignBtn.textContent = 'Assign';
+    npcAssignBtn.style.flexShrink = '0';
+
+    npcAssignRow.appendChild(npcSelect);
+    npcAssignRow.appendChild(npcAssignBtn);
+    npcsSection.appendChild(npcAssignRow);
+
+    panel.appendChild(npcsSection);
+
+    void this.renderNpcsSection(npcsList, npcSelect, npcAssignBtn, building.id, mapId);
 
     // ── Delete button ────────────────────────────────────────────────
     const deleteBtn = document.createElement('button');
@@ -994,6 +1037,106 @@ export class PropertiesPanel {
     btnRow.appendChild(saveBtn);
     btnRow.appendChild(cancelBtn);
     container.appendChild(btnRow);
+  }
+
+  private async renderNpcsSection(
+    listEl: HTMLElement,
+    npcSelect: HTMLSelectElement,
+    assignBtn: HTMLButtonElement,
+    buildingId: number,
+    mapId: number,
+  ): Promise<void> {
+    listEl.innerHTML = '<em style="font-size:11px;color:#404666;">Loading...</em>';
+
+    let allNpcs: NpcResponse[] = [];
+    let assignedNpcs: BuildingNpcEntry[] = [];
+
+    try {
+      [allNpcs, assignedNpcs] = await Promise.all([
+        listNpcs(),
+        listBuildingNpcs(mapId, buildingId),
+      ]);
+    } catch {
+      listEl.innerHTML = '<em style="font-size:11px;color:#f87171;">Failed to load NPCs.</em>';
+      return;
+    }
+
+    // Populate dropdown with all NPCs (assigned ones are still selectable to re-add — server will 409)
+    npcSelect.innerHTML = '';
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = '— select NPC —';
+    npcSelect.appendChild(defaultOpt);
+    for (const n of allNpcs) {
+      const opt = document.createElement('option');
+      opt.value = String(n.id);
+      opt.textContent = n.name;
+      npcSelect.appendChild(opt);
+    }
+
+    // Render assigned list
+    listEl.innerHTML = '';
+    if (assignedNpcs.length === 0) {
+      const empty = document.createElement('p');
+      empty.style.cssText = 'font-size:11px;color:#3a4060;font-style:italic;margin:0;';
+      empty.textContent = 'No NPCs assigned.';
+      listEl.appendChild(empty);
+    } else {
+      for (const n of assignedNpcs) {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:3px;';
+
+        const icon = document.createElement('img');
+        icon.src = n.icon_url;
+        icon.alt = '';
+        icon.style.cssText = 'width:20px;height:20px;object-fit:contain;image-rendering:pixelated;border-radius:3px;';
+
+        const nameEl = document.createElement('span');
+        nameEl.style.cssText = 'flex:1;font-size:11px;color:#8a94b0;';
+        nameEl.textContent = n.name;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'btn btn--danger btn--small';
+        removeBtn.textContent = '✕';
+        removeBtn.addEventListener('click', async () => {
+          try {
+            await removeNpcFromBuilding(mapId, buildingId, n.npc_id);
+            row.remove();
+            if (listEl.children.length === 0) {
+              const empty = document.createElement('p');
+              empty.style.cssText = 'font-size:11px;color:#3a4060;font-style:italic;margin:0;';
+              empty.textContent = 'No NPCs assigned.';
+              listEl.appendChild(empty);
+            }
+          } catch (err) {
+            alert(`Failed to remove NPC: ${(err as Error).message}`);
+          }
+        });
+
+        row.appendChild(icon);
+        row.appendChild(nameEl);
+        row.appendChild(removeBtn);
+        listEl.appendChild(row);
+      }
+    }
+
+    // Assign button handler
+    assignBtn.onclick = async () => {
+      const npcId = parseInt(npcSelect.value, 10);
+      if (isNaN(npcId) || npcId <= 0) { alert('Please select an NPC.'); return; }
+      try {
+        await assignNpcToBuilding(mapId, buildingId, npcId);
+        // Reload the section to show updated state
+        await this.renderNpcsSection(listEl, npcSelect, assignBtn, buildingId, mapId);
+      } catch (err) {
+        const msg = (err as Error).message;
+        if (msg.includes('ALREADY_ASSIGNED')) {
+          alert('This NPC is already assigned to this building.');
+        } else {
+          alert(`Failed to assign NPC: ${msg}`);
+        }
+      }
+    };
   }
 
   clear(): void {

@@ -122,6 +122,58 @@ export class BuildingPanel {
       this.bodyEl.appendChild(desc);
     }
 
+    // ── NPCs section ─────────────────────────────────────────────────
+    if (building.npcs && building.npcs.length > 0) {
+      const npcsSection = document.createElement('div');
+      npcsSection.style.cssText = 'border-top:1px solid #3a2e1a;padding-top:10px;';
+
+      const npcsTitle = document.createElement('p');
+      npcsTitle.style.cssText = 'margin:0 0 8px;font-family:Cinzel,serif;font-size:11px;letter-spacing:0.08em;color:#c9a55c;';
+      npcsTitle.textContent = 'You can find here:';
+      npcsSection.appendChild(npcsTitle);
+
+      for (const npc of building.npcs) {
+        const npcRow = document.createElement('div');
+        npcRow.style.cssText = [
+          'display:flex',
+          'align-items:center',
+          'gap:8px',
+          'padding:6px 8px',
+          'cursor:pointer',
+          'border:1px solid transparent',
+          'border-radius:3px',
+          'transition:background 0.15s,border-color 0.15s',
+        ].join(';');
+
+        npcRow.addEventListener('mouseenter', () => {
+          npcRow.style.background = 'rgba(90,74,42,0.3)';
+          npcRow.style.borderColor = '#5a4a2a';
+        });
+        npcRow.addEventListener('mouseleave', () => {
+          npcRow.style.background = '';
+          npcRow.style.borderColor = 'transparent';
+        });
+        npcRow.addEventListener('click', () => {
+          this.renderNpcPanel(npc);
+        });
+
+        const icon = document.createElement('img');
+        icon.src = npc.icon_url;
+        icon.alt = npc.name;
+        icon.style.cssText = 'width:56px;height:56px;object-fit:contain;image-rendering:pixelated;flex-shrink:0;border-radius:6px;';
+
+        const name = document.createElement('span');
+        name.style.cssText = 'font-family:"Crimson Text",serif;font-size:14px;color:#e8c870;';
+        name.textContent = npc.name;
+
+        npcRow.appendChild(icon);
+        npcRow.appendChild(name);
+        npcsSection.appendChild(npcRow);
+      }
+
+      this.bodyEl.appendChild(npcsSection);
+    }
+
     if (building.actions.length === 0) {
       const empty = document.createElement('p');
       empty.style.cssText =
@@ -186,6 +238,128 @@ export class BuildingPanel {
     errorEl.style.cssText =
       'margin:0;font-family:"Crimson Text",serif;font-size:12px;color:#c0504a;display:none;';
     this.bodyEl.appendChild(errorEl);
+  }
+
+  // ---------------------------------------------------------------------------
+  // NPC panel
+  // ---------------------------------------------------------------------------
+
+  private renderNpcPanel(npc: { id: number; name: string; description: string; icon_url: string }): void {
+    // Header: NPC name with back chevron
+    this.headerEl.innerHTML = '';
+
+    const backBtn = document.createElement('button');
+    backBtn.style.cssText = [
+      'background:none',
+      'border:none',
+      'padding:0 6px 0 0',
+      'cursor:pointer',
+      'color:#c9a55c',
+      'font-family:Cinzel,serif',
+      'font-size:15px',
+      'line-height:1',
+      'vertical-align:middle',
+    ].join(';');
+    backBtn.textContent = '‹';
+    backBtn.addEventListener('click', () => {
+      if (this.currentBuilding) {
+        this.renderBuilding(this.currentBuilding, this.currentExpeditionState);
+      }
+    });
+
+    const title = document.createElement('h2');
+    title.style.cssText = 'margin:0;font-size:15px;letter-spacing:0.08em;color:#e8c870;display:flex;align-items:center;gap:4px;';
+    title.appendChild(backBtn);
+    title.appendChild(document.createTextNode(npc.name));
+    this.headerEl.appendChild(title);
+
+    // Body: image left + description right, then dialog options
+    this.bodyEl.innerHTML = '';
+
+    const topRow = document.createElement('div');
+    topRow.style.cssText = 'display:flex;gap:14px;align-items:flex-start;';
+
+    const imgWrap = document.createElement('div');
+    imgWrap.style.cssText = [
+      'width:96px',
+      'height:96px',
+      'flex-shrink:0',
+      'border-radius:6px',
+      'background:rgba(20,16,8,0.8)',
+      'border:1px solid #3a2e1a',
+      'overflow:hidden',
+      'display:flex',
+      'align-items:center',
+      'justify-content:center',
+    ].join(';');
+
+    const img = document.createElement('img');
+    img.src = npc.icon_url;
+    img.alt = npc.name;
+    img.style.cssText = 'width:100%;height:100%;object-fit:contain;image-rendering:pixelated;';
+    imgWrap.appendChild(img);
+
+    const descEl = document.createElement('p');
+    descEl.style.cssText = [
+      'margin:0',
+      'font-family:"Crimson Text",serif',
+      'font-size:14px',
+      'color:#a89060',
+      'line-height:1.55',
+      'flex:1',
+      'white-space:pre-wrap',
+    ].join(';');
+    descEl.textContent = npc.description;
+
+    topRow.appendChild(imgWrap);
+    topRow.appendChild(descEl);
+    this.bodyEl.appendChild(topRow);
+
+    // Divider
+    const divider = document.createElement('div');
+    divider.style.cssText = 'border-top:1px solid #3a2e1a;';
+    this.bodyEl.appendChild(divider);
+
+    // Dialog options label
+    const dialogLabel = document.createElement('p');
+    dialogLabel.style.cssText = 'margin:0;font-family:Cinzel,serif;font-size:11px;letter-spacing:0.08em;color:#c9a55c;';
+    dialogLabel.textContent = 'What would you like to say?';
+    this.bodyEl.appendChild(dialogLabel);
+
+    // Dialog options
+    const optionsEl = document.createElement('div');
+    optionsEl.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+
+    const backOption = this.buildDialogOption('Leave', () => {
+      if (this.currentBuilding) {
+        this.renderBuilding(this.currentBuilding, this.currentExpeditionState);
+      }
+    });
+    optionsEl.appendChild(backOption);
+
+    this.bodyEl.appendChild(optionsEl);
+  }
+
+  private buildDialogOption(text: string, onClick: () => void): HTMLElement {
+    const btn = document.createElement('button');
+    btn.style.cssText = [
+      'width:100%',
+      'padding:9px 12px',
+      'background:rgba(90,74,42,0.25)',
+      'border:1px solid #5a4a2a',
+      'color:#e8c870',
+      'font-family:"Crimson Text",serif',
+      'font-size:14px',
+      'cursor:pointer',
+      'text-align:left',
+      'transition:background 0.15s',
+      'border-radius:2px',
+    ].join(';');
+    btn.textContent = `› ${text}`;
+    btn.addEventListener('mouseenter', () => { btn.style.background = 'rgba(90,74,42,0.6)'; });
+    btn.addEventListener('mouseleave', () => { btn.style.background = 'rgba(90,74,42,0.25)'; });
+    btn.addEventListener('click', onClick);
+    return btn;
   }
 
   // ---------------------------------------------------------------------------

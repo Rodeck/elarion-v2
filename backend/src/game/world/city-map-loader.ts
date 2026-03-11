@@ -22,6 +22,8 @@ import {
   type TravelActionConfig,
   type ExploreActionConfig,
 } from '../../db/queries/city-maps';
+import { getNpcsForZone, type ZoneNpcRow } from '../../db/queries/npcs';
+import { config } from '../../config';
 import { log } from '../../logger';
 
 // ─── Cache ──────────────────────────────────────────────────────────────────
@@ -50,6 +52,7 @@ function toProtocolBuilding(
   b: Building,
   actions: BuildingAction[],
   zoneNameMap: Map<number, string>,
+  npcsByBuilding: Map<number, ZoneNpcRow[]>,
 ): CityMapBuilding {
   const protocolActions: BuildingActionDto[] = actions
     .filter((a) => a.building_id === b.id)
@@ -86,6 +89,13 @@ function toProtocolBuilding(
       };
     });
 
+  const buildingNpcs = (npcsByBuilding.get(b.id) ?? []).map((n) => ({
+    id: n.npc_id,
+    name: n.npc_name,
+    description: n.npc_description,
+    icon_url: `${config.adminBaseUrl}/npc-icons/${n.icon_filename}`,
+  }));
+
   const result: CityMapBuilding = {
     id: b.id,
     name: b.name,
@@ -94,6 +104,7 @@ function toProtocolBuilding(
     label_x: b.label_offset_x ?? 0,
     label_y: b.label_offset_y ?? 0,
     actions: protocolActions,
+    npcs: buildingNpcs,
   };
 
   if (b.hotspot_type === 'rect' || b.hotspot_type === 'circle') {
@@ -137,13 +148,21 @@ function buildAdjacencyList(edges: PathEdge[]): Map<number, number[]> {
 // ─── Single-zone loader ─────────────────────────────────────────────────────
 
 async function loadSingleZone(zone: MapZoneWithCounts): Promise<void> {
-  const [nodes, edges, buildings, buildingActions, spawnNode] = await Promise.all([
+  const [nodes, edges, buildings, buildingActions, spawnNode, zoneNpcs] = await Promise.all([
     getNodesForZone(zone.id),
     getEdgesForZone(zone.id),
     getBuildingsForZone(zone.id),
     getBuildingActionsForZone(zone.id),
     getSpawnNodeForZone(zone.id),
+    getNpcsForZone(zone.id),
   ]);
+
+  const npcsByBuilding = new Map<number, ZoneNpcRow[]>();
+  for (const row of zoneNpcs) {
+    let list = npcsByBuilding.get(row.building_id);
+    if (!list) { list = []; npcsByBuilding.set(row.building_id, list); }
+    list.push(row);
+  }
 
   // Resolve target zone names for travel action labels
   const targetZoneIds = [
@@ -167,7 +186,7 @@ async function loadSingleZone(zone: MapZoneWithCounts): Promise<void> {
     image_height: zone.image_height_px ?? 0,
     nodes: nodes.map(toProtocolNode),
     edges: edges.map(toProtocolEdge),
-    buildings: buildings.map((b) => toProtocolBuilding(b, buildingActions, zoneNameMap)),
+    buildings: buildings.map((b) => toProtocolBuilding(b, buildingActions, zoneNameMap, npcsByBuilding)),
     spawn_node_id: spawnNode?.id ?? 0,
   };
 

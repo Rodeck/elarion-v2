@@ -15,6 +15,11 @@ import {
 } from '../../../../backend/src/db/queries/city-maps';
 import type { ExpeditionActionConfig } from '../../../../backend/src/db/queries/squires';
 import { getMonsterById } from '../../../../backend/src/db/queries/monsters';
+import {
+  getNpcsForBuilding,
+  assignNpcToBuilding,
+  removeNpcFromBuilding,
+} from '../../../../backend/src/db/queries/npcs';
 import { query } from '../../../../backend/src/db/connection';
 
 export const buildingsRouter = Router();
@@ -468,6 +473,69 @@ buildingsRouter.put('/:id/buildings/:buildingId/actions/:actionId', async (req: 
     return res.json({ action });
   } catch (err) {
     log('error', 'Failed to update building action', { action_id: actionId, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── Building NPCs sub-resource ─────────────────────────────────────────────
+
+// GET /:id/buildings/:buildingId/npcs
+buildingsRouter.get('/:id/buildings/:buildingId/npcs', async (req: Request, res: Response) => {
+  const buildingId = parseInt(req.params.buildingId!, 10);
+  if (isNaN(buildingId)) return res.status(400).json({ error: 'Invalid building id' });
+
+  try {
+    const npcs = await getNpcsForBuilding(buildingId);
+    return res.json({ npcs: npcs.map((n) => ({
+      npc_id: n.npc_id,
+      name: n.name,
+      icon_url: `/npc-icons/${n.icon_filename}`,
+      sort_order: n.sort_order,
+    })) });
+  } catch (err) {
+    log('error', 'Failed to list building NPCs', { building_id: buildingId, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /:id/buildings/:buildingId/npcs
+buildingsRouter.post('/:id/buildings/:buildingId/npcs', async (req: Request, res: Response) => {
+  const buildingId = parseInt(req.params.buildingId!, 10);
+  if (isNaN(buildingId)) return res.status(400).json({ error: 'Invalid building id' });
+
+  const { npc_id } = req.body as { npc_id?: unknown };
+  if (!Number.isInteger(npc_id) || (npc_id as number) <= 0) {
+    return res.status(400).json({ error: 'npc_id must be a positive integer' });
+  }
+
+  try {
+    await assignNpcToBuilding(buildingId, npc_id as number);
+    log('info', 'Assigned NPC to building', { building_id: buildingId, npc_id, admin: req.username });
+    return res.status(201).json({ success: true });
+  } catch (err: unknown) {
+    const msg = String(err);
+    if (msg.includes('unique') || msg.includes('duplicate') || msg.includes('23505')) {
+      return res.status(409).json({ error: 'ALREADY_ASSIGNED' });
+    }
+    log('error', 'Failed to assign NPC to building', { building_id: buildingId, npc_id, error: msg });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /:id/buildings/:buildingId/npcs/:npcId
+buildingsRouter.delete('/:id/buildings/:buildingId/npcs/:npcId', async (req: Request, res: Response) => {
+  const buildingId = parseInt(req.params.buildingId!, 10);
+  const npcId = parseInt(req.params.npcId!, 10);
+  if (isNaN(buildingId) || isNaN(npcId)) {
+    return res.status(400).json({ error: 'Invalid building id or NPC id' });
+  }
+
+  try {
+    await removeNpcFromBuilding(buildingId, npcId);
+    log('info', 'Removed NPC from building', { building_id: buildingId, npc_id: npcId, admin: req.username });
+    return res.status(204).send();
+  } catch (err) {
+    log('error', 'Failed to remove NPC from building', { building_id: buildingId, npc_id: npcId, error: String(err) });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
