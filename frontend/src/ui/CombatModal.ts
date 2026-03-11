@@ -173,6 +173,13 @@ export class CombatModal {
       xpLine.textContent = `+${result.xp_gained ?? 0} XP`;
       outcomeEl.appendChild(xpLine);
 
+      if (result.crowns_gained && result.crowns_gained > 0) {
+        const crownsLine = document.createElement('p');
+        crownsLine.style.cssText = 'margin:0;font-family:Crimson Text,serif;font-size:12px;color:#d4a84b;';
+        crownsLine.textContent = `+${result.crowns_gained} Crown${result.crowns_gained !== 1 ? 's' : ''}`;
+        outcomeEl.appendChild(crownsLine);
+      }
+
       if (result.items_dropped && result.items_dropped.length > 0) {
         const itemsLine = document.createElement('div');
         itemsLine.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;';

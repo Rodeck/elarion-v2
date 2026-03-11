@@ -106,8 +106,15 @@ export class DayNightBar {
     // Bar fill width
     this.fill.style.width = `${(Math.min(cycleProgress, 1) * 100).toFixed(2)}%`;
 
-    // Gradient: gold for day portion, blue for night portion
-    this.fill.style.background = `linear-gradient(to right, #d4a84b ${(dayFrac * 100).toFixed(1)}%, #4a6fa5 ${(dayFrac * 100).toFixed(1)}%)`;
+    // During day the fill is purely gold. During night, the fill spans the full cycle
+    // (day portion gold + night portion blue), so gradient stops are relative to fill width.
+    if (isNight) {
+      // Fill width = dayFrac + nightProgress fraction of total; day occupies the leading portion.
+      const dayShareOfFill = (dayFrac / Math.min(cycleProgress, 1)) * 100;
+      this.fill.style.background = `linear-gradient(to right, #d4a84b ${dayShareOfFill.toFixed(1)}%, #4a6fa5 ${dayShareOfFill.toFixed(1)}%)`;
+    } else {
+      this.fill.style.background = '#d4a84b';
+    }
 
     // Icon follows the fill edge
     this.icon.textContent = isNight ? '☾' : '☀';

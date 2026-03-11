@@ -9,6 +9,7 @@ import { log } from '../../logger';
 import { sendToSession } from '../server';
 import type { AuthenticatedSession } from '../server';
 import { getCityMapCache } from '../../game/world/city-map-loader';
+import { getExpeditionStateForBuilding } from '../../game/world/city-movement-handler';
 import { getSpawnNodeForZone } from '../../db/queries/city-maps';
 import {
   getSquiresForCharacter,
@@ -157,6 +158,21 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
   worldStatePayload.day_night_state = getDayCycleDto();
 
   sendToSession(session, 'world.state', worldStatePayload);
+
+  // If the player is already at a building node, send city.building_arrived so the
+  // building panel opens with full expedition state (same as arriving via movement).
+  if (cityCache && currentNodeId !== null) {
+    const building = cityCache.mapData.buildings.find((b) => b.node_id === currentNodeId);
+    if (building) {
+      const expeditionState = await getExpeditionStateForBuilding(character.id, building).catch(() => undefined);
+      sendToSession(session, 'city.building_arrived', {
+        building_id: building.id,
+        building_name: building.name,
+        node_id: currentNodeId,
+        ...(expeditionState !== undefined ? { expedition_state: expeditionState } : {}),
+      });
+    }
+  }
 
   // Send inventory state immediately after world state
   await sendInventoryState(session);

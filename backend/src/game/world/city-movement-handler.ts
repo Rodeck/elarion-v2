@@ -82,7 +82,7 @@ const STEP_DELAY_MS = 300;
 // Expedition state lookup for building_arrived
 // ---------------------------------------------------------------------------
 
-async function getExpeditionStateForBuilding(
+export async function getExpeditionStateForBuilding(
   characterId: string,
   building: CityMapBuilding,
 ): Promise<ExpeditionStateDto | undefined> {
