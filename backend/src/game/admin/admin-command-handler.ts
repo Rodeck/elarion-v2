@@ -5,6 +5,7 @@ import { getItemDefinitionById, clearAllInventory } from '../../db/queries/inven
 import { grantItemToCharacter } from '../inventory/inventory-grant-service';
 import { sendInventoryState } from '../../websocket/handlers/inventory-state-handler';
 import { forcePhase } from '../world/day-cycle-service';
+import { awardCrowns } from '../currency/crown-service';
 import { log } from '../../logger';
 
 // ---------------------------------------------------------------------------
@@ -33,8 +34,9 @@ export async function handleAdminCommand(session: AuthenticatedSession, rawMessa
     case '/clear_inventory': return handleClearInventory(session, args, reply);
     case '/day':             return handleForcePhase(session, 'day', reply);
     case '/night':           return handleForcePhase(session, 'night', reply);
+    case '/crown':           return handleGiveCrowns(session, args, reply);
     default:
-      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night`);
+      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown`);
   }
 }
 
@@ -222,4 +224,52 @@ async function handleForcePhase(session: AuthenticatedSession, phase: 'day' | 'n
   });
 
   reply(true, `Day/night cycle forced to ${phase}.`);
+}
+
+// ---------------------------------------------------------------------------
+// /crown <player> <amount>
+// ---------------------------------------------------------------------------
+
+async function handleGiveCrowns(session: AuthenticatedSession, args: string[], reply: ReplyFn): Promise<void> {
+  const playerName = args[0];
+  if (!playerName) {
+    reply(false, 'Usage: /crown <player> <amount>');
+    return;
+  }
+
+  const amount = parseInt(args[1] ?? '', 10);
+  if (!Number.isInteger(amount) || amount < 1) {
+    reply(false, 'Amount must be a positive integer.');
+    return;
+  }
+
+  const character = await findByName(playerName);
+  if (!character) {
+    reply(false, `Player '${playerName}' not found.`);
+    return;
+  }
+
+  const targetSession = getSessionByCharacterId(character.id);
+  if (!targetSession) {
+    reply(false, `Player '${playerName}' is not currently online.`);
+    return;
+  }
+
+  const newBalance = await awardCrowns(character.id, amount);
+
+  sendToSession(targetSession, 'character.crowns_changed', { crowns: newBalance });
+
+  log('info', 'admin', 'admin_command', {
+    event: 'admin_command',
+    admin_account_id: session.accountId,
+    admin_character_id: session.characterId,
+    command: '/crown',
+    target_player: playerName,
+    target_character_id: character.id,
+    args: { amount },
+    new_balance: newBalance,
+    success: true,
+  });
+
+  reply(true, `Granted ${amount} Crown${amount !== 1 ? 's' : ''} to ${playerName}. New balance: ${newBalance}.`);
 }

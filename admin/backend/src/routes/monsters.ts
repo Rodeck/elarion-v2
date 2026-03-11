@@ -35,6 +35,8 @@ function monsterToResponse(m: Monster) {
     defense: m.defense,
     hp: m.hp,
     xp_reward: m.xp_reward,
+    min_crowns: m.min_crowns,
+    max_crowns: m.max_crowns,
     icon_url: buildIconUrl(m.icon_filename),
     created_at: m.created_at,
   };
@@ -108,7 +110,7 @@ monstersRouter.get('/:id', async (req: Request, res: Response) => {
 // ── POST /api/monsters ─────────────────────────────────────────────────────
 
 monstersRouter.post('/', upload.single('icon'), async (req: Request, res: Response) => {
-  const { name, attack, defense, hp, xp_reward } = req.body as Record<string, string>;
+  const { name, attack, defense, hp, xp_reward, min_crowns, max_crowns } = req.body as Record<string, string>;
 
   if (!name || !name.trim()) return res.status(400).json({ error: 'name is required' });
 
@@ -116,11 +118,16 @@ monstersRouter.post('/', upload.single('icon'), async (req: Request, res: Respon
   const defenseNum = parseInt(defense ?? '', 10);
   const hpNum = parseInt(hp ?? '', 10);
   const xpNum = parseInt(xp_reward ?? '', 10);
+  const minCrownsNum = parseInt(min_crowns ?? '0', 10);
+  const maxCrownsNum = parseInt(max_crowns ?? '0', 10);
 
   if (isNaN(attackNum) || attackNum < 0) return res.status(400).json({ error: 'attack must be a non-negative integer' });
   if (isNaN(defenseNum) || defenseNum < 0) return res.status(400).json({ error: 'defense must be a non-negative integer' });
   if (isNaN(hpNum) || hpNum < 1) return res.status(400).json({ error: 'hp must be a positive integer' });
   if (isNaN(xpNum) || xpNum < 0) return res.status(400).json({ error: 'xp_reward must be a non-negative integer' });
+  if (isNaN(minCrownsNum) || minCrownsNum < 0) return res.status(400).json({ error: 'min_crowns must be a non-negative integer' });
+  if (isNaN(maxCrownsNum) || maxCrownsNum < 0) return res.status(400).json({ error: 'max_crowns must be a non-negative integer' });
+  if (minCrownsNum > maxCrownsNum) return res.status(400).json({ error: 'min_crowns must be <= max_crowns' });
 
   let iconFilename: string | null = null;
   if (req.file) {
@@ -150,6 +157,8 @@ monstersRouter.post('/', upload.single('icon'), async (req: Request, res: Respon
       defense: defenseNum,
       hp: hpNum,
       xp_reward: xpNum,
+      min_crowns: minCrownsNum,
+      max_crowns: maxCrownsNum,
     });
     const loot = await getLootByMonsterId(monster.id);
     log('info', 'Created monster', { id: monster.id, name: monster.name, admin: req.username });
@@ -173,7 +182,7 @@ monstersRouter.put('/:id', upload.single('icon'), async (req: Request, res: Resp
   const existing = await getMonsterById(id);
   if (!existing) return res.status(404).json({ error: 'Monster not found' });
 
-  const { name, attack, defense, hp, xp_reward } = req.body as Record<string, string>;
+  const { name, attack, defense, hp, xp_reward, min_crowns, max_crowns } = req.body as Record<string, string>;
 
   const data: Parameters<typeof updateMonster>[1] = {};
   if (name !== undefined) {
@@ -199,6 +208,22 @@ monstersRouter.put('/:id', upload.single('icon'), async (req: Request, res: Resp
     const v = parseInt(xp_reward, 10);
     if (isNaN(v) || v < 0) return res.status(400).json({ error: 'xp_reward must be a non-negative integer' });
     data.xp_reward = v;
+  }
+  if (min_crowns !== undefined) {
+    const v = parseInt(min_crowns, 10);
+    if (isNaN(v) || v < 0) return res.status(400).json({ error: 'min_crowns must be a non-negative integer' });
+    data.min_crowns = v;
+  }
+  if (max_crowns !== undefined) {
+    const v = parseInt(max_crowns, 10);
+    if (isNaN(v) || v < 0) return res.status(400).json({ error: 'max_crowns must be a non-negative integer' });
+    data.max_crowns = v;
+  }
+  // Validate range consistency after both values are set
+  const effectiveMin = data.min_crowns ?? existing.min_crowns;
+  const effectiveMax = data.max_crowns ?? existing.max_crowns;
+  if (effectiveMin > effectiveMax) {
+    return res.status(400).json({ error: 'min_crowns must be <= max_crowns' });
   }
 
   let newIconFilename: string | undefined;

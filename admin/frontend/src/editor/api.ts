@@ -499,6 +499,8 @@ export interface MonsterResponse {
   defense: number;
   hp: number;
   xp_reward: number;
+  min_crowns: number;
+  max_crowns: number;
   icon_url: string | null;
   created_at: string;
   loot?: MonsterLootEntry[];

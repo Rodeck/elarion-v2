@@ -47,6 +47,8 @@ import type {
   EquipmentEquipRejectedPayload,
   EquipmentUnequipRejectedPayload,
   AdminCommandResultPayload,
+  CharacterCrownsChangedPayload,
+  PlayerSummary,
 } from '@elarion/protocol';
 
 const TILE_SIZE = 32;
@@ -288,6 +290,13 @@ export class GameScene extends Phaser.Scene {
       this.chatBox.addAdminMessage(payload.success, payload.message);
     });
 
+    this.client.on<CharacterCrownsChangedPayload>('character.crowns_changed', (payload) => {
+      if (this.myCharacter) {
+        this.myCharacter.crowns = payload.crowns;
+        this.statsBar.setCrowns(payload.crowns);
+      }
+    });
+
     this.client.on<DayNightStateDto>('world.day_night_changed', (payload) => {
       this.dayNightBar?.update(payload);
     });
@@ -295,6 +304,10 @@ export class GameScene extends Phaser.Scene {
     this.client.on<NightEncounterResultPayload>('night.encounter_result', (payload) => {
       // Reuse the explore CombatModal — adapt payload to the expected shape (action_id unused by modal)
       this.buildingPanel.showExploreResult({ action_id: 0, ...payload });
+      if (payload.combat_result === 'win' && payload.crowns_gained && payload.crowns_gained > 0 && this.myCharacter) {
+        this.myCharacter.crowns += payload.crowns_gained;
+        this.statsBar.setCrowns(this.myCharacter.crowns);
+      }
     });
 
     // ── City-specific handlers ──────────────────────────────────────
@@ -377,6 +390,10 @@ export class GameScene extends Phaser.Scene {
 
     this.client.on<BuildingExploreResultPayload>('building.explore_result', (payload) => {
       this.buildingPanel.showExploreResult(payload);
+      if (payload.combat_result === 'win' && payload.crowns_gained && payload.crowns_gained > 0 && this.myCharacter) {
+        this.myCharacter.crowns += payload.crowns_gained;
+        this.statsBar.setCrowns(this.myCharacter.crowns);
+      }
     });
 
     // Inventory handlers
@@ -881,6 +898,7 @@ export class GameScene extends Phaser.Scene {
       xpThreshold,
       c.attack_power,
       c.defence,
+      c.crowns,
     );
     this.logoutButton = new LogoutButton(document.getElementById('top-bar')!, () => this.handleLogout());
   }
@@ -940,7 +958,7 @@ export class GameScene extends Phaser.Scene {
 
   // ── Remote players ──────────────────────────────────────────────
 
-  private spawnRemotePlayer(p: CharacterData): void {
+  private spawnRemotePlayer(p: PlayerSummary): void {
     if (this.isCityMap && this.cityMapData) {
       const nodeId = p.current_node_id ?? this.cityMapData.spawn_node_id;
       const node = this.cityMapData.nodes.find(n => n.id === nodeId);

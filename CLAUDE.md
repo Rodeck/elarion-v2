@@ -1,4 +1,4 @@
-# elarion-v2 Development Guidelines
+﻿# elarion-v2 Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-03-02
 
@@ -27,6 +27,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - PostgreSQL 16 — one new table (`map_random_encounter_tables`); no schema changes to existing tables (013-day-night-cycle)
 - TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (game backend), Phaser 3.60 + Vite 5 (game frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client) (014-npc-system)
 - PostgreSQL 16 — two new tables (`npcs`, `building_npcs`); filesystem for NPC icon PNGs under `backend/assets/npcs/icons/` (014-npc-system)
+- TypeScript 5.x (all packages: frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client) (015-currency-system)
+- PostgreSQL 16 — two new columns on existing tables (`characters.crowns`, `monsters.min_crowns`, `monsters.max_crowns`); migration file `017_currency.sql` (015-currency-system)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -52,9 +54,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 015-currency-system: Added TypeScript 5.x (all packages: frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client)
 - 014-npc-system: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (game backend), Phaser 3.60 + Vite 5 (game frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client)
 - 014-npc-system: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (game backend), Phaser 3.60 + Vite 5 (game frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client)
-- 013-day-night-cycle: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client)
 
 
 

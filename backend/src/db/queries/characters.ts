@@ -28,6 +28,7 @@ export interface Character {
   pos_y: number;
   current_node_id: number | null;
   in_combat: boolean;
+  crowns: number;
   updated_at: Date;
 }
 
@@ -101,6 +102,14 @@ export async function findByName(name: string): Promise<Character | null> {
     [name],
   );
   return result.rows[0] ?? null;
+}
+
+export async function addCrowns(characterId: string, amount: number): Promise<number> {
+  const result = await query<{ crowns: number }>(
+    `UPDATE characters SET crowns = crowns + $2, updated_at = now() WHERE id = $1 RETURNING crowns`,
+    [characterId, amount],
+  );
+  return result.rows[0]!.crowns;
 }
 
 export async function updateCharacterNode(characterId: string, nodeId: number): Promise<void> {

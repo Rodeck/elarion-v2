@@ -30,6 +30,7 @@ export interface CharacterData {
   pos_x: number;
   pos_y: number;
   current_node_id: number | null;
+  crowns: number;
 }
 
 export interface PlayerSummary {
@@ -183,6 +184,7 @@ export interface BuildingExploreResultPayload {
   combat_result?: 'win' | 'loss';
   xp_gained?: number;               // only when combat_result === 'win'
   items_dropped?: ItemDroppedDto[]; // only when combat_result === 'win', may be empty
+  crowns_gained?: number;           // only when combat_result === 'win' and amount > 0
 }
 
 // ---------------------------------------------------------------------------
@@ -431,7 +433,8 @@ export type AnyServerMessage =
   | EquipmentUnequipRejectedMessage
   | WorldDayNightChangedMessage
   | NightEncounterResultMessage
-  | AdminCommandResultMessage;
+  | AdminCommandResultMessage
+  | CharacterCrownsChangedMessage;
 
 export type AnyClientMessage =
   | AuthRegisterMessage
@@ -681,6 +684,7 @@ export interface NightEncounterResultPayload {
   combat_result: 'win' | 'loss';
   xp_gained?: number;               // only when combat_result === 'win'
   items_dropped?: ItemDroppedDto[]; // only when combat_result === 'win', may be empty
+  crowns_gained?: number;           // only when combat_result === 'win' and amount > 0
 }
 
 // ---------------------------------------------------------------------------
@@ -693,6 +697,17 @@ export interface AdminCommandResultPayload {
 }
 
 export type AdminCommandResultMessage = WsMessage<AdminCommandResultPayload>;
+
+// ---------------------------------------------------------------------------
+// Currency: Server → Client payloads
+// ---------------------------------------------------------------------------
+
+/** Sent to a player when their Crown balance changes via an admin command. */
+export interface CharacterCrownsChangedPayload {
+  crowns: number;
+}
+
+export type CharacterCrownsChangedMessage = WsMessage<CharacterCrownsChangedPayload>;
 
 // ---------------------------------------------------------------------------
 // Day/Night Cycle: message type aliases

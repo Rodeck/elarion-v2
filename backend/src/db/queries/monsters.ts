@@ -8,6 +8,8 @@ export interface Monster {
   defense: number;
   hp: number;
   xp_reward: number;
+  min_crowns: number;
+  max_crowns: number;
   created_at: Date;
 }
 
@@ -33,12 +35,14 @@ export async function createMonster(data: {
   defense: number;
   hp: number;
   xp_reward: number;
+  min_crowns?: number;
+  max_crowns?: number;
 }): Promise<Monster> {
   const result = await query<Monster>(
-    `INSERT INTO monsters (name, icon_filename, attack, defense, hp, xp_reward)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO monsters (name, icon_filename, attack, defense, hp, xp_reward, min_crowns, max_crowns)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [data.name, data.icon_filename ?? null, data.attack, data.defense, data.hp, data.xp_reward],
+    [data.name, data.icon_filename ?? null, data.attack, data.defense, data.hp, data.xp_reward, data.min_crowns ?? 0, data.max_crowns ?? 0],
   );
   return result.rows[0]!;
 }
@@ -52,6 +56,8 @@ export async function updateMonster(
     defense?: number;
     hp?: number;
     xp_reward?: number;
+    min_crowns?: number;
+    max_crowns?: number;
   },
 ): Promise<Monster | null> {
   const fields: string[] = [];
@@ -64,6 +70,8 @@ export async function updateMonster(
   if (data.defense !== undefined) { fields.push(`defense = $${paramIdx++}`); values.push(data.defense); }
   if (data.hp !== undefined) { fields.push(`hp = $${paramIdx++}`); values.push(data.hp); }
   if (data.xp_reward !== undefined) { fields.push(`xp_reward = $${paramIdx++}`); values.push(data.xp_reward); }
+  if (data.min_crowns !== undefined) { fields.push(`min_crowns = $${paramIdx++}`); values.push(data.min_crowns); }
+  if (data.max_crowns !== undefined) { fields.push(`max_crowns = $${paramIdx++}`); values.push(data.max_crowns); }
 
   if (fields.length === 0) return getMonsterById(id);
 

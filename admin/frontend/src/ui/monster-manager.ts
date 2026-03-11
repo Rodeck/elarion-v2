@@ -64,6 +64,14 @@ export class MonsterManager {
                 <label for="mm-xp">XP Reward</label>
                 <input id="mm-xp" type="number" min="0" value="10" />
               </div>
+              <div>
+                <label for="mm-min-crowns">Min Crowns</label>
+                <input id="mm-min-crowns" type="number" min="0" value="0" />
+              </div>
+              <div>
+                <label for="mm-max-crowns">Max Crowns</label>
+                <input id="mm-max-crowns" type="number" min="0" value="0" />
+              </div>
             </div>
             <label>Icon (PNG, max 2 MB)</label>
             <div class="file-upload-row" style="margin-bottom:0.5rem;">
@@ -187,6 +195,7 @@ export class MonsterManager {
             <span class="stat-chip stat-chip--def">DEF ${m.defense}</span>
             <span class="stat-chip stat-chip--hp">HP ${m.hp}</span>
             <span class="stat-chip stat-chip--xp">XP ${m.xp_reward}</span>
+            <span class="stat-chip stat-chip--cr">CR ${m.min_crowns}–${m.max_crowns}</span>
           </div>
         </div>
         <div class="monster-card-actions">
@@ -331,6 +340,8 @@ export class MonsterManager {
     const defense = parseInt(this.container.querySelector<HTMLInputElement>('#mm-defense')?.value ?? '', 10);
     const hp = parseInt(this.container.querySelector<HTMLInputElement>('#mm-hp')?.value ?? '', 10);
     const xpReward = parseInt(this.container.querySelector<HTMLInputElement>('#mm-xp')?.value ?? '', 10);
+    const minCrowns = parseInt(this.container.querySelector<HTMLInputElement>('#mm-min-crowns')?.value ?? '0', 10);
+    const maxCrowns = parseInt(this.container.querySelector<HTMLInputElement>('#mm-max-crowns')?.value ?? '0', 10);
     const iconFile = this.container.querySelector<HTMLInputElement>('#mm-icon')?.files?.[0];
 
     if (!name) { this.showFormError('Name is required.'); return; }
@@ -338,6 +349,9 @@ export class MonsterManager {
     if (isNaN(defense) || defense < 0) { this.showFormError('Defense must be ≥ 0.'); return; }
     if (isNaN(hp) || hp < 1) { this.showFormError('HP must be ≥ 1.'); return; }
     if (isNaN(xpReward) || xpReward < 0) { this.showFormError('XP Reward must be ≥ 0.'); return; }
+    if (isNaN(minCrowns) || minCrowns < 0) { this.showFormError('Min Crowns must be ≥ 0.'); return; }
+    if (isNaN(maxCrowns) || maxCrowns < 0) { this.showFormError('Max Crowns must be ≥ 0.'); return; }
+    if (minCrowns > maxCrowns) { this.showFormError('Min Crowns must be ≤ Max Crowns.'); return; }
 
     const fd = new FormData();
     fd.append('name', name);
@@ -345,6 +359,8 @@ export class MonsterManager {
     fd.append('defense', String(defense));
     fd.append('hp', String(hp));
     fd.append('xp_reward', String(xpReward));
+    fd.append('min_crowns', String(minCrowns));
+    fd.append('max_crowns', String(maxCrowns));
     if (iconFile) fd.append('icon', iconFile);
     if (!iconFile && this.acceptedBase64) {
       fd.append('icon_base64', this.acceptedBase64);
@@ -383,6 +399,8 @@ export class MonsterManager {
     (this.container.querySelector<HTMLInputElement>('#mm-defense'))!.value = String(m.defense);
     (this.container.querySelector<HTMLInputElement>('#mm-hp'))!.value = String(m.hp);
     (this.container.querySelector<HTMLInputElement>('#mm-xp'))!.value = String(m.xp_reward);
+    (this.container.querySelector<HTMLInputElement>('#mm-min-crowns'))!.value = String(m.min_crowns ?? 0);
+    (this.container.querySelector<HTMLInputElement>('#mm-max-crowns'))!.value = String(m.max_crowns ?? 0);
     (this.container.querySelector<HTMLInputElement>('#mm-icon'))!.value = '';
 
     const preview = this.container.querySelector<HTMLElement>('#mm-icon-preview')!;
@@ -529,6 +547,8 @@ export class MonsterManager {
     (this.container.querySelector<HTMLInputElement>('#mm-defense'))!.value = '2';
     (this.container.querySelector<HTMLInputElement>('#mm-hp'))!.value = '20';
     (this.container.querySelector<HTMLInputElement>('#mm-xp'))!.value = '10';
+    (this.container.querySelector<HTMLInputElement>('#mm-min-crowns'))!.value = '0';
+    (this.container.querySelector<HTMLInputElement>('#mm-max-crowns'))!.value = '0';
     (this.container.querySelector<HTMLInputElement>('#mm-icon'))!.value = '';
     const nameEl = this.container.querySelector<HTMLElement>('#mm-icon-filename');
     if (nameEl) nameEl.textContent = 'No file chosen';

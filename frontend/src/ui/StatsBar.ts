@@ -8,6 +8,7 @@ export class StatsBar {
   private xpTextEl: HTMLSpanElement;
   private attackEl: HTMLSpanElement | null = null;
   private defenceEl: HTMLSpanElement | null = null;
+  private crownsEl: HTMLSpanElement | null = null;
   private maxHp = 1;
 
   constructor(
@@ -21,6 +22,7 @@ export class StatsBar {
     xpThreshold: number,
     attack?: number,
     defence?: number,
+    crowns?: number,
   ) {
     this.maxHp = maxHp;
 
@@ -155,8 +157,20 @@ export class StatsBar {
     defBlock.appendChild(defLabel);
     defBlock.appendChild(this.defenceEl);
 
+    const crBlock = document.createElement('div');
+    crBlock.style.cssText = 'display:flex;align-items:center;gap:4px;';
+    const crLabel = document.createElement('span');
+    crLabel.style.cssText = 'font-family:var(--font-display);font-size:9px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1px;';
+    crLabel.textContent = 'CR';
+    this.crownsEl = document.createElement('span');
+    this.crownsEl.style.cssText = 'font-family:var(--font-number);font-size:12px;color:#d4a84b;';
+    this.crownsEl.dataset['statsType'] = 'crowns';
+    crBlock.appendChild(crLabel);
+    crBlock.appendChild(this.crownsEl);
+
     statsRow.appendChild(attackBlock);
     statsRow.appendChild(defBlock);
+    statsRow.appendChild(crBlock);
 
     // ── Assemble ──────────────────────────────────────────────────
     this.container.appendChild(headerRow);
@@ -171,6 +185,7 @@ export class StatsBar {
     if (attack !== undefined && defence !== undefined) {
       this.updateStats(attack, defence);
     }
+    this.setCrowns(crowns ?? 0);
   }
 
   private createBarSection(
@@ -260,6 +275,10 @@ export class StatsBar {
   updateStats(attack: number, defence: number): void {
     if (this.attackEl) this.attackEl.textContent = String(attack);
     if (this.defenceEl) this.defenceEl.textContent = String(defence);
+  }
+
+  setCrowns(amount: number): void {
+    if (this.crownsEl) this.crownsEl.textContent = String(amount);
   }
 
   destroy(): void {

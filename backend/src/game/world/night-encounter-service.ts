@@ -4,6 +4,7 @@ import { getEncounterTable } from '../../db/queries/encounter-tables';
 import { findByAccountId } from '../../db/queries/characters';
 import { awardXp } from '../progression/xp-service';
 import { grantItemToCharacter } from '../inventory/inventory-grant-service';
+import { awardCrowns, rollCrownDrop } from '../currency/crown-service';
 import { getPhase } from './day-cycle-service';
 import { sendToSession } from '../../websocket/server';
 import { log } from '../../logger';
@@ -135,11 +136,18 @@ export async function rollNightEncounter(
   });
 
   let xpGained: number | undefined;
+  let crownsGained: number | undefined;
   const itemsDropped: ItemDroppedDto[] = [];
 
   if (playerWon) {
     await awardXp(character.id, monster.xp_reward);
     xpGained = monster.xp_reward;
+
+    const crownsDropped = rollCrownDrop(monster);
+    if (crownsDropped > 0) {
+      await awardCrowns(character.id, crownsDropped);
+      crownsGained = crownsDropped;
+    }
 
     const lootTable = await getLootByMonsterId(monster.id);
     for (const entry of lootTable) {
@@ -158,6 +166,7 @@ export async function rollNightEncounter(
       characterId: character.id,
       monsterId: monster.id,
       xpAwarded: xpGained,
+      crownsAwarded: crownsDropped,
       itemsDropped: itemsDropped.length,
     });
   }
@@ -176,6 +185,7 @@ export async function rollNightEncounter(
     combat_result: playerWon ? 'win' : 'loss',
     xp_gained: xpGained,
     items_dropped: itemsDropped.length > 0 ? itemsDropped : undefined,
+    crowns_gained: crownsGained,
   });
 
   return true;

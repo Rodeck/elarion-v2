@@ -136,6 +136,7 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
       pos_x: character.pos_x,
       pos_y: character.pos_y,
       current_node_id: currentNodeId,
+      crowns: character.crowns,
     },
     players,
   };

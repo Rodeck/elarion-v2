@@ -122,6 +122,7 @@ export async function handleCharacterCreate(session: AuthenticatedSession, paylo
       zone_id: character.zone_id,
       pos_x: character.pos_x,
       pos_y: character.pos_y,
+      crowns: character.crowns,
     },
   });
 }

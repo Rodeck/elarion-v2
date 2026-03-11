@@ -2,6 +2,7 @@ import { getMonsterById } from '../../db/queries/monsters';
 import { getLootByMonsterId } from '../../db/queries/monster-loot';
 import { awardXp } from '../progression/xp-service';
 import { grantItemToCharacter } from '../inventory/inventory-grant-service';
+import { awardCrowns, rollCrownDrop } from '../currency/crown-service';
 import { getPhase } from '../world/day-cycle-service';
 import { log } from '../../logger';
 import { config } from '../../config';
@@ -146,6 +147,12 @@ export async function resolveExplore(
   // ── Win: award XP ───────────────────────────────────────────────────────────
   await awardXp(character.id, monster.xp_reward);
 
+  // ── Win: roll and award Crowns ──────────────────────────────────────────────
+  const crownsDropped = rollCrownDrop(monster);
+  if (crownsDropped > 0) {
+    await awardCrowns(character.id, crownsDropped);
+  }
+
   // ── Win: roll loot ──────────────────────────────────────────────────────────
   const lootTable = await getLootByMonsterId(monster.id);
   const itemsDropped: ItemDroppedDto[] = [];
@@ -168,6 +175,7 @@ export async function resolveExplore(
     actionId,
     monsterId: monster.id,
     xpAwarded: monster.xp_reward,
+    crownsAwarded: crownsDropped,
     itemsDropped: itemsDropped.length,
   });
 
@@ -186,5 +194,6 @@ export async function resolveExplore(
     combat_result: 'win',
     xp_gained: monster.xp_reward,
     items_dropped: itemsDropped,
+    ...(crownsDropped > 0 && { crowns_gained: crownsDropped }),
   };
 }
