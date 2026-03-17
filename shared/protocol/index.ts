@@ -121,6 +121,7 @@ export interface NpcDto {
   name: string;
   description: string;
   icon_url: string;
+  is_crafter: boolean;
 }
 
 export interface CityMapBuilding {
@@ -441,7 +442,13 @@ export type AnyServerMessage =
   | CombatEndMessage
   | LoadoutStateMessage
   | LoadoutUpdatedMessage
-  | LoadoutUpdateRejectedMessage;
+  | LoadoutUpdateRejectedMessage
+  | CraftingStateMessage
+  | CraftingStartedMessage
+  | CraftingCancelledMessage
+  | CraftingCollectedMessage
+  | CraftingRejectedMessage
+  | CraftingSessionsUpdatedMessage;
 
 export type AnyClientMessage =
   | AuthRegisterMessage
@@ -458,7 +465,11 @@ export type AnyClientMessage =
   | EquipmentUnequipMessage
   | CombatTriggerActiveMessage
   | LoadoutUpdateMessage
-  | LoadoutRequestMessage;
+  | LoadoutRequestMessage
+  | CraftingOpenMessage
+  | CraftingStartMessage
+  | CraftingCancelMessage
+  | CraftingCollectMessage;
 
 // ---------------------------------------------------------------------------
 // Inventory: shared sub-types
@@ -902,3 +913,130 @@ export type LoadoutUpdateRejectedMessage    = WsMessage<LoadoutUpdateRejectedPay
 export type CombatTriggerActiveMessage      = WsMessage<CombatTriggerActivePayload>;
 export type LoadoutUpdateMessage            = WsMessage<LoadoutUpdatePayload>;
 export type LoadoutRequestMessage           = WsMessage<LoadoutRequestPayload>;
+
+// ---------------------------------------------------------------------------
+// Crafting System: shared sub-types
+// ---------------------------------------------------------------------------
+
+export interface CraftingIngredientDto {
+  item_def_id: number;
+  item_name: string;
+  item_icon_url: string | null;
+  quantity: number;          // Per 1x craft
+}
+
+export interface CraftingRecipeDto {
+  id: number;
+  npc_id: number;
+  name: string;
+  description: string | null;
+  output_item: ItemDefinitionDto;
+  output_quantity: number;
+  cost_crowns: number;
+  craft_time_seconds: number;
+  ingredients: CraftingIngredientDto[];
+}
+
+export interface CraftingSessionDto {
+  id: number;
+  recipe_id: number;
+  npc_id: number;
+  quantity: number;
+  started_at: string;         // ISO 8601 timestamp
+  total_duration_seconds: number;
+  status: 'in_progress' | 'completed';
+  progress_percent: number;   // 0–100, computed server-side
+  remaining_seconds: number;  // 0 if completed, computed server-side
+}
+
+export type CraftingRejectionReason =
+  | 'NOT_AT_NPC'
+  | 'NPC_NOT_CRAFTER'
+  | 'RECIPE_NOT_FOUND'
+  | 'INSUFFICIENT_MATERIALS'
+  | 'INSUFFICIENT_CROWNS'
+  | 'ALREADY_CRAFTING'
+  | 'INVALID_QUANTITY'
+  | 'SESSION_NOT_FOUND'
+  | 'SESSION_NOT_IN_PROGRESS'
+  | 'SESSION_NOT_COMPLETED'
+  | 'INVENTORY_FULL'
+  | 'ITEM_DEF_NOT_FOUND';
+
+// ---------------------------------------------------------------------------
+// Crafting System: Client → Server payloads
+// ---------------------------------------------------------------------------
+
+export interface CraftingOpenPayload {
+  npc_id: number;
+}
+
+export interface CraftingStartPayload {
+  npc_id: number;
+  recipe_id: number;
+  quantity: number;
+}
+
+export interface CraftingCancelPayload {
+  session_id: number;
+}
+
+export interface CraftingCollectPayload {
+  session_id: number;
+}
+
+// ---------------------------------------------------------------------------
+// Crafting System: Server → Client payloads
+// ---------------------------------------------------------------------------
+
+export interface CraftingStatePayload {
+  npc_id: number;
+  recipes: CraftingRecipeDto[];
+  active_sessions: CraftingSessionDto[];
+}
+
+export interface CraftingStartedPayload {
+  session: CraftingSessionDto;
+  new_crowns: number;
+  updated_slots: InventorySlotDto[];
+}
+
+export interface CraftingCancelledPayload {
+  session_id: number;
+  refunded_crowns: number;
+  refunded_items: { item_def_id: number; quantity: number }[];
+  new_crowns: number;
+  updated_slots: InventorySlotDto[];
+}
+
+export interface CraftingCollectedPayload {
+  session_id: number;
+  items_received: { item_def_id: number; quantity: number }[];
+  updated_slots: InventorySlotDto[];
+}
+
+export interface CraftingRejectedPayload {
+  action: 'open' | 'start' | 'cancel' | 'collect';
+  reason: CraftingRejectionReason;
+  details?: string;
+}
+
+export interface CraftingSessionsUpdatedPayload {
+  finished_count: number;
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// Crafting System: message type aliases
+// ---------------------------------------------------------------------------
+
+export type CraftingOpenMessage             = WsMessage<CraftingOpenPayload>;
+export type CraftingStartMessage            = WsMessage<CraftingStartPayload>;
+export type CraftingCancelMessage           = WsMessage<CraftingCancelPayload>;
+export type CraftingCollectMessage          = WsMessage<CraftingCollectPayload>;
+export type CraftingStateMessage            = WsMessage<CraftingStatePayload>;
+export type CraftingStartedMessage          = WsMessage<CraftingStartedPayload>;
+export type CraftingCancelledMessage        = WsMessage<CraftingCancelledPayload>;
+export type CraftingCollectedMessage        = WsMessage<CraftingCollectedPayload>;
+export type CraftingRejectedMessage         = WsMessage<CraftingRejectedPayload>;
+export type CraftingSessionsUpdatedMessage  = WsMessage<CraftingSessionsUpdatedPayload>;

@@ -57,6 +57,12 @@ import type {
   LoadoutStatePayload,
   LoadoutUpdatedPayload,
   LoadoutUpdateRejectedPayload,
+  CraftingStatePayload,
+  CraftingStartedPayload,
+  CraftingCancelledPayload,
+  CraftingCollectedPayload,
+  CraftingRejectedPayload,
+  CraftingSessionsUpdatedPayload,
 } from '@elarion/protocol';
 
 const TILE_SIZE = 32;
@@ -160,6 +166,13 @@ export class GameScene extends Phaser.Scene {
     });
     this.buildingPanel.setOnExpeditionCollect((expeditionId) => {
       this.client.send('expedition.collect', { expedition_id: expeditionId });
+    });
+    this.buildingPanel.setOnCraftingOpen((npcId) => {
+      this.buildingPanel.getCraftingModal().open(npcId);
+      this.client.send('crafting.open', { npc_id: npcId });
+    });
+    this.buildingPanel.getCraftingModal().setSendFn((type, payload) => {
+      this.client.send(type, payload);
     });
 
     this.combatScreen = new CombatScreen(() => {
@@ -504,6 +517,38 @@ export class GameScene extends Phaser.Scene {
         ALREADY_COLLECTED: 'Rewards already collected.',
       };
       this.chatBox.addSystemMessage(messages[payload.reason] ?? 'Could not collect expedition rewards.');
+    });
+
+    // Crafting handlers
+    this.client.on<CraftingStatePayload>('crafting.state', (payload) => {
+      this.buildingPanel.getCraftingModal().handleState(payload);
+    });
+    this.client.on<CraftingStartedPayload>('crafting.started', (payload) => {
+      this.buildingPanel.getCraftingModal().handleStarted(payload);
+      if (this.myCharacter) this.myCharacter.crowns = payload.new_crowns;
+      this.statsBar?.setCrowns(payload.new_crowns);
+      this.leftPanel.onInventoryState({ slots: payload.updated_slots, capacity: 20 });
+    });
+    this.client.on<CraftingCancelledPayload>('crafting.cancelled', (payload) => {
+      this.buildingPanel.getCraftingModal().handleCancelled(payload);
+      if (this.myCharacter) this.myCharacter.crowns = payload.new_crowns;
+      this.statsBar?.setCrowns(payload.new_crowns);
+      this.leftPanel.onInventoryState({ slots: payload.updated_slots, capacity: 20 });
+    });
+    this.client.on<CraftingCollectedPayload>('crafting.collected', (payload) => {
+      this.buildingPanel.getCraftingModal().handleCollected(payload);
+      this.leftPanel.onInventoryState({ slots: payload.updated_slots, capacity: 20 });
+    });
+    this.client.on<CraftingRejectedPayload>('crafting.rejected', (payload) => {
+      this.buildingPanel.getCraftingModal().handleRejected(payload);
+    });
+    this.client.on<CraftingSessionsUpdatedPayload>('crafting.sessions_updated', (payload) => {
+      this.chatBox.addSystemMessage(payload.message);
+      // Refresh crafting modal if open
+      const modal = this.buildingPanel.getCraftingModal();
+      if (modal.isOpen()) {
+        this.client.send('crafting.open', { npc_id: modal.getNpcId() });
+      }
     });
 
     // Combat handlers

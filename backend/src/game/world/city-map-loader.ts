@@ -94,6 +94,7 @@ function toProtocolBuilding(
     name: n.npc_name,
     description: n.npc_description,
     icon_url: `${config.adminBaseUrl}/npc-icons/${n.icon_filename}`,
+    is_crafter: n.is_crafter ?? false,
   }));
 
   const result: CityMapBuilding = {

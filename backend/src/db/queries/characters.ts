@@ -112,6 +112,14 @@ export async function addCrowns(characterId: string, amount: number): Promise<nu
   return result.rows[0]!.crowns;
 }
 
+export async function deductCrowns(characterId: string, amount: number): Promise<number | null> {
+  const result = await query<{ crowns: number }>(
+    `UPDATE characters SET crowns = crowns - $2, updated_at = now() WHERE id = $1 AND crowns >= $2 RETURNING crowns`,
+    [characterId, amount],
+  );
+  return result.rows[0]?.crowns ?? null;
+}
+
 export async function updateCharacterNode(characterId: string, nodeId: number): Promise<void> {
   await query(
     `UPDATE characters SET current_node_id = $2, updated_at = now() WHERE id = $1`,

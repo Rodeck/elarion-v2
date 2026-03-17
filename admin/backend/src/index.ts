@@ -18,6 +18,7 @@ import { aiGenerateRouter } from './routes/ai-generate';
 import { encounterTablesRouter } from './routes/encounter-tables';
 import { npcsRouter } from './routes/npcs';
 import { abilitiesRouter } from './routes/abilities';
+import { recipesRouter } from './routes/recipes';
 
 const app = express();
 
@@ -65,6 +66,7 @@ app.use('/api/ai', aiGenerateRouter);
 app.use('/api/encounter-tables', encounterTablesRouter);
 app.use('/api/npcs', npcsRouter);
 app.use('/api/abilities', abilitiesRouter);
+app.use('/api/recipes', recipesRouter);
 
 if (!process.env['OPENROUTER_API_KEY']) {
   console.log(JSON.stringify({ level: 'warn', event: 'openrouter_key_missing', msg: 'OPENROUTER_API_KEY not set — AI image generation will return 503', timestamp: new Date().toISOString() }));

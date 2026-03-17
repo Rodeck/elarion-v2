@@ -7,6 +7,7 @@ import { AdminConfigManager } from './ui/admin-config-manager';
 import { EncounterTableManager } from './ui/encounter-table-manager';
 import { NpcManager } from './ui/npc-manager';
 import { AbilityManager } from './ui/ability-manager';
+import { RecipeManager } from './ui/recipe-manager';
 import { Toolbar } from './ui/toolbar';
 import { MapCanvas } from './editor/canvas';
 import { EditorModeManager } from './editor/modes';
@@ -40,6 +41,7 @@ let imagePromptManager: ImagePromptManager | null = null;
 let adminConfigManager: AdminConfigManager | null = null;
 let npcManager: NpcManager | null = null;
 let abilityManager: AbilityManager | null = null;
+let recipeManager: RecipeManager | null = null;
 let toolbar: Toolbar | null = null;
 let canvas: MapCanvas | null = null;
 let modeManager: EditorModeManager | null = null;
@@ -108,11 +110,12 @@ function destroyAll(): void {
   adminConfigManager = null;
   npcManager = null;
   abilityManager = null;
+  recipeManager = null;
   destroyEditor();
   app.innerHTML = '';
 }
 
-async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' = 'maps'): Promise<void> {
+async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' = 'maps'): Promise<void> {
   destroyAll();
 
   // Tab bar
@@ -127,6 +130,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     <button class="btn ${activeTab === 'config' ? 'btn--active' : ''}" id="tab-config">Config</button>
     <button class="btn ${activeTab === 'npcs' ? 'btn--active' : ''}" id="tab-npcs">NPCs</button>
     <button class="btn ${activeTab === 'abilities' ? 'btn--active' : ''}" id="tab-abilities">Abilities</button>
+    <button class="btn ${activeTab === 'recipes' ? 'btn--active' : ''}" id="tab-recipes">Recipes</button>
     <div style="flex:1"></div>
     <span style="font-size:0.75rem;color:#2d3347;align-self:center;padding-right:0.5rem;letter-spacing:0.05em;font-weight:600;">ELARION ADMIN</span>
   `;
@@ -173,7 +177,12 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
   abilityManagerPanel.style.display = activeTab === 'abilities' ? '' : 'none';
   app.appendChild(abilityManagerPanel);
 
-  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities'): void {
+  const recipeManagerPanel = document.createElement('div');
+  recipeManagerPanel.id = 'recipe-manager';
+  recipeManagerPanel.style.display = activeTab === 'recipes' ? '' : 'none';
+  app.appendChild(recipeManagerPanel);
+
+  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes'): void {
     mapEditorPanel.style.display = tab === 'maps' ? '' : 'none';
     itemManagerPanel.style.display = tab === 'items' ? '' : 'none';
     monsterManagerPanel.style.display = tab === 'monsters' ? '' : 'none';
@@ -182,6 +191,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     adminConfigPanel.style.display = tab === 'config' ? '' : 'none';
     npcManagerPanel.style.display = tab === 'npcs' ? '' : 'none';
     abilityManagerPanel.style.display = tab === 'abilities' ? '' : 'none';
+    recipeManagerPanel.style.display = tab === 'recipes' ? '' : 'none';
     tabBar.querySelector('#tab-maps')!.classList.toggle('btn--active', tab === 'maps');
     tabBar.querySelector('#tab-items')!.classList.toggle('btn--active', tab === 'items');
     tabBar.querySelector('#tab-monsters')!.classList.toggle('btn--active', tab === 'monsters');
@@ -190,6 +200,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     tabBar.querySelector('#tab-config')!.classList.toggle('btn--active', tab === 'config');
     tabBar.querySelector('#tab-npcs')!.classList.toggle('btn--active', tab === 'npcs');
     tabBar.querySelector('#tab-abilities')!.classList.toggle('btn--active', tab === 'abilities');
+    tabBar.querySelector('#tab-recipes')!.classList.toggle('btn--active', tab === 'recipes');
   }
 
   tabBar.querySelector('#tab-maps')!.addEventListener('click', () => setActiveTab('maps'));
@@ -257,6 +268,15 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     }
   });
 
+  tabBar.querySelector('#tab-recipes')!.addEventListener('click', async () => {
+    setActiveTab('recipes');
+    if (!recipeManager) {
+      recipeManager = new RecipeManager();
+      recipeManager.init(recipeManagerPanel);
+      await recipeManager.load();
+    }
+  });
+
   // Initialize map list
   mapListView = new MapListView(mapEditorPanel);
   mapListView.setOnEditMap((mapId) => {
@@ -293,6 +313,10 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     abilityManager = new AbilityManager();
     abilityManager.init(abilityManagerPanel);
     await abilityManager.load();
+  } else if (activeTab === 'recipes') {
+    recipeManager = new RecipeManager();
+    recipeManager.init(recipeManagerPanel);
+    await recipeManager.load();
   }
 }
 

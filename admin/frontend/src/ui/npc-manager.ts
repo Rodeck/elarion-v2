@@ -4,6 +4,7 @@ import {
   updateNpc,
   deleteNpc,
   uploadNpcIcon,
+  toggleNpcCrafter,
   type NpcResponse,
 } from '../editor/api';
 import { ImageGenDialog } from './image-gen-dialog';
@@ -129,17 +130,35 @@ export class NpcManager {
     card.className = 'npc-card';
     card.dataset['id'] = String(n.id);
 
+    const isCrafter = (n as NpcResponse & { is_crafter?: boolean }).is_crafter ?? false;
     card.innerHTML = `
       <div class="npc-card-icon">
         <img src="${n.icon_url}" alt="${this.esc(n.name)}" />
       </div>
       <div class="npc-card-name">${this.esc(n.name)}</div>
       <div class="npc-card-desc">${this.esc(n.description)}</div>
+      <div style="margin:6px 0;display:flex;align-items:center;gap:6px;">
+        <label style="font-size:0.75rem;color:#9ba8d0;display:flex;align-items:center;gap:4px;cursor:pointer;">
+          <input type="checkbox" class="npc-crafter-toggle" data-id="${n.id}" ${isCrafter ? 'checked' : ''} />
+          Crafting NPC
+        </label>
+      </div>
       <div class="monster-card-actions">
         <button class="btn btn--sm btn--edit" data-id="${n.id}">Edit</button>
         <button class="btn btn--sm btn--danger btn--delete" data-id="${n.id}">Delete</button>
       </div>
     `;
+
+    card.querySelector<HTMLInputElement>('.npc-crafter-toggle')!.addEventListener('change', async (e) => {
+      const checkbox = e.target as HTMLInputElement;
+      try {
+        await toggleNpcCrafter(n.id, checkbox.checked);
+        (n as NpcResponse & { is_crafter?: boolean }).is_crafter = checkbox.checked;
+      } catch (err) {
+        checkbox.checked = !checkbox.checked;
+        alert(`Failed to toggle crafter: ${(err as Error).message}`);
+      }
+    });
 
     card.querySelector<HTMLButtonElement>('.btn--edit')!.addEventListener('click', () => {
       this.startEdit(n);

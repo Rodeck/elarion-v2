@@ -8,10 +8,12 @@ import type {
   ExpeditionCompletedPayload,
 } from '@elarion/protocol';
 import { CombatModal } from './CombatModal';
+import { CraftingModal } from './CraftingModal';
 
 type ActionCallback = (payload: CityBuildingActionPayload) => void;
 type ExpeditionDispatchCallback = (buildingId: number, actionId: number, durationHours: 1 | 3 | 6) => void;
 type ExpeditionCollectCallback = (expeditionId: number) => void;
+type CraftingOpenCallback = (npcId: number) => void;
 
 export class BuildingPanel {
   private panel: HTMLElement;
@@ -21,6 +23,8 @@ export class BuildingPanel {
   private onExpeditionDispatch: ExpeditionDispatchCallback | null = null;
   private onExpeditionCollect: ExpeditionCollectCallback | null = null;
   private combatModal: CombatModal;
+  private craftingModal: CraftingModal;
+  private onCraftingOpen: CraftingOpenCallback | null = null;
   private progressIntervals: number[] = [];
   private currentBuilding: CityMapBuilding | null = null;
   private currentExpeditionState: ExpeditionStateDto | undefined;
@@ -28,6 +32,7 @@ export class BuildingPanel {
   constructor(parent: HTMLElement, onAction: ActionCallback) {
     this.onAction = onAction;
     this.combatModal = new CombatModal(document.body);
+    this.craftingModal = new CraftingModal(document.body);
 
     this.panel = document.createElement('div');
     this.panel.id = 'building-panel';
@@ -63,6 +68,14 @@ export class BuildingPanel {
 
   setOnExpeditionCollect(cb: ExpeditionCollectCallback): void {
     this.onExpeditionCollect = cb;
+  }
+
+  setOnCraftingOpen(cb: CraftingOpenCallback): void {
+    this.onCraftingOpen = cb;
+  }
+
+  getCraftingModal(): CraftingModal {
+    return this.craftingModal;
   }
 
   show(building: CityMapBuilding, expeditionState?: ExpeditionStateDto): void {
@@ -248,7 +261,7 @@ export class BuildingPanel {
   // NPC panel
   // ---------------------------------------------------------------------------
 
-  private renderNpcPanel(npc: { id: number; name: string; description: string; icon_url: string }): void {
+  private renderNpcPanel(npc: { id: number; name: string; description: string; icon_url: string; is_crafter: boolean }): void {
     // Header: NPC name with back chevron
     this.headerEl.innerHTML = '';
 
@@ -333,6 +346,13 @@ export class BuildingPanel {
     // Dialog options
     const optionsEl = document.createElement('div');
     optionsEl.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+
+    if (npc.is_crafter) {
+      const craftOption = this.buildDialogOption('I want to craft some items', () => {
+        this.onCraftingOpen?.(npc.id);
+      });
+      optionsEl.appendChild(craftOption);
+    }
 
     const backOption = this.buildDialogOption('Leave', () => {
       if (this.currentBuilding) {
@@ -636,5 +656,6 @@ export class BuildingPanel {
     this.clearProgressIntervals();
     this.panel.remove();
     this.combatModal.close();
+    this.craftingModal.close();
   }
 }

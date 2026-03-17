@@ -62,6 +62,20 @@ const schemas: Record<string, Schema> = {
     // ability_id and priority are optional numbers — no strict schema rule here;
     // handler performs all semantic validation
   },
+  'crafting.open': {
+    npc_id: { type: 'number', required: true },
+  },
+  'crafting.start': {
+    npc_id: { type: 'number', required: true },
+    recipe_id: { type: 'number', required: true },
+    quantity: { type: 'number', required: true },
+  },
+  'crafting.cancel': {
+    session_id: { type: 'number', required: true },
+  },
+  'crafting.collect': {
+    session_id: { type: 'number', required: true },
+  },
 };
 
 export interface ValidationResult {

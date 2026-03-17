@@ -8,6 +8,7 @@ import { forcePhase } from '../world/day-cycle-service';
 import { awardCrowns } from '../currency/crown-service';
 import { getAllAbilities } from '../../db/queries/abilities';
 import { grantAbilityToCharacter, getOwnedAbilities, getCharacterLoadout } from '../../db/queries/loadouts';
+import { completeAllSessionsForCharacter } from '../../db/queries/crafting';
 import { log } from '../../logger';
 
 // ---------------------------------------------------------------------------
@@ -38,8 +39,9 @@ export async function handleAdminCommand(session: AuthenticatedSession, rawMessa
     case '/night':           return handleForcePhase(session, 'night', reply);
     case '/crown':           return handleGiveCrowns(session, args, reply);
     case '/skill_all':       return handleSkillAll(session, args, reply);
+    case '/crafting_finish': return handleCraftingFinish(session, args, reply);
     default:
-      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown, /skill_all`);
+      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown, /skill_all, /crafting_finish`);
   }
 }
 
@@ -336,4 +338,51 @@ async function handleSkillAll(session: AuthenticatedSession, args: string[], rep
 
   const skipped = allAbilities.length - granted;
   reply(true, `Granted ${granted} abilit${granted !== 1 ? 'ies' : 'y'} to ${playerName}${skipped > 0 ? ` (${skipped} already owned)` : ''}.`);
+}
+
+// ---------------------------------------------------------------------------
+// /crafting_finish <player>
+// ---------------------------------------------------------------------------
+
+async function handleCraftingFinish(session: AuthenticatedSession, args: string[], reply: ReplyFn): Promise<void> {
+  const playerName = args[0];
+  if (!playerName) {
+    reply(false, 'Usage: /crafting_finish <player>');
+    return;
+  }
+
+  const character = await findByName(playerName);
+  if (!character) {
+    reply(false, `Player '${playerName}' not found.`);
+    return;
+  }
+
+  const count = await completeAllSessionsForCharacter(character.id);
+
+  if (count === 0) {
+    reply(true, `${playerName} has no in-progress crafting sessions.`);
+    return;
+  }
+
+  // Notify target player if online
+  const targetSession = getSessionByCharacterId(character.id);
+  if (targetSession) {
+    sendToSession(targetSession, 'crafting.sessions_updated', {
+      finished_count: count,
+      message: `An admin completed ${count} crafting session${count !== 1 ? 's' : ''} for you.`,
+    });
+  }
+
+  log('info', 'admin', 'admin_command', {
+    event: 'admin_command',
+    admin_account_id: session.accountId,
+    admin_character_id: session.characterId,
+    command: '/crafting_finish',
+    target_player: playerName,
+    target_character_id: character.id,
+    sessions_finished: count,
+    success: true,
+  });
+
+  reply(true, `Completed ${count} crafting session${count !== 1 ? 's' : ''} for ${playerName}.`);
 }

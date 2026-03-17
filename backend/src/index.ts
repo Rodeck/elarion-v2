@@ -18,6 +18,7 @@ import { handleInventoryDeleteItem } from './game/inventory/inventory-delete-han
 import { handleExpeditionDispatch, handleExpeditionCollect } from './game/expedition/expedition-handler';
 import { handleEquipmentEquip, handleEquipmentUnequip } from './game/equipment/equipment-handler';
 import { handleCombatTriggerActive, handleLoadoutRequest, handleLoadoutUpdate } from './game/combat/combat-handlers';
+import { registerCraftingHandlers } from './game/crafting/crafting-handler';
 import { sendWorldState, setZonePlayersGetter } from './websocket/handlers/world-state-handler';
 import { getZonePlayers } from './game/world/zone-registry';
 import { loadCityMaps } from './game/world/city-map-loader';
@@ -70,6 +71,7 @@ async function bootstrap(): Promise<void> {
   registerHandler('combat:trigger_active', handleCombatTriggerActive);
   registerHandler('loadout:request', handleLoadoutRequest);
   registerHandler('loadout:update', handleLoadoutUpdate);
+  registerCraftingHandlers();
 
   // Start WebSocket server (also sends world.state on connect)
   startWebSocketServer();

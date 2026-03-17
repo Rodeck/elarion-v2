@@ -33,7 +33,14 @@
       "Bash(npx vite:*)",
       "Bash(head:*)",
       "Bash(xargs grep:*)",
-      "Bash(./node_modules/.bin/tsc --noEmit)"
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(grep -oP '\\\\d+\\(?=-crafting-system$\\)')",
+      "Bash(find /d/projects/elarion-v2/backend -name *admin* -o -name *command*)",
+      "Bash(grep -E \"\\\\.\\(ts|sql\\)$\")",
+      "Bash(grep -E \"\\\\.\\(ts|tsx|sql\\)$\")",
+      "Bash(grep -E \"\\\\.ts$\")",
+      "Bash(grep -r \"craftingRecipe\\\\|recipe\\\\|craft\" /d/projects/elarion-v2/shared/protocol --include=*.ts)",
+      "Bash(node_modules/.bin/tsc --noEmit)"
     ]
   }
 }

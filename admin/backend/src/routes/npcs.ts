@@ -27,6 +27,7 @@ function npcToResponse(n: Npc) {
     description: n.description,
     icon_filename: n.icon_filename,
     icon_url: buildIconUrl(n.icon_filename),
+    is_crafter: n.is_crafter,
     created_at: n.created_at,
   };
 }
@@ -150,6 +151,33 @@ npcsRouter.put('/:id', async (req: Request, res: Response) => {
     return res.json(npcToResponse(updated));
   } catch (err) {
     log('error', 'Failed to update NPC', { id, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── PUT /api/npcs/:id/crafter ──────────────────────────────────────────────
+
+npcsRouter.put('/:id/crafter', async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id!, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid NPC id' });
+
+  const { is_crafter } = req.body as Record<string, unknown>;
+  if (typeof is_crafter !== 'boolean') {
+    return res.status(400).json({ error: 'is_crafter must be a boolean' });
+  }
+
+  try {
+    const existing = await getNpcById(id);
+    if (!existing) return res.status(404).json({ error: 'NPC not found' });
+
+    const { query } = await import('../../../../backend/src/db/connection');
+    await query('UPDATE npcs SET is_crafter = $1 WHERE id = $2', [is_crafter, id]);
+
+    const updated = await getNpcById(id);
+    log('info', 'Updated NPC crafter status', { id, is_crafter, admin: req.username });
+    return res.json(npcToResponse(updated!));
+  } catch (err) {
+    log('error', 'Failed to update NPC crafter status', { id, error: String(err) });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

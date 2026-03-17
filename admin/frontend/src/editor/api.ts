@@ -822,3 +822,82 @@ export async function upsertEncounterEntry(zoneId: number, monsterId: number, we
 export async function deleteEncounterEntry(entryId: number): Promise<void> {
   await request<void>(`${ENCOUNTER_BASE}/entry/${entryId}`, { method: 'DELETE' });
 }
+
+// ---------------------------------------------------------------------------
+// Crafting Recipes
+// ---------------------------------------------------------------------------
+
+const RECIPES_BASE = '/api/recipes';
+
+export interface RecipeIngredient {
+  id: number;
+  item_def_id: number;
+  item_name: string;
+  quantity: number;
+}
+
+export interface RecipeResponse {
+  id: number;
+  npc_id: number;
+  name: string;
+  description: string | null;
+  output_item_id: number;
+  output_quantity: number;
+  cost_crowns: number;
+  craft_time_seconds: number;
+  sort_order: number;
+  ingredients: RecipeIngredient[];
+}
+
+export async function getRecipes(npcId?: number): Promise<RecipeResponse[]> {
+  const qs = npcId ? `?npc_id=${npcId}` : '';
+  return request<RecipeResponse[]>(`${RECIPES_BASE}${qs}`);
+}
+
+export async function getRecipeById(id: number): Promise<RecipeResponse> {
+  return request<RecipeResponse>(`${RECIPES_BASE}/${id}`);
+}
+
+export async function createRecipe(data: {
+  npc_id: number;
+  name: string;
+  description?: string;
+  output_item_id: number;
+  output_quantity: number;
+  cost_crowns: number;
+  craft_time_seconds: number;
+  sort_order?: number;
+  ingredients: { item_def_id: number; quantity: number }[];
+}): Promise<RecipeResponse> {
+  return request<RecipeResponse>(RECIPES_BASE, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRecipe(id: number, data: {
+  name?: string;
+  description?: string;
+  output_item_id?: number;
+  output_quantity?: number;
+  cost_crowns?: number;
+  craft_time_seconds?: number;
+  sort_order?: number;
+  ingredients?: { item_def_id: number; quantity: number }[];
+}): Promise<RecipeResponse> {
+  return request<RecipeResponse>(`${RECIPES_BASE}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteRecipe(id: number): Promise<void> {
+  return request<void>(`${RECIPES_BASE}/${id}`, { method: 'DELETE' });
+}
+
+export async function toggleNpcCrafter(npcId: number, isCrafter: boolean): Promise<void> {
+  return request<void>(`${NPCS_BASE}/${npcId}/crafter`, {
+    method: 'PUT',
+    body: JSON.stringify({ is_crafter: isCrafter }),
+  });
+}

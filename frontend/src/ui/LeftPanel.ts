@@ -120,6 +120,8 @@ export class LeftPanel {
         this.loadoutContentEl,
         this.onUpdateLoadoutSlot,
       );
+      // LoadoutPanel.render() sets display:flex on the container — restore correct visibility
+      this.updateTabVisibility();
     }
     return this.loadoutPanel;
   }
