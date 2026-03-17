@@ -30,6 +30,10 @@ export default defineConfig({
         target: 'http://localhost:4001',
         changeOrigin: true,
       },
+      '/ability-icons': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
     },
   },
 });

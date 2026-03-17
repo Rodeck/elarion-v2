@@ -11,6 +11,8 @@ import type { AuthenticatedSession } from '../server';
 import { getCityMapCache } from '../../game/world/city-map-loader';
 import { getExpeditionStateForBuilding } from '../../game/world/city-movement-handler';
 import { getSpawnNodeForZone } from '../../db/queries/city-maps';
+import { setCharacterInCombat } from '../../db/queries/loadouts';
+import { CombatSessionManager } from '../../game/combat/combat-session-manager';
 import {
   getSquiresForCharacter,
   createSquire,
@@ -33,6 +35,14 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
     log('info', 'world-state', 'session_restore_no_character', { accountId: session.accountId });
     sendToSession(session, 'auth.session_info', { has_character: false });
     return;
+  }
+
+  // If the DB says in_combat but there is no live session (server restarted),
+  // clear the flag so the player is not permanently locked.
+  if (character.in_combat && !CombatSessionManager.has(character.id)) {
+    await setCharacterInCombat(character.id, false).catch(() => undefined);
+    character.in_combat = false;
+    log('warn', 'world-state', 'stale_in_combat_cleared', { characterId: character.id });
   }
 
   const cls = await findClassById(character.class_id);

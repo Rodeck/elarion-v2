@@ -7,6 +7,7 @@ import { BuildingPanel } from '../ui/BuildingPanel';
 import { LogoutButton } from '../ui/LogoutButton';
 import { DayNightBar } from '../ui/DayNightBar';
 import { LeftPanel } from '../ui/LeftPanel';
+import { CombatScreen } from '../ui/CombatScreen';
 import { SessionStore } from '../auth/SessionStore';
 import { AnimatedSprite } from '../entities/AnimatedSprite';
 import { getSprite } from '../entities/SpriteRegistry';
@@ -49,6 +50,13 @@ import type {
   AdminCommandResultPayload,
   CharacterCrownsChangedPayload,
   PlayerSummary,
+  CombatStartPayload,
+  CombatTurnResultPayload,
+  CombatActiveWindowPayload,
+  CombatEndPayload,
+  LoadoutStatePayload,
+  LoadoutUpdatedPayload,
+  LoadoutUpdateRejectedPayload,
 } from '@elarion/protocol';
 
 const TILE_SIZE = 32;
@@ -66,6 +74,7 @@ export class GameScene extends Phaser.Scene {
   private buildingPanel!: BuildingPanel;
   private leftPanel!: LeftPanel;
   private dayNightBar: DayNightBar | null = null;
+  private combatScreen: CombatScreen | null = null;
 
   // Remote players: characterId → sprite
   private remotePlayers = new Map<string, Phaser.GameObjects.Container>();
@@ -88,6 +97,9 @@ export class GameScene extends Phaser.Scene {
 
   // Expedition state cache: building_id → last known expedition state
   private expeditionStateByBuilding = new Map<number, ExpeditionStateDto>();
+
+  // Building open when combat started — restored when combat screen closes
+  private buildingBeforeCombat: CityMapBuilding | null = null;
 
   // City map state
   private isCityMap = false;
@@ -129,6 +141,9 @@ export class GameScene extends Phaser.Scene {
       (slotId) => {
         this.client.send('inventory.delete_item', { slot_id: slotId });
       },
+      (slotName, abilityId, priority) => {
+        this.client.send('loadout:update', { slot_name: slotName, ability_id: abilityId, priority });
+      },
     );
 
     const buildingSlot = document.getElementById('building-panel-slot')!;
@@ -147,8 +162,26 @@ export class GameScene extends Phaser.Scene {
       this.client.send('expedition.collect', { expedition_id: expeditionId });
     });
 
+    this.combatScreen = new CombatScreen(() => {
+      const combatId = this.combatScreen?.getCombatId();
+      if (combatId) {
+        this.client.send('combat:trigger_active', { combat_id: combatId });
+      }
+    });
+    this.combatScreen.setOnClose(() => {
+      if (this.buildingBeforeCombat) {
+        this.buildingPanel.show(
+          this.buildingBeforeCombat,
+          this.expeditionStateByBuilding.get(this.buildingBeforeCombat.id),
+        );
+        this.buildingBeforeCombat = null;
+      }
+    });
+
     void this.client.connect().then(() => {
       this.registerHandlers();
+      // Request loadout state on init (server also pushes it on login, this is a fallback)
+      this.client.send('loadout:request', {});
     });
 
     // Camera and world bounds set after world.state arrives
@@ -389,6 +422,9 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.client.on<BuildingExploreResultPayload>('building.explore_result', (payload) => {
+      // combat_started: combat screen takes over — no modal needed
+      if (payload.outcome === 'combat_started') return;
+
       this.buildingPanel.showExploreResult(payload);
       if (payload.combat_result === 'win' && payload.crowns_gained && payload.crowns_gained > 0 && this.myCharacter) {
         this.myCharacter.crowns += payload.crowns_gained;
@@ -468,6 +504,47 @@ export class GameScene extends Phaser.Scene {
         ALREADY_COLLECTED: 'Rewards already collected.',
       };
       this.chatBox.addSystemMessage(messages[payload.reason] ?? 'Could not collect expedition rewards.');
+    });
+
+    // Combat handlers
+    this.client.on<CombatStartPayload>('combat:start', (payload) => {
+      this.buildingBeforeCombat = this.buildingPanel.getCurrentBuilding();
+      this.buildingPanel.hide();
+      this.leftPanel.setLoadoutLocked(true);
+      this.combatScreen?.open(payload);
+    });
+
+    this.client.on<CombatTurnResultPayload>('combat:turn_result', (payload) => {
+      this.combatScreen?.applyTurnResult(payload);
+    });
+
+    this.client.on<CombatActiveWindowPayload>('combat:active_window', (payload) => {
+      this.combatScreen?.openActiveWindow(payload);
+    });
+
+    this.client.on<CombatEndPayload>('combat:end', (payload) => {
+      this.combatScreen?.showOutcome(payload);
+      this.leftPanel.setLoadoutLocked(false);
+    });
+
+    this.client.on('connection_lost', () => {
+      // Clear before close so the onClose callback does not re-open the building panel
+      this.buildingBeforeCombat = null;
+      this.combatScreen?.close();
+      this.leftPanel.setLoadoutLocked(false);
+    });
+
+    // Loadout handlers
+    this.client.on<LoadoutStatePayload>('loadout:state', (payload) => {
+      this.leftPanel.updateLoadout(payload);
+    });
+
+    this.client.on<LoadoutUpdatedPayload>('loadout:updated', (_payload) => {
+      // Full state refresh is sent alongside loadout:updated — handled by loadout:state handler above
+    });
+
+    this.client.on<LoadoutUpdateRejectedPayload>('loadout:update_rejected', (payload) => {
+      this.leftPanel.handleLoadoutUpdateRejected(payload);
     });
   }
 

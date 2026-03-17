@@ -3,6 +3,7 @@ import { getMapsByType } from '../../db/queries/city-maps';
 import { createSquire } from '../../db/queries/squires';
 import { log } from '../../logger';
 import { sendToSession } from '../../websocket/server';
+import { sendLoadoutState } from '../combat/combat-handlers';
 import type { AuthenticatedSession } from '../../websocket/server';
 import type { CharacterCreatePayload } from '@elarion/protocol';
 
@@ -125,4 +126,7 @@ export async function handleCharacterCreate(session: AuthenticatedSession, paylo
       crowns: character.crowns,
     },
   });
+
+  // Push empty loadout state for new character
+  void sendLoadoutState(session, character.id);
 }

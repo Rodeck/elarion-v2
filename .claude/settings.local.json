@@ -32,7 +32,8 @@
       "Bash(sed:*)",
       "Bash(npx vite:*)",
       "Bash(head:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(./node_modules/.bin/tsc --noEmit)"
     ]
   }
 }

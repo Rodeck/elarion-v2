@@ -1,5 +1,6 @@
 import { InventoryPanel } from './InventoryPanel';
 import { EquipmentPanel } from './EquipmentPanel';
+import { LoadoutPanel } from './LoadoutPanel';
 import type {
   InventorySlotDto,
   InventoryStatePayload,
@@ -10,6 +11,8 @@ import type {
   EquipmentEquipRejectedPayload,
   EquipmentUnequipRejectedPayload,
   EquipSlot,
+  LoadoutStatePayload,
+  LoadoutUpdateRejectedPayload,
 } from '../../../shared/protocol/index';
 
 const EQUIPPABLE_CATEGORIES = ['weapon', 'shield', 'boots', 'greaves', 'bracer', 'helmet', 'chestplate'];
@@ -19,14 +22,17 @@ export class LeftPanel {
   private onEquip: (slotId: number, slotName: EquipSlot) => void;
   private onUnequip: (slotName: EquipSlot) => void;
   private onDeleteItem: (slotId: number) => void;
+  private onUpdateLoadoutSlot: (slotName: 'auto_1' | 'auto_2' | 'auto_3' | 'active', abilityId: number | null, priority: number) => void;
 
   private tabsEl!: HTMLElement;
   private equipmentContentEl!: HTMLElement;
   private inventoryContentEl!: HTMLElement;
+  private loadoutContentEl!: HTMLElement;
 
   private inventoryPanel: InventoryPanel;
   private equipmentPanel: EquipmentPanel | null = null;
-  private activeTab: 'equipment' | 'inventory' = 'inventory';
+  private loadoutPanel: LoadoutPanel | null = null;
+  private activeTab: 'equipment' | 'inventory' | 'loadout' = 'inventory';
 
   private inventorySlots: InventorySlotDto[] = [];
 
@@ -35,11 +41,13 @@ export class LeftPanel {
     onEquip: (slotId: number, slotName: EquipSlot) => void,
     onUnequip: (slotName: EquipSlot) => void,
     onDeleteItem: (slotId: number) => void,
+    onUpdateLoadoutSlot?: (slotName: 'auto_1' | 'auto_2' | 'auto_3' | 'active', abilityId: number | null, priority: number) => void,
   ) {
     this.container = container;
     this.onEquip = onEquip;
     this.onUnequip = onUnequip;
     this.onDeleteItem = onDeleteItem;
+    this.onUpdateLoadoutSlot = onUpdateLoadoutSlot ?? (() => undefined);
 
     this.build();
 
@@ -55,9 +63,10 @@ export class LeftPanel {
     this.tabsEl = document.createElement('div');
     this.tabsEl.className = 'left-panel__tabs';
 
-    const tabs: { id: 'equipment' | 'inventory'; label: string }[] = [
+    const tabs: { id: 'equipment' | 'inventory' | 'loadout'; label: string }[] = [
       { id: 'inventory', label: '🎒 Inventory' },
       { id: 'equipment', label: '⚔ Equipment' },
+      { id: 'loadout',   label: '🗡 Loadout' },
     ];
 
     for (const tab of tabs) {
@@ -65,7 +74,7 @@ export class LeftPanel {
       btn.className = 'left-panel__tab' + (tab.id === this.activeTab ? ' is-active' : '');
       btn.dataset['tab'] = tab.id;
       btn.textContent = tab.label;
-      btn.addEventListener('click', () => this.showTab(tab.id));
+      btn.addEventListener('click', () => this.showTab(tab.id as 'equipment' | 'inventory' | 'loadout'));
       this.tabsEl.appendChild(btn);
     }
 
@@ -76,9 +85,13 @@ export class LeftPanel {
     this.inventoryContentEl = document.createElement('div');
     this.inventoryContentEl.style.cssText = 'flex:1;display:flex;overflow:hidden;flex-direction:column;';
 
+    this.loadoutContentEl = document.createElement('div');
+    this.loadoutContentEl.style.cssText = 'flex:1;display:none;overflow:hidden;flex-direction:column;';
+
     this.container.appendChild(this.tabsEl);
     this.container.appendChild(this.equipmentContentEl);
     this.container.appendChild(this.inventoryContentEl);
+    this.container.appendChild(this.loadoutContentEl);
 
     // Show default tab
     this.updateTabVisibility();
@@ -101,11 +114,21 @@ export class LeftPanel {
     return this.equipmentPanel;
   }
 
+  private ensureLoadoutPanel(): LoadoutPanel {
+    if (!this.loadoutPanel) {
+      this.loadoutPanel = new LoadoutPanel(
+        this.loadoutContentEl,
+        this.onUpdateLoadoutSlot,
+      );
+    }
+    return this.loadoutPanel;
+  }
+
   // ---------------------------------------------------------------------------
   // Tab navigation
   // ---------------------------------------------------------------------------
 
-  showTab(tab: 'equipment' | 'inventory'): void {
+  showTab(tab: 'equipment' | 'inventory' | 'loadout'): void {
     this.activeTab = tab;
     this.updateTabVisibility();
 
@@ -120,12 +143,18 @@ export class LeftPanel {
       const ep = this.ensureEquipmentPanel();
       ep.renderMiniInventory(this.inventorySlots.filter((s) => EQUIPPABLE_CATEGORIES.includes(s.definition.category)));
     }
+
+    // If switching to loadout, ensure panel exists
+    if (tab === 'loadout') {
+      this.ensureLoadoutPanel();
+    }
   }
 
   private updateTabVisibility(): void {
-    const showEquipment = this.activeTab === 'equipment';
-    this.equipmentContentEl.style.display = showEquipment ? 'flex' : 'none';
-    this.inventoryContentEl.style.display = showEquipment ? 'none' : 'flex';
+    const tab = this.activeTab;
+    this.equipmentContentEl.style.display = tab === 'equipment' ? 'flex' : 'none';
+    this.inventoryContentEl.style.display  = tab === 'inventory' ? 'flex' : 'none';
+    this.loadoutContentEl.style.display    = tab === 'loadout'   ? 'flex' : 'none';
   }
 
   // ---------------------------------------------------------------------------
@@ -227,5 +256,24 @@ export class LeftPanel {
     };
     const msg = messages[payload.reason] ?? 'Could not unequip item.';
     ep.showNotification(msg, 'error');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Loadout pass-through
+  // ---------------------------------------------------------------------------
+
+  updateLoadout(payload: LoadoutStatePayload): void {
+    const lp = this.ensureLoadoutPanel();
+    lp.render(payload);
+  }
+
+  setLoadoutLocked(locked: boolean): void {
+    const lp = this.ensureLoadoutPanel();
+    lp.setLocked(locked);
+  }
+
+  handleLoadoutUpdateRejected(payload: LoadoutUpdateRejectedPayload): void {
+    const lp = this.ensureLoadoutPanel();
+    lp.handleUpdateRejected(payload);
   }
 }

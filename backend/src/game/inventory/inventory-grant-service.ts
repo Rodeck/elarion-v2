@@ -62,6 +62,13 @@ export async function grantItemToCharacter(
           food_power: def.food_power,
           stack_size: def.stack_size,
           icon_url: buildIconUrl(def.icon_filename),
+          max_mana: def.max_mana,
+          mana_on_hit: def.mana_on_hit,
+          mana_on_damage_taken: def.mana_on_damage_taken,
+          mana_regen: def.mana_regen,
+          dodge_chance: def.dodge_chance,
+          crit_chance: def.crit_chance,
+          crit_damage: def.crit_damage,
         },
       };
 
@@ -112,6 +119,13 @@ export async function grantItemToCharacter(
       food_power: newSlotWithDef.def_food_power,
       stack_size: newSlotWithDef.def_stack_size,
       icon_url: buildIconUrl(newSlotWithDef.def_icon_filename),
+      max_mana: newSlotWithDef.def_max_mana,
+      mana_on_hit: newSlotWithDef.def_mana_on_hit,
+      mana_on_damage_taken: newSlotWithDef.def_mana_on_damage_taken,
+      mana_regen: newSlotWithDef.def_mana_regen,
+      dodge_chance: newSlotWithDef.def_dodge_chance,
+      crit_chance: newSlotWithDef.def_crit_chance,
+      crit_damage: newSlotWithDef.def_crit_damage,
     },
   };
 

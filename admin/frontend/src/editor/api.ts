@@ -754,6 +754,47 @@ export async function removeNpcFromBuilding(mapId: number, buildingId: number, n
 }
 
 // ---------------------------------------------------------------------------
+// Abilities
+// ---------------------------------------------------------------------------
+
+const ABILITIES_BASE = '/api/abilities';
+
+export interface AbilityResponse {
+  id: number;
+  name: string;
+  description: string;
+  effect_type: string;
+  mana_cost: number;
+  effect_value: number;
+  duration_turns: number;
+  cooldown_turns: number;
+  priority_default: number;
+  slot_type: string;
+  icon_url: string | null;
+  created_at: string;
+}
+
+export async function listAbilities(): Promise<AbilityResponse[]> {
+  return request<AbilityResponse[]>(ABILITIES_BASE);
+}
+
+export async function getAbility(id: number): Promise<AbilityResponse> {
+  return request<AbilityResponse>(`${ABILITIES_BASE}/${id}`);
+}
+
+export async function createAbility(formData: FormData): Promise<AbilityResponse> {
+  return request<AbilityResponse>(ABILITIES_BASE, { method: 'POST', body: formData });
+}
+
+export async function updateAbility(id: number, formData: FormData): Promise<AbilityResponse> {
+  return request<AbilityResponse>(`${ABILITIES_BASE}/${id}`, { method: 'PUT', body: formData });
+}
+
+export async function deleteAbility(id: number): Promise<void> {
+  return request<void>(`${ABILITIES_BASE}/${id}`, { method: 'DELETE' });
+}
+
+// ---------------------------------------------------------------------------
 // Encounter tables
 // ---------------------------------------------------------------------------
 

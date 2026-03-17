@@ -1,6 +1,8 @@
 import { getPlayerState, removePlayer } from '../game/world/zone-registry';
 import { broadcastPlayerLeft } from '../game/world/zone-broadcasts';
 import { clearRateWindow } from '../game/world/movement-rate-limiter';
+import { setCharacterInCombat } from '../db/queries/loadouts';
+import { CombatSessionManager } from '../game/combat/combat-session-manager';
 import { log } from '../logger';
 import type { AuthenticatedSession } from './server';
 
@@ -24,6 +26,14 @@ export function onClientDisconnect(session: AuthenticatedSession): void {
       broadcastPlayerLeft(found.zoneId, characterId);
       clearRateWindow(characterId);
       log('info', 'disconnect', 'player_removed_after_grace', { characterId });
+    }
+    // End any active combat session and clear the DB flag so the player
+    // is not permanently locked when they reconnect.
+    const combatSession = CombatSessionManager.get(characterId);
+    if (combatSession) {
+      combatSession.abort();
+    } else {
+      setCharacterInCombat(characterId, false).catch(() => undefined);
     }
   }, GRACE_PERIOD_MS);
 

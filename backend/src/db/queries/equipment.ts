@@ -59,6 +59,13 @@ function buildInventorySlotDto(row: InventoryItemWithDefinition): InventorySlotD
       food_power: row.def_food_power,
       stack_size: row.def_stack_size,
       icon_url: buildIconUrl(row.def_icon_filename),
+      max_mana: row.def_max_mana,
+      mana_on_hit: row.def_mana_on_hit,
+      mana_on_damage_taken: row.def_mana_on_damage_taken,
+      mana_regen: row.def_mana_regen,
+      dodge_chance: row.def_dodge_chance,
+      crit_chance: row.def_crit_chance,
+      crit_damage: row.def_crit_damage,
     },
   };
 }
@@ -76,16 +83,23 @@ export async function getEquipmentState(characterId: string): Promise<EquipmentS
        ii.quantity,
        ii.created_at,
        ii.equipped_slot,
-       d.name           AS def_name,
-       d.description    AS def_description,
-       d.category       AS def_category,
-       d.weapon_subtype AS def_weapon_subtype,
-       d.attack         AS def_attack,
-       d.defence        AS def_defence,
-       d.heal_power     AS def_heal_power,
-       d.food_power     AS def_food_power,
-       d.stack_size     AS def_stack_size,
-       d.icon_filename  AS def_icon_filename
+       d.name                  AS def_name,
+       d.description           AS def_description,
+       d.category              AS def_category,
+       d.weapon_subtype        AS def_weapon_subtype,
+       d.attack                AS def_attack,
+       d.defence               AS def_defence,
+       d.heal_power            AS def_heal_power,
+       d.food_power            AS def_food_power,
+       d.stack_size            AS def_stack_size,
+       d.icon_filename         AS def_icon_filename,
+       d.max_mana              AS def_max_mana,
+       d.mana_on_hit           AS def_mana_on_hit,
+       d.mana_on_damage_taken  AS def_mana_on_damage_taken,
+       d.mana_regen            AS def_mana_regen,
+       d.dodge_chance          AS def_dodge_chance,
+       d.crit_chance           AS def_crit_chance,
+       d.crit_damage           AS def_crit_damage
      FROM inventory_items ii
      JOIN item_definitions d ON d.id = ii.item_def_id
      WHERE ii.character_id = $1

@@ -354,8 +354,20 @@ export class EquipmentPanel {
       slotEl.appendChild(ph);
     }
 
-    // Tooltip on hover
-    slotEl.title = item.definition.name;
+    // Tooltip on hover — build from non-null stats
+    const tipParts: string[] = [item.definition.name];
+    const def = item.definition;
+    if (def.attack != null) tipParts.push(`Attack: ${def.attack}`);
+    if (def.defence != null) tipParts.push(`Defence: ${def.defence}`);
+    if (def.heal_power != null) tipParts.push(`Heal: ${def.heal_power}`);
+    if (def.max_mana > 0) tipParts.push(`Max Mana: +${def.max_mana}`);
+    if (def.mana_on_hit > 0) tipParts.push(`Mana on Hit: +${def.mana_on_hit}`);
+    if (def.mana_on_damage_taken > 0) tipParts.push(`Mana on Hit Taken: +${def.mana_on_damage_taken}`);
+    if (def.mana_regen > 0) tipParts.push(`Mana Regen: +${def.mana_regen}`);
+    if (def.dodge_chance > 0) tipParts.push(`Dodge: ${def.dodge_chance}%`);
+    if (def.crit_chance > 0) tipParts.push(`Crit Chance: ${def.crit_chance}%`);
+    if (def.crit_damage !== 150) tipParts.push(`Crit Dmg: ${def.crit_damage}%`);
+    slotEl.title = tipParts.join('\n');
   }
 
   private buildIconPlaceholder(category: string): HTMLElement {

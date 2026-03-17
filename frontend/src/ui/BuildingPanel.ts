@@ -73,6 +73,10 @@ export class BuildingPanel {
     this.renderEmpty();
   }
 
+  getCurrentBuilding(): CityMapBuilding | null {
+    return this.currentBuilding;
+  }
+
   // ---------------------------------------------------------------------------
   // Render states
   // ---------------------------------------------------------------------------

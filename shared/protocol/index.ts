@@ -169,7 +169,7 @@ export interface ItemDroppedDto {
 
 export interface BuildingExploreResultPayload {
   action_id: number;
-  outcome: 'no_encounter' | 'combat';
+  outcome: 'no_encounter' | 'combat' | 'combat_started';
 
   // Only present when outcome === 'combat':
   monster?: {
@@ -434,7 +434,14 @@ export type AnyServerMessage =
   | WorldDayNightChangedMessage
   | NightEncounterResultMessage
   | AdminCommandResultMessage
-  | CharacterCrownsChangedMessage;
+  | CharacterCrownsChangedMessage
+  | CombatStartMessage
+  | CombatTurnResultMessage
+  | CombatActiveWindowMessage
+  | CombatEndMessage
+  | LoadoutStateMessage
+  | LoadoutUpdatedMessage
+  | LoadoutUpdateRejectedMessage;
 
 export type AnyClientMessage =
   | AuthRegisterMessage
@@ -448,7 +455,10 @@ export type AnyClientMessage =
   | ExpeditionDispatchMessage
   | ExpeditionCollectMessage
   | EquipmentEquipMessage
-  | EquipmentUnequipMessage;
+  | EquipmentUnequipMessage
+  | CombatTriggerActiveMessage
+  | LoadoutUpdateMessage
+  | LoadoutRequestMessage;
 
 // ---------------------------------------------------------------------------
 // Inventory: shared sub-types
@@ -475,6 +485,14 @@ export interface ItemDefinitionDto {
   food_power: number | null;
   stack_size: number | null;   // null = not stackable
   icon_url: string | null;     // absolute URL or null (use placeholder)
+  // Mana / combat stats (default 0, non-zero only on magic items)
+  max_mana: number;
+  mana_on_hit: number;
+  mana_on_damage_taken: number;
+  mana_regen: number;
+  dodge_chance: number;
+  crit_chance: number;
+  crit_damage: number;
 }
 
 /** A single occupied inventory slot as sent to the client. */
@@ -715,3 +733,172 @@ export type CharacterCrownsChangedMessage = WsMessage<CharacterCrownsChangedPayl
 
 export type WorldDayNightChangedMessage = WsMessage<WorldDayNightChangedPayload>;
 export type NightEncounterResultMessage = WsMessage<NightEncounterResultPayload>;
+
+// ---------------------------------------------------------------------------
+// Combat System: shared sub-types
+// ---------------------------------------------------------------------------
+
+export type CombatEventKind =
+  | 'auto_attack'
+  | 'ability_fired'
+  | 'mana_gained'
+  | 'mana_spent'
+  | 'dodge'
+  | 'crit'
+  | 'effect_applied'
+  | 'effect_tick'
+  | 'effect_expired';
+
+export interface CombatEventDto {
+  kind: CombatEventKind;
+  source: 'player' | 'enemy';
+  target: 'player' | 'enemy';
+  value?: number;
+  ability_name?: string;
+  effect_name?: string;
+  is_crit?: boolean;
+}
+
+export interface CombatAbilityStateDto {
+  slot_name: 'auto_1' | 'auto_2' | 'auto_3' | 'active';
+  ability_id: number;
+  name: string;
+  description: string;
+  mana_cost: number;
+  icon_url: string | null;
+  status: 'ready' | 'cooldown' | 'insufficient_mana';
+  cooldown_turns_remaining: number;
+}
+
+export interface MonsterCombatDto {
+  id: number;
+  name: string;
+  icon_url: string | null;
+  max_hp: number;
+  attack: number;
+  defence: number;
+}
+
+export interface PlayerCombatStateDto {
+  max_hp: number;
+  current_hp: number;
+  max_mana: number;
+  current_mana: number;
+  attack: number;
+  defence: number;
+}
+
+export interface AbilityDroppedDto {
+  ability_id: number;
+  name: string;
+  icon_url: string | null;
+}
+
+export interface OwnedAbilityDto {
+  id: number;
+  name: string;
+  icon_url: string | null;
+  description: string;
+  effect_type: string;
+  mana_cost: number;
+  effect_value: number;
+  duration_turns: number;
+  cooldown_turns: number;
+  priority_default: number;
+  slot_type: 'auto' | 'active' | 'both';
+}
+
+// ---------------------------------------------------------------------------
+// Combat System: Server → Client payloads
+// ---------------------------------------------------------------------------
+
+export interface CombatStartPayload {
+  combat_id: string;
+  monster: MonsterCombatDto;
+  player: PlayerCombatStateDto;
+  loadout: {
+    slots: CombatAbilityStateDto[];
+  };
+  turn_timer_ms: number;
+}
+
+export interface CombatTurnResultPayload {
+  combat_id: string;
+  turn: number;
+  phase: 'player' | 'enemy';
+  events: CombatEventDto[];
+  player_hp: number;
+  player_mana: number;
+  enemy_hp: number;
+  ability_states: CombatAbilityStateDto[];
+}
+
+export interface CombatActiveWindowPayload {
+  combat_id: string;
+  timer_ms: number;
+  ability: CombatAbilityStateDto | null;
+}
+
+export interface CombatEndPayload {
+  combat_id: string;
+  outcome: 'win' | 'loss';
+  xp_gained: number;
+  crowns_gained: number;
+  items_dropped: ItemDroppedDto[];
+  ability_drops: AbilityDroppedDto[];
+}
+
+export interface LoadoutSlotDto {
+  slot_name: 'auto_1' | 'auto_2' | 'auto_3' | 'active';
+  ability_id: number | null;
+  priority: number;
+  ability?: OwnedAbilityDto;
+}
+
+export interface LoadoutStatePayload {
+  slots: LoadoutSlotDto[];
+  owned_abilities: OwnedAbilityDto[];
+}
+
+export interface LoadoutUpdatedPayload {
+  slot_name: 'auto_1' | 'auto_2' | 'auto_3' | 'active';
+  ability_id: number | null;
+  priority: number;
+}
+
+export interface LoadoutUpdateRejectedPayload {
+  slot_name: string;
+  reason: 'in_combat' | 'ability_not_owned' | 'slot_type_mismatch';
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// Combat System: Client → Server payloads
+// ---------------------------------------------------------------------------
+
+export interface CombatTriggerActivePayload {
+  combat_id: string;
+}
+
+export interface LoadoutUpdatePayload {
+  slot_name: 'auto_1' | 'auto_2' | 'auto_3' | 'active';
+  ability_id: number | null;
+  priority?: number;
+}
+
+export interface LoadoutRequestPayload {}
+
+// ---------------------------------------------------------------------------
+// Combat System: message type aliases
+// ---------------------------------------------------------------------------
+
+export type CombatStartMessage              = WsMessage<CombatStartPayload>;
+export type CombatTurnResultMessage         = WsMessage<CombatTurnResultPayload>;
+export type CombatActiveWindowMessage       = WsMessage<CombatActiveWindowPayload>;
+export type CombatEndMessage                = WsMessage<CombatEndPayload>;
+export type LoadoutStateMessage             = WsMessage<LoadoutStatePayload>;
+export type LoadoutUpdatedMessage           = WsMessage<LoadoutUpdatedPayload>;
+export type LoadoutUpdateRejectedMessage    = WsMessage<LoadoutUpdateRejectedPayload>;
+export type CombatTriggerActiveMessage      = WsMessage<CombatTriggerActivePayload>;
+export type LoadoutUpdateMessage            = WsMessage<LoadoutUpdatePayload>;
+export type LoadoutRequestMessage           = WsMessage<LoadoutRequestPayload>;

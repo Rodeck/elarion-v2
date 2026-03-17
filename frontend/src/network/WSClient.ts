@@ -41,6 +41,7 @@ export class WSClient {
 
       this.socket.onclose = () => {
         if (!this.closed) {
+          this.emit('connection_lost', {});
           void this.reconnect();
         } else {
           this.emit('disconnected', {});

@@ -262,6 +262,13 @@ export class InventoryPanel {
     if (def.defence != null) stats.push(`Defence: ${def.defence}`);
     if (def.heal_power != null) stats.push(`Heal: ${def.heal_power}`);
     if (def.food_power != null) stats.push(`Food: ${def.food_power}`);
+    if (def.max_mana > 0) stats.push(`Max Mana: +${def.max_mana}`);
+    if (def.mana_on_hit > 0) stats.push(`Mana on Hit: +${def.mana_on_hit}`);
+    if (def.mana_on_damage_taken > 0) stats.push(`Mana on Hit Taken: +${def.mana_on_damage_taken}`);
+    if (def.mana_regen > 0) stats.push(`Mana Regen: +${def.mana_regen}`);
+    if (def.dodge_chance > 0) stats.push(`Dodge: ${def.dodge_chance}%`);
+    if (def.crit_chance > 0) stats.push(`Crit Chance: ${def.crit_chance}%`);
+    if (def.crit_damage !== 150) stats.push(`Crit Dmg: ${def.crit_damage}%`);
 
     // Map raw DB category to display label
     const categoryLabel = this.resolveDisplayCategory(def.category);

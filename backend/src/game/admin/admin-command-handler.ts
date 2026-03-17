@@ -6,6 +6,8 @@ import { grantItemToCharacter } from '../inventory/inventory-grant-service';
 import { sendInventoryState } from '../../websocket/handlers/inventory-state-handler';
 import { forcePhase } from '../world/day-cycle-service';
 import { awardCrowns } from '../currency/crown-service';
+import { getAllAbilities } from '../../db/queries/abilities';
+import { grantAbilityToCharacter, getOwnedAbilities, getCharacterLoadout } from '../../db/queries/loadouts';
 import { log } from '../../logger';
 
 // ---------------------------------------------------------------------------
@@ -35,8 +37,9 @@ export async function handleAdminCommand(session: AuthenticatedSession, rawMessa
     case '/day':             return handleForcePhase(session, 'day', reply);
     case '/night':           return handleForcePhase(session, 'night', reply);
     case '/crown':           return handleGiveCrowns(session, args, reply);
+    case '/skill_all':       return handleSkillAll(session, args, reply);
     default:
-      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown`);
+      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown, /skill_all`);
   }
 }
 
@@ -272,4 +275,65 @@ async function handleGiveCrowns(session: AuthenticatedSession, args: string[], r
   });
 
   reply(true, `Granted ${amount} Crown${amount !== 1 ? 's' : ''} to ${playerName}. New balance: ${newBalance}.`);
+}
+
+// ---------------------------------------------------------------------------
+// /skill_all <player>
+// ---------------------------------------------------------------------------
+
+async function handleSkillAll(session: AuthenticatedSession, args: string[], reply: ReplyFn): Promise<void> {
+  const playerName = args[0];
+  if (!playerName) {
+    reply(false, 'Usage: /skill_all <player>');
+    return;
+  }
+
+  const character = await findByName(playerName);
+  if (!character) {
+    reply(false, `Player '${playerName}' not found.`);
+    return;
+  }
+
+  const allAbilities = await getAllAbilities();
+  if (allAbilities.length === 0) {
+    reply(false, 'No abilities exist in the database yet.');
+    return;
+  }
+
+  const owned = await getOwnedAbilities(character.id);
+  const ownedIds = new Set(owned.map((a) => a.id));
+
+  let granted = 0;
+  for (const ability of allAbilities) {
+    if (!ownedIds.has(ability.id)) {
+      await grantAbilityToCharacter(character.id, ability.id);
+      granted++;
+    }
+  }
+
+  // Push updated loadout state if the player is online
+  const targetSession = getSessionByCharacterId(character.id);
+  if (targetSession) {
+    const [slots, ownedAbilities] = await Promise.all([
+      getCharacterLoadout(character.id),
+      getOwnedAbilities(character.id),
+    ]);
+    sendToSession(targetSession, 'loadout:state', { slots, owned_abilities: ownedAbilities });
+  }
+
+  log('info', 'admin', 'admin_command', {
+    event: 'admin_command',
+    admin_account_id: session.accountId,
+    admin_character_id: session.characterId,
+    command: '/skill_all',
+    target_player: playerName,
+    target_character_id: character.id,
+    args: {},
+    granted,
+    already_owned: allAbilities.length - granted,
+    success: true,
+  });
+
+  const skipped = allAbilities.length - granted;
+  reply(true, `Granted ${granted} abilit${granted !== 1 ? 'ies' : 'y'} to ${playerName}${skipped > 0 ? ` (${skipped} already owned)` : ''}.`);
 }

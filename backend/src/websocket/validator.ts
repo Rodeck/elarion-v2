@@ -54,6 +54,14 @@ const schemas: Record<string, Schema> = {
   'equipment.unequip': {
     slot_name: { type: 'string', required: true, enumValues: ['helmet', 'chestplate', 'left_arm', 'right_arm', 'greaves', 'bracer', 'boots'] },
   },
+  'combat:trigger_active': {
+    combat_id: { type: 'string', required: true, minLength: 36, maxLength: 36 },
+  },
+  'loadout:update': {
+    slot_name: { type: 'string', required: true, enumValues: ['auto_1', 'auto_2', 'auto_3', 'active'] },
+    // ability_id and priority are optional numbers — no strict schema rule here;
+    // handler performs all semantic validation
+  },
 };
 
 export interface ValidationResult {

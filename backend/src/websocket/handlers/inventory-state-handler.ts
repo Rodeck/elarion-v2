@@ -34,6 +34,13 @@ export async function sendInventoryState(session: AuthenticatedSession): Promise
       food_power: row.def_food_power,
       stack_size: row.def_stack_size,
       icon_url: buildIconUrl(row.def_icon_filename),
+      max_mana: row.def_max_mana,
+      mana_on_hit: row.def_mana_on_hit,
+      mana_on_damage_taken: row.def_mana_on_damage_taken,
+      mana_regen: row.def_mana_regen,
+      dodge_chance: row.def_dodge_chance,
+      crit_chance: row.def_crit_chance,
+      crit_damage: row.def_crit_damage,
     },
   }));
 

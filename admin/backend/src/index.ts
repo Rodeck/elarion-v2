@@ -17,6 +17,7 @@ import { adminConfigRouter } from './routes/admin-config';
 import { aiGenerateRouter } from './routes/ai-generate';
 import { encounterTablesRouter } from './routes/encounter-tables';
 import { npcsRouter } from './routes/npcs';
+import { abilitiesRouter } from './routes/abilities';
 
 const app = express();
 
@@ -39,6 +40,10 @@ app.use('/monster-icons', express.static(monsterIconsDir));
 const npcIconsDir = path.resolve(__dirname, '../../../backend/assets/npcs/icons');
 app.use('/npc-icons', express.static(npcIconsDir));
 
+// Serve ability icons statically
+const abilityIconsDir = path.resolve(__dirname, '../../../backend/assets/ability-icons');
+app.use('/ability-icons', express.static(abilityIconsDir));
+
 // Public auth routes (must be before requireAdmin middleware)
 app.use(authRouter);
 
@@ -59,6 +64,7 @@ app.use('/api/admin-config', adminConfigRouter);
 app.use('/api/ai', aiGenerateRouter);
 app.use('/api/encounter-tables', encounterTablesRouter);
 app.use('/api/npcs', npcsRouter);
+app.use('/api/abilities', abilitiesRouter);
 
 if (!process.env['OPENROUTER_API_KEY']) {
   console.log(JSON.stringify({ level: 'warn', event: 'openrouter_key_missing', msg: 'OPENROUTER_API_KEY not set — AI image generation will return 503', timestamp: new Date().toISOString() }));
