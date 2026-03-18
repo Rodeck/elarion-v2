@@ -43,7 +43,18 @@
       "Bash(node_modules/.bin/tsc --noEmit)",
       "Bash(find /d/projects/elarion-v2 -name .env* -o -name *.env)",
       "Bash(find C:Userspajak.claude -type f \\\\\\(-name *.md -o -name *.json \\\\\\))",
-      "Bash(find /d/projects/elarion-v2/admin/backend/src -type f -name *.ts)"
+      "Bash(find /d/projects/elarion-v2/admin/backend/src -type f -name *.ts)",
+      "Bash(ADMIN_PASSWORD=123456789 node scripts/game-entities.js create-item '{\"\"name\"\":\"\"Leather Cap\"\",\"\"category\"\":\"\"helmet\"\",\"\"defence\"\":4}')",
+      "Bash(ADMIN_PASSWORD=123456789 node scripts/game-entities.js create-item '{\"\"name\"\":\"\"Leather Bracers\"\",\"\"category\"\":\"\"bracer\"\",\"\"defence\"\":3}')",
+      "Bash(ADMIN_PASSWORD=123456789 node scripts/game-entities.js create-item '{\"\"name\"\":\"\"Leather Greaves\"\",\"\"category\"\":\"\"greaves\"\",\"\"defence\"\":4}')",
+      "Bash(ADMIN_PASSWORD=123456789 node scripts/game-entities.js create-item '{\"\"name\"\":\"\"Hunting Dagger\"\",\"\"category\"\":\"\"weapon\"\",\"\"weapon_subtype\"\":\"\"dagger\"\",\"\"attack\"\":7}')",
+      "Bash(ADMIN_PASSWORD=123456789 node scripts/game-entities.js create-item '{\"\"name\"\":\"\"Short Bow\"\",\"\"category\"\":\"\"weapon\"\",\"\"weapon_subtype\"\":\"\"bow\"\",\"\"attack\"\":9}')",
+      "Bash(ADMIN_PASSWORD=123456789 node scripts/game-entities.js create-item '{\"\"name\"\":\"\"Crude Wand\"\",\"\"category\"\":\"\"weapon\"\",\"\"weapon_subtype\"\":\"\"wand\"\",\"\"attack\"\":6}')",
+      "Bash(ADMIN_PASSWORD=123456789 node scripts/game-entities.js create-item '{\"\"name\"\":\"\"Herb Potion\"\",\"\"category\"\":\"\"heal\"\",\"\"heal_power\"\":15,\"\"stack_size\"\":10}')",
+      "Bash(ADMIN_PASSWORD=123456789 node scripts/game-entities.js create-item '{\"\"name\"\":\"\"Cooked Meat\"\",\"\"category\"\":\"\"food\"\",\"\"food_power\"\":10,\"\"stack_size\"\":10}')",
+      "Bash(ADMIN_PASSWORD=123456789 node scripts/game-entities.js create-item '{\"\"name\"\":\"\"Iron Ore\"\",\"\"category\"\":\"\"resource\"\",\"\"stack_size\"\":20}')",
+      "Bash(ADMIN_PASSWORD=123456789 node scripts/game-entities.js create-item '{\"\"name\"\":\"\"Herb\"\",\"\"category\"\":\"\"resource\"\",\"\"stack_size\"\":20}')",
+      "Bash(ADMIN_PASSWORD=123456789 node scripts/game-entities.js create-item '{\"\"name\"\":\"\"Wood\"\",\"\"category\"\":\"\"resource\"\",\"\"stack_size\"\":20}')"
     ]
   }
 }

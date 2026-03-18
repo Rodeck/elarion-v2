@@ -27,6 +27,7 @@ export class ItemManager {
   private currentCategory: string = 'all';
   private editingId: number | null = null;
   private acceptedBase64: string | null = null;
+  private updateAiGenBtn: (() => void) | null = null;
 
   init(container: HTMLElement): void {
     this.container = container;
@@ -129,6 +130,7 @@ export class ItemManager {
           <div class="item-filter-bar" id="item-filter-bar">
             <button class="btn btn--active" data-cat="all">All</button>
             ${VALID_CATEGORIES.map((c) => `<button class="btn" data-cat="${c}">${this.labelFor(c)}</button>`).join('')}
+            <button class="btn" id="item-refresh-btn" title="Refresh items list" style="margin-left:auto;">&#x21bb; Refresh</button>
           </div>
           <div id="item-list-container">
             <p style="color:#3d4262;font-size:0.875rem;">Loading...</p>
@@ -149,10 +151,21 @@ export class ItemManager {
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-cat]');
       if (!btn) return;
       this.currentCategory = btn.dataset['cat'] ?? 'all';
-      bar.querySelectorAll('.btn').forEach((b) => b.classList.remove('btn--active'));
+      bar.querySelectorAll('[data-cat]').forEach((b) => b.classList.remove('btn--active'));
       btn.classList.add('btn--active');
       await this.load();
     });
+
+    const refreshBtn = this.container.querySelector<HTMLButtonElement>('#item-refresh-btn');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', async () => {
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = '↻ Refreshing...';
+        await this.load();
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = '↻ Refresh';
+      });
+    }
   }
 
   private attachFormListeners(): void {
@@ -189,11 +202,11 @@ export class ItemManager {
     const itemNameInput = this.container.querySelector<HTMLInputElement>('#item-name')!;
 
     // Disable AI gen button when name is empty
-    const updateAiBtn = () => {
+    this.updateAiGenBtn = () => {
       aiGenBtn.disabled = !itemNameInput.value.trim();
     };
-    itemNameInput.addEventListener('input', updateAiBtn);
-    updateAiBtn();
+    itemNameInput.addEventListener('input', this.updateAiGenBtn);
+    this.updateAiGenBtn();
 
     aiGenBtn.addEventListener('click', async () => {
       const name = itemNameInput.value.trim();
@@ -287,6 +300,7 @@ export class ItemManager {
     const nameEl = this.container.querySelector<HTMLElement>('#icon-filename');
     if (nameEl) nameEl.textContent = 'No file chosen';
     this.updateConditionalFields(form, '');
+    this.updateAiGenBtn?.();
   }
 
   private populateForm(item: ItemDefinitionResponse): void {
@@ -323,6 +337,7 @@ export class ItemManager {
     this.container.querySelector<HTMLElement>('#item-form-submit')!.textContent = 'Save Changes';
     this.container.querySelector<HTMLElement>('#item-form-cancel')!.style.display = '';
     this.container.querySelector<HTMLElement>('#item-error')!.style.display = 'none';
+    this.updateAiGenBtn?.();
   }
 
   private renderList(): void {
