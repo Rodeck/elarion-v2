@@ -1169,6 +1169,21 @@
     color: #44495e;
   }
 
+  /* ── Overlay Tooltip ────────────────────────────────────────── */
+  .overlay-tooltip {
+    position: absolute;
+    pointer-events: none;
+    z-index: 20;
+    background: #111520;
+    border: 1px solid #2a2f42;
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.625rem;
+    font-size: 0.75rem;
+    color: #c8cad6;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  }
+
   /* ── Misc ────────────────────────────────────────────────────── */
   hr {
     border: none;

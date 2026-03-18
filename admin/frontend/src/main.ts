@@ -24,6 +24,7 @@ import {
   createBuilding,
   updateBuilding,
   deleteBuilding,
+  fetchBuildingItems,
   type MapFull,
   type PathNode,
   type PathEdge,
@@ -118,9 +119,11 @@ function destroyAll(): void {
 async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' = 'maps'): Promise<void> {
   destroyAll();
 
-  // Tab bar
+  // Tab bar — hidden until authenticated
+  const token = localStorage.getItem('admin_token');
   const tabBar = document.createElement('div');
   tabBar.className = 'admin-tab-bar';
+  if (!token) tabBar.style.display = 'none';
   tabBar.innerHTML = `
     <button class="btn ${activeTab === 'maps' ? 'btn--active' : ''}" id="tab-maps">Map Editor</button>
     <button class="btn ${activeTab === 'items' ? 'btn--active' : ''}" id="tab-items">Items</button>
@@ -536,8 +539,36 @@ async function showEditor(mapId: number): Promise<void> {
     }
   });
 
+  // Item overlay toggle
+  let itemOverlayActive = false;
+  toolbar.setOnItemOverlay(async () => {
+    itemOverlayActive = !itemOverlayActive;
+    toolbar!.setItemOverlayActive(itemOverlayActive);
+    if (itemOverlayActive && canvas) {
+      try {
+        const data = await fetchBuildingItems(mapId);
+        canvas.setOverlayData(data);
+        canvas.overlayEnabled = true;
+      } catch (err) {
+        alert(`Failed to load item overlay: ${(err as Error).message}`);
+        itemOverlayActive = false;
+        toolbar!.setItemOverlayActive(false);
+      }
+    } else if (canvas) {
+      canvas.clearOverlay();
+    }
+  });
+
   toolbar.setOnSave(async () => {
     await saveMap();
+    // Refresh overlay if active
+    if (itemOverlayActive && canvas) {
+      try {
+        const data = await fetchBuildingItems(mapId);
+        canvas.setOverlayData(data);
+        canvas.overlayEnabled = true;
+      } catch { /* ignore refresh failure */ }
+    }
   });
 
   toolbar.setOnBack(() => {

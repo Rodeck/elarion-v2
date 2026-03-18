@@ -44,7 +44,7 @@ export class MapListView {
       <input id="username-input" type="text" autocomplete="username" placeholder="Username" required />
       <label for="password-input">Password</label>
       <input id="password-input" type="password" autocomplete="current-password" placeholder="Password" required />
-      <button type="submit" class="btn btn--primary">Sign In</button>
+      <button type="submit" class="btn btn--primary" style="margin-top:1.25rem">Sign In</button>
       <p class="error" id="login-error" style="display:none"></p>
     `;
 
@@ -62,6 +62,9 @@ export class MapListView {
       try {
         const token = await login(usernameInput.value.trim(), passwordInput.value);
         localStorage.setItem('admin_token', token);
+        // Show the tab bar now that user is authenticated
+        const tabBar = document.querySelector('.admin-tab-bar') as HTMLElement;
+        if (tabBar) tabBar.style.display = '';
         await this.render();
       } catch (err) {
         passwordInput.value = '';

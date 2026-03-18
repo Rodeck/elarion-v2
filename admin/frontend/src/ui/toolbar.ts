@@ -38,7 +38,9 @@ export class Toolbar {
   private onSave: (() => void) | null = null;
   private onBack: (() => void) | null = null;
   private onConfiguration: (() => void) | null = null;
+  private onItemOverlay: (() => void) | null = null;
   private configButton!: HTMLButtonElement;
+  private itemOverlayButton!: HTMLButtonElement;
 
   constructor(parent: HTMLElement) {
     this.container = document.createElement('div');
@@ -132,6 +134,15 @@ export class Toolbar {
     spawnBtn.addEventListener('click', () => this.onSetSpawn?.());
     group.appendChild(spawnBtn);
 
+    // Item Overlay -----------------------------------------------------------
+    this.itemOverlayButton = document.createElement('button');
+    this.itemOverlayButton.className = 'toolbar-btn';
+    this.itemOverlayButton.textContent = 'Items';
+    this.itemOverlayButton.addEventListener('click', () => {
+      this.onItemOverlay?.();
+    });
+    group.appendChild(this.itemOverlayButton);
+
     // Configuration ----------------------------------------------------------
     this.configButton = document.createElement('button');
     this.configButton.className = 'toolbar-btn';
@@ -189,6 +200,14 @@ export class Toolbar {
 
   setConfigurationActive(active: boolean): void {
     this.configButton.classList.toggle('toolbar-btn--active', active);
+  }
+
+  setOnItemOverlay(cb: () => void): void {
+    this.onItemOverlay = cb;
+  }
+
+  setItemOverlayActive(active: boolean): void {
+    this.itemOverlayButton.classList.toggle('toolbar-btn--active', active);
   }
 
   enableSave(enabled: boolean): void {

@@ -19,6 +19,7 @@ import { encounterTablesRouter } from './routes/encounter-tables';
 import { npcsRouter } from './routes/npcs';
 import { abilitiesRouter } from './routes/abilities';
 import { recipesRouter } from './routes/recipes';
+import { buildingItemsRouter } from './routes/building-items';
 
 const app = express();
 
@@ -56,6 +57,7 @@ app.use('/api/maps', mapsRouter);
 app.use('/api/maps', nodesRouter);
 app.use('/api/maps', edgesRouter);
 app.use('/api/maps', buildingsRouter);
+app.use('/api/maps', buildingItemsRouter);
 app.use('/api/maps', uploadRouter);
 app.use('/api/items', itemsRouter);
 app.use('/api/monsters', monstersRouter);

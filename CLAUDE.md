@@ -32,6 +32,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client), `jose` (JWT) (016-combat-system)
 - PostgreSQL 16 — migration `018_combat_system.sql`; in-memory `Map<characterId, CombatSession>` for active sessions (016-combat-system)
 - PostgreSQL 16 — new tables `crafting_recipes`, `recipe_ingredients`, `crafting_sessions`; `npcs` table extended with `is_crafter BOOLEAN` (017-crafting-system)
+- TypeScript 5.x (admin backend + admin frontend) + Express 4 (admin backend), Canvas 2D API (admin frontend), `pg` (PostgreSQL client) (018-building-item-overlay)
+- PostgreSQL 16 — read-only queries against existing tables (no new tables or migrations) (018-building-item-overlay)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -57,9 +59,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 018-building-item-overlay: Added TypeScript 5.x (admin backend + admin frontend) + Express 4 (admin backend), Canvas 2D API (admin frontend), `pg` (PostgreSQL client)
 - 017-crafting-system: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client)
 - 016-combat-system: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
-- 015-currency-system: Added TypeScript 5.x (all packages: frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client)
 
 
 

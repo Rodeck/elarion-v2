@@ -418,6 +418,32 @@ export async function deleteBuildingAction(
 }
 
 // ---------------------------------------------------------------------------
+// Building Items Overlay
+// ---------------------------------------------------------------------------
+
+export interface BuildingOverlayItem {
+  item_id: number;
+  item_name: string;
+  icon_filename: string;
+  obtain_method: 'loot' | 'craft';
+  source_name: string;
+}
+
+export interface BuildingOverlayEntry {
+  building_id: number;
+  building_name: string;
+  items: BuildingOverlayItem[];
+}
+
+export interface BuildingItemsResponse {
+  buildings: BuildingOverlayEntry[];
+}
+
+export async function fetchBuildingItems(mapId: number): Promise<BuildingItemsResponse> {
+  return request<BuildingItemsResponse>(`${BASE}/${mapId}/building-items`);
+}
+
+// ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 

@@ -2,6 +2,8 @@
 // Elarion Map Editor — HTML5 Canvas 2D Rendering Engine
 // ---------------------------------------------------------------------------
 
+import type { BuildingItemsResponse, BuildingOverlayItem } from './api';
+
 // ---------------------------------------------------------------------------
 // Data Types
 // ---------------------------------------------------------------------------
@@ -64,6 +66,19 @@ const LABEL_COLOR = '#ffffff';
 const LABEL_SHADOW = '#000000';
 
 const DIAMOND_SIZE = 10;
+
+// Overlay
+const OVERLAY_ICON_SIZE = 24;
+const OVERLAY_ICON_GAP = 2;
+const OVERLAY_ICONS_PER_ROW = 6;
+const OVERLAY_BORDER_WIDTH = 2;
+const OVERLAY_OFFSET_Y = 16; // offset below building diamond
+const OVERLAY_COLORS: Record<string, string> = {
+  loot: '#f87171',
+  craft: '#60a5fa',
+  found: '#4ade80',
+  bought: '#a78bfa',
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -153,6 +168,13 @@ export class MapCanvas {
   private dragLabelOrigOffsetX = 0;
   private dragLabelOrigOffsetY = 0;
 
+  // Item overlay
+  overlayEnabled = false;
+  private overlayData: Map<number, BuildingOverlayItem[]> | null = null;
+  private overlayIcons: Map<string, HTMLImageElement> = new Map();
+  private tooltipEl: HTMLDivElement | null = null;
+  private containerEl: HTMLElement | null = null;
+
   // Render loop
   private needsRedraw = true;
   private animFrameId = 0;
@@ -171,6 +193,7 @@ export class MapCanvas {
   // -------------------------------------------------------------------------
 
   constructor(container: HTMLElement) {
+    this.containerEl = container;
     this.canvas = document.createElement('canvas');
     this.canvas.style.display = 'block';
     this.canvas.style.width = '100%';
@@ -201,7 +224,16 @@ export class MapCanvas {
     this.canvas.addEventListener('mouseup', this.handleMouseUp);
     this.canvas.addEventListener('wheel', this.handleWheel, { passive: false });
     this.canvas.addEventListener('contextmenu', this.handleContextMenu);
+    this.canvas.addEventListener('mouseleave', () => {
+      if (this.tooltipEl) this.tooltipEl.style.display = 'none';
+    });
     window.addEventListener('resize', this.handleResize);
+
+    // Create tooltip element
+    this.tooltipEl = document.createElement('div');
+    this.tooltipEl.className = 'overlay-tooltip';
+    this.tooltipEl.style.display = 'none';
+    container.appendChild(this.tooltipEl);
 
     // Start render loop
     this.renderLoop();
@@ -356,6 +388,20 @@ export class MapCanvas {
       }
       return;
     }
+
+    // Overlay tooltip
+    if (this.tooltipEl && this.overlayEnabled && this.overlayData) {
+      const hit = this.getOverlayItemAt(world.x, world.y);
+      if (hit) {
+        const label = hit.item.obtain_method === 'loot' ? 'Loot from' : 'Crafted by';
+        this.tooltipEl.textContent = `${hit.item.item_name} — ${label} ${hit.item.source_name}`;
+        this.tooltipEl.style.left = `${sx + 12}px`;
+        this.tooltipEl.style.top = `${sy + 12}px`;
+        this.tooltipEl.style.display = 'block';
+      } else {
+        this.tooltipEl.style.display = 'none';
+      }
+    }
   }
 
   private onMouseUp(e: MouseEvent): void {
@@ -394,24 +440,18 @@ export class MapCanvas {
   private onWheel(e: WheelEvent): void {
     e.preventDefault();
 
-    // Pinch-to-zoom (ctrlKey is set by trackpad pinch gestures)
-    if (e.ctrlKey) {
-      const rect = this.canvas.getBoundingClientRect();
-      const sx = e.clientX - rect.left;
-      const sy = e.clientY - rect.top;
+    const rect = this.canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
 
-      const oldScale = this.scale;
-      const delta = -e.deltaY * ZOOM_FACTOR;
-      this.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, this.scale * (1 + delta)));
+    const oldScale = this.scale;
+    const delta = -e.deltaY * ZOOM_FACTOR;
+    this.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, this.scale * (1 + delta)));
 
-      const ratio = this.scale / oldScale;
-      this.offsetX = sx - (sx - this.offsetX) * ratio;
-      this.offsetY = sy - (sy - this.offsetY) * ratio;
-    } else {
-      // Two-finger drag = pan
-      this.offsetX -= e.deltaX;
-      this.offsetY -= e.deltaY;
-    }
+    // Zoom towards cursor position
+    const ratio = this.scale / oldScale;
+    this.offsetX = sx - (sx - this.offsetX) * ratio;
+    this.offsetY = sy - (sy - this.offsetY) * ratio;
 
     this.needsRedraw = true;
   }
@@ -541,6 +581,11 @@ export class MapCanvas {
 
     // 6. Buildings
     this.renderBuildings(ctx);
+
+    // 7. Item overlay (if enabled)
+    if (this.overlayEnabled && this.overlayData) {
+      this.renderItemOverlay(ctx);
+    }
 
     ctx.restore();
   }
@@ -826,6 +871,136 @@ export class MapCanvas {
     this.canvas.style.cursor = cursor;
   }
 
+  // -------------------------------------------------------------------------
+  // Public API — Item Overlay
+  // -------------------------------------------------------------------------
+
+  setOverlayData(data: BuildingItemsResponse): void {
+    this.overlayData = new Map();
+    const filenames = new Set<string>();
+
+    for (const b of data.buildings) {
+      if (b.items.length > 0) {
+        this.overlayData.set(b.building_id, b.items);
+        for (const item of b.items) {
+          if (item.icon_filename) {
+            filenames.add(item.icon_filename);
+          }
+        }
+      }
+    }
+
+    // Preload icon images
+    for (const filename of filenames) {
+      if (!this.overlayIcons.has(filename)) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          this.needsRedraw = true;
+        };
+        img.src = `/item-icons/${filename}`;
+        this.overlayIcons.set(filename, img);
+      }
+    }
+
+    this.needsRedraw = true;
+  }
+
+  clearOverlay(): void {
+    this.overlayData = null;
+    this.overlayEnabled = false;
+    if (this.tooltipEl) {
+      this.tooltipEl.style.display = 'none';
+    }
+    this.needsRedraw = true;
+  }
+
+  // -------------------------------------------------------------------------
+  // Item Overlay — Rendering
+  // -------------------------------------------------------------------------
+
+  private renderItemOverlay(ctx: CanvasRenderingContext2D): void {
+    if (!this.overlayData) return;
+
+    for (const [buildingId, items] of this.overlayData) {
+      const building = this.buildings.find((b) => b.id === buildingId);
+      if (!building) continue;
+      const node = this.nodes.find((n) => n.id === building.node_id);
+      if (!node) continue;
+
+      const cellSize = OVERLAY_ICON_SIZE + OVERLAY_BORDER_WIDTH * 2 + OVERLAY_ICON_GAP;
+      const cols = Math.min(items.length, OVERLAY_ICONS_PER_ROW);
+      const gridWidth = cols * cellSize - OVERLAY_ICON_GAP;
+      const startX = node.x - gridWidth / 2;
+      const startY = node.y + OVERLAY_OFFSET_Y;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]!;
+        const col = i % OVERLAY_ICONS_PER_ROW;
+        const row = Math.floor(i / OVERLAY_ICONS_PER_ROW);
+        const x = startX + col * cellSize;
+        const y = startY + row * cellSize;
+
+        const borderColor = OVERLAY_COLORS[item.obtain_method] || '#888';
+
+        // Background
+        ctx.fillStyle = '#111520';
+        ctx.fillRect(x, y, OVERLAY_ICON_SIZE + OVERLAY_BORDER_WIDTH * 2, OVERLAY_ICON_SIZE + OVERLAY_BORDER_WIDTH * 2);
+
+        // Border
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = OVERLAY_BORDER_WIDTH;
+        ctx.strokeRect(
+          x + OVERLAY_BORDER_WIDTH / 2,
+          y + OVERLAY_BORDER_WIDTH / 2,
+          OVERLAY_ICON_SIZE + OVERLAY_BORDER_WIDTH,
+          OVERLAY_ICON_SIZE + OVERLAY_BORDER_WIDTH,
+        );
+
+        // Icon image
+        if (item.icon_filename) {
+          const img = this.overlayIcons.get(item.icon_filename);
+          if (img && img.complete && img.naturalWidth > 0) {
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, x + OVERLAY_BORDER_WIDTH, y + OVERLAY_BORDER_WIDTH, OVERLAY_ICON_SIZE, OVERLAY_ICON_SIZE);
+          }
+        }
+      }
+    }
+  }
+
+  /** Get overlay item at world coordinates (for tooltip hit-testing). */
+  getOverlayItemAt(worldX: number, worldY: number): { item: BuildingOverlayItem; screenX: number; screenY: number } | null {
+    if (!this.overlayEnabled || !this.overlayData) return null;
+
+    for (const [buildingId, items] of this.overlayData) {
+      const building = this.buildings.find((b) => b.id === buildingId);
+      if (!building) continue;
+      const node = this.nodes.find((n) => n.id === building.node_id);
+      if (!node) continue;
+
+      const cellSize = OVERLAY_ICON_SIZE + OVERLAY_BORDER_WIDTH * 2 + OVERLAY_ICON_GAP;
+      const cols = Math.min(items.length, OVERLAY_ICONS_PER_ROW);
+      const gridWidth = cols * cellSize - OVERLAY_ICON_GAP;
+      const startX = node.x - gridWidth / 2;
+      const startY = node.y + OVERLAY_OFFSET_Y;
+
+      for (let i = 0; i < items.length; i++) {
+        const col = i % OVERLAY_ICONS_PER_ROW;
+        const row = Math.floor(i / OVERLAY_ICONS_PER_ROW);
+        const x = startX + col * cellSize;
+        const y = startY + row * cellSize;
+        const totalSize = OVERLAY_ICON_SIZE + OVERLAY_BORDER_WIDTH * 2;
+
+        if (worldX >= x && worldX <= x + totalSize && worldY >= y && worldY <= y + totalSize) {
+          const screen = this.worldToScreen(x, y);
+          return { item: items[i]!, screenX: screen.x, screenY: screen.y };
+        }
+      }
+    }
+    return null;
+  }
+
   destroy(): void {
     this.destroyed = true;
     cancelAnimationFrame(this.animFrameId);
@@ -836,6 +1011,11 @@ export class MapCanvas {
     this.canvas.removeEventListener('wheel', this.handleWheel);
     this.canvas.removeEventListener('contextmenu', this.handleContextMenu);
     window.removeEventListener('resize', this.handleResize);
+
+    if (this.tooltipEl && this.tooltipEl.parentElement) {
+      this.tooltipEl.parentElement.removeChild(this.tooltipEl);
+    }
+    this.tooltipEl = null;
 
     if (this.canvas.parentElement) {
       this.canvas.parentElement.removeChild(this.canvas);
