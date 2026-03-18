@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import express, { Router, Request, Response } from 'express';
 import multer from 'multer';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -131,6 +131,108 @@ function validateItemFields(body: Record<string, unknown>, isCreate: boolean): s
 
   return null;
 }
+
+// ─── POST /api/items/batch-icons ─────────────────────────────────────────────
+
+itemsRouter.post(
+  '/batch-icons',
+  express.json({ limit: '50mb' }),
+  async (req: Request, res: Response) => {
+    const body = req.body as Record<string, unknown>;
+    const icons = body['icons'];
+
+    if (!Array.isArray(icons) || icons.length === 0) {
+      return res.status(400).json({ error: 'icons must be a non-empty array' });
+    }
+    if (icons.length > 256) {
+      return res.status(400).json({ error: 'icons array must not exceed 256 entries' });
+    }
+
+    // Check for duplicate item_ids
+    const itemIds = icons.map((e: Record<string, unknown>) => e['item_id']);
+    const idSet = new Set(itemIds);
+    if (idSet.size !== itemIds.length) {
+      return res.status(400).json({ error: 'Duplicate item_id values in request' });
+    }
+
+    const results: Array<{ item_id: number; icon_url?: string; error?: string; status: string }> = [];
+    let updated = 0;
+    let failed = 0;
+
+    for (const entry of icons) {
+      const itemId = Number((entry as Record<string, unknown>)['item_id']);
+      const iconBase64 = (entry as Record<string, unknown>)['icon_base64'] as string | undefined;
+
+      if (!Number.isInteger(itemId) || itemId <= 0) {
+        results.push({ item_id: itemId, error: 'Invalid item_id', status: 'error' });
+        failed++;
+        continue;
+      }
+      if (!iconBase64 || typeof iconBase64 !== 'string') {
+        results.push({ item_id: itemId, error: 'Missing icon_base64', status: 'error' });
+        failed++;
+        continue;
+      }
+
+      let buf: Buffer;
+      try {
+        buf = Buffer.from(iconBase64, 'base64');
+      } catch {
+        results.push({ item_id: itemId, error: 'Invalid base64 data', status: 'error' });
+        failed++;
+        continue;
+      }
+
+      if (!isValidPng(buf)) {
+        results.push({ item_id: itemId, error: 'Data is not a valid PNG', status: 'error' });
+        failed++;
+        continue;
+      }
+
+      try {
+        const existing = await getItemDefinitionById(itemId);
+        if (!existing) {
+          results.push({ item_id: itemId, error: 'Item not found', status: 'error' });
+          failed++;
+          continue;
+        }
+
+        // Delete old icon if present
+        if (existing.icon_filename) {
+          const oldPath = path.resolve(ICONS_DIR, existing.icon_filename);
+          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        }
+
+        // Save new icon
+        const newFilename = `${crypto.randomUUID()}.png`;
+        const newPath = path.resolve(ICONS_DIR, newFilename);
+        fs.mkdirSync(ICONS_DIR, { recursive: true });
+        fs.writeFileSync(newPath, buf);
+
+        // Update DB
+        await updateItemDefinition(itemId, { icon_filename: newFilename } as Parameters<typeof updateItemDefinition>[1]);
+
+        results.push({ item_id: itemId, icon_url: buildIconUrl(newFilename)!, status: 'ok' });
+        updated++;
+      } catch (err) {
+        results.push({ item_id: itemId, error: String(err), status: 'error' });
+        failed++;
+      }
+    }
+
+    log('info', 'batch_icons_updated', {
+      admin: req.username,
+      total: icons.length,
+      updated,
+      failed,
+    });
+
+    const status = failed > 0 && updated > 0 ? 207 : failed > 0 ? 400 : 200;
+    const responseBody: Record<string, unknown> = { updated, results };
+    if (failed > 0) responseBody['failed'] = failed;
+    return res.status(status).json(responseBody);
+  },
+);
 
 // ─── GET /api/items ──────────────────────────────────────────────────────────
 

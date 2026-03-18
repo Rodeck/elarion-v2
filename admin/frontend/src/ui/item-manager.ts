@@ -6,6 +6,7 @@ import {
   type ItemDefinitionResponse,
 } from '../editor/api';
 import { ImageGenDialog } from './image-gen-dialog';
+import { SpriteSheetDialog } from './sprite-sheet-dialog';
 
 const VALID_CATEGORIES = [
   'resource', 'food', 'heal', 'weapon',
@@ -130,7 +131,8 @@ export class ItemManager {
           <div class="item-filter-bar" id="item-filter-bar">
             <button class="btn btn--active" data-cat="all">All</button>
             ${VALID_CATEGORIES.map((c) => `<button class="btn" data-cat="${c}">${this.labelFor(c)}</button>`).join('')}
-            <button class="btn" id="item-refresh-btn" title="Refresh items list" style="margin-left:auto;">&#x21bb; Refresh</button>
+            <button class="btn btn--secondary" id="sprite-sheet-btn" title="Cut icons from a sprite sheet" style="margin-left:auto;">&#x2702; Sprite Sheet</button>
+            <button class="btn" id="item-refresh-btn" title="Refresh items list">&#x21bb; Refresh</button>
           </div>
           <div id="item-list-container">
             <p style="color:#3d4262;font-size:0.875rem;">Loading...</p>
@@ -164,6 +166,14 @@ export class ItemManager {
         await this.load();
         refreshBtn.disabled = false;
         refreshBtn.textContent = '↻ Refresh';
+      });
+    }
+
+    const spriteSheetBtn = this.container.querySelector<HTMLButtonElement>('#sprite-sheet-btn');
+    if (spriteSheetBtn) {
+      spriteSheetBtn.addEventListener('click', async () => {
+        const dialog = new SpriteSheetDialog(() => this.load());
+        await dialog.open();
       });
     }
   }

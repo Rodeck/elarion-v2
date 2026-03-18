@@ -24,7 +24,11 @@ import { buildingItemsRouter } from './routes/building-items';
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use((req, res, next) => {
+  // Skip global JSON parser for batch-icons (handled by route-level parser with higher limit)
+  if (req.path === '/api/items/batch-icons') return next();
+  express.json()(req, res, next);
+});
 
 // Serve uploaded map images statically
 const imagesDir = path.resolve(__dirname, '../../../backend/assets/maps/images');

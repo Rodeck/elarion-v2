@@ -504,6 +504,35 @@ export async function deleteItem(id: number): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Batch Item Icons (Sprite Sheet Tool)
+// ---------------------------------------------------------------------------
+
+export interface BatchIconEntry {
+  item_id: number;
+  icon_base64: string;
+}
+
+export interface BatchIconResult {
+  item_id: number;
+  icon_url?: string;
+  error?: string;
+  status: string;
+}
+
+export interface BatchIconsResponse {
+  updated: number;
+  failed?: number;
+  results: BatchIconResult[];
+}
+
+export async function batchUpdateIcons(icons: BatchIconEntry[]): Promise<BatchIconsResponse> {
+  return request<BatchIconsResponse>(`${ITEMS_BASE}/batch-icons`, {
+    method: 'POST',
+    body: JSON.stringify({ icons }),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Monsters
 // ---------------------------------------------------------------------------
 
