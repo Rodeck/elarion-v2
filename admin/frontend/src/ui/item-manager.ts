@@ -9,7 +9,7 @@ import { ImageGenDialog } from './image-gen-dialog';
 
 const VALID_CATEGORIES = [
   'resource', 'food', 'heal', 'weapon',
-  'boots', 'shield', 'greaves', 'bracer', 'tool',
+  'helmet', 'chestplate', 'boots', 'shield', 'greaves', 'bracer', 'tool',
 ] as const;
 
 const VALID_WEAPON_SUBTYPES = [
@@ -17,7 +17,7 @@ const VALID_WEAPON_SUBTYPES = [
 ] as const;
 
 const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food']);
-const DEFENCE_CATEGORIES = new Set(['boots', 'shield', 'greaves', 'bracer']);
+const DEFENCE_CATEGORIES = new Set(['helmet', 'chestplate', 'boots', 'shield', 'greaves', 'bracer']);
 
 type ItemCategory = typeof VALID_CATEGORIES[number];
 
@@ -429,7 +429,8 @@ export class ItemManager {
   private labelFor(category: string): string {
     const labels: Record<string, string> = {
       resource: 'Resource', food: 'Food', heal: 'Heal', weapon: 'Weapon',
-      boots: 'Boots', shield: 'Shield', greaves: 'Greaves', bracer: 'Bracer', tool: 'Tool',
+      helmet: 'Helmet', chestplate: 'Chestplate', boots: 'Boots', shield: 'Shield',
+      greaves: 'Greaves', bracer: 'Bracer', tool: 'Tool',
     };
     return labels[category] ?? category;
   }
