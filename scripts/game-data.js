@@ -1,0 +1,537 @@
+#!/usr/bin/env node
+// game-data.js — Query game database for planning and content design
+// Usage: node scripts/game-data.js <command> [args...]
+
+const path = require('path');
+const { Pool } = require(path.join(__dirname, '..', 'backend', 'node_modules', 'pg'));
+
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/elarion_dev';
+const pool = new Pool({ connectionString: DATABASE_URL, max: 2 });
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+function table(rows, columns) {
+  if (!rows.length) { console.log('  (no data)'); return; }
+  const cols = columns || Object.keys(rows[0]);
+  const widths = cols.map(c => Math.max(c.length, ...rows.map(r => String(r[c] ?? '').length)));
+  const sep = widths.map(w => '─'.repeat(w + 2)).join('┼');
+  const header = cols.map((c, i) => ` ${c.padEnd(widths[i])} `).join('│');
+  console.log(header);
+  console.log(sep);
+  for (const row of rows) {
+    console.log(cols.map((c, i) => ` ${String(row[c] ?? '').padEnd(widths[i])} `).join('│'));
+  }
+}
+
+function section(title) { console.log(`\n═══ ${title} ${'═'.repeat(Math.max(0, 60 - title.length))}`); }
+
+// ─── Commands ──────────────────────────────────────────────────────────────────
+
+async function overview() {
+  const counts = await Promise.all([
+    pool.query(`SELECT COUNT(*) as n FROM item_definitions`),
+    pool.query(`SELECT COUNT(*) as n FROM monsters`),
+    pool.query(`SELECT COUNT(*) as n FROM map_zones`),
+    pool.query(`SELECT COUNT(*) as n FROM buildings`),
+    pool.query(`SELECT COUNT(*) as n FROM npcs`),
+    pool.query(`SELECT COUNT(*) as n FROM crafting_recipes`),
+    pool.query(`SELECT COUNT(*) as n FROM abilities`),
+    pool.query(`SELECT COUNT(*) as n FROM characters`),
+    pool.query(`SELECT COUNT(*) as n FROM accounts`),
+  ]);
+  const labels = ['Items', 'Monsters', 'Map Zones', 'Buildings', 'NPCs', 'Crafting Recipes', 'Abilities', 'Characters', 'Accounts'];
+  section('Game Overview');
+  table(labels.map((l, i) => ({ entity: l, count: counts[i].rows[0].n })));
+
+  // Categories breakdown
+  section('Items by Category');
+  const cats = await pool.query(`SELECT category, COUNT(*) as count FROM item_definitions GROUP BY category ORDER BY count DESC`);
+  table(cats.rows);
+
+  // Zones summary
+  section('Zones');
+  const zones = await pool.query(`
+    SELECT z.id, z.name, z.map_type, z.min_level,
+      (SELECT COUNT(*) FROM buildings b WHERE b.zone_id = z.id) as buildings,
+      (SELECT COUNT(*) FROM path_nodes pn WHERE pn.zone_id = z.id) as nodes,
+      (SELECT COUNT(*) FROM map_random_encounter_tables re WHERE re.zone_id = z.id) as encounter_types
+    FROM map_zones z ORDER BY z.id
+  `);
+  table(zones.rows);
+}
+
+async function items(category) {
+  const q = category
+    ? `SELECT id, name, category, weapon_subtype, attack, defence, heal_power, food_power, stack_size,
+         dodge_chance, crit_chance, crit_damage, max_mana, mana_on_hit
+       FROM item_definitions WHERE category = $1 ORDER BY id`
+    : `SELECT id, name, category, weapon_subtype, attack, defence, heal_power, food_power, stack_size
+       FROM item_definitions ORDER BY category, id`;
+  const params = category ? [category] : [];
+  const res = await pool.query(q, params);
+  section(category ? `Items — ${category}` : 'All Items');
+  table(res.rows);
+
+  if (!category) {
+    console.log('\nTip: filter by category with: game-data items <category>');
+    console.log('Categories: resource, food, heal, weapon, boots, shield, greaves, bracer, tool, helmet, chestplate');
+  }
+}
+
+async function itemDetail(id) {
+  const res = await pool.query(`SELECT * FROM item_definitions WHERE id = $1`, [id]);
+  if (!res.rows.length) { console.log(`Item #${id} not found`); return; }
+  const item = res.rows[0];
+
+  section(`Item #${id}: ${item.name}`);
+  console.log(`  Category:       ${item.category}${item.weapon_subtype ? ` (${item.weapon_subtype})` : ''}`);
+  console.log(`  Stack Size:     ${item.stack_size ?? 'unstackable'}`);
+  if (item.attack)     console.log(`  Attack:         ${item.attack}`);
+  if (item.defence)    console.log(`  Defence:        ${item.defence}`);
+  if (item.heal_power) console.log(`  Heal Power:     ${item.heal_power}`);
+  if (item.food_power) console.log(`  Food Power:     ${item.food_power}`);
+  if (item.max_mana)   console.log(`  Max Mana:       ${item.max_mana}`);
+  if (item.mana_on_hit) console.log(`  Mana on Hit:    ${item.mana_on_hit}`);
+  if (item.mana_on_damage_taken) console.log(`  Mana on Dmg:    ${item.mana_on_damage_taken}`);
+  if (item.mana_regen) console.log(`  Mana Regen:     ${item.mana_regen}`);
+  if (item.dodge_chance) console.log(`  Dodge Chance:   ${item.dodge_chance}%`);
+  if (item.crit_chance)  console.log(`  Crit Chance:    ${item.crit_chance}%`);
+  if (item.crit_damage && item.crit_damage !== 150) console.log(`  Crit Damage:    ${item.crit_damage}%`);
+  if (item.icon_filename) console.log(`  Icon:           ${item.icon_filename}`);
+
+  // Where does this item drop?
+  const drops = await pool.query(`
+    SELECT m.id as monster_id, m.name as monster, ml.drop_chance, ml.quantity
+    FROM monster_loot ml JOIN monsters m ON m.id = ml.monster_id
+    WHERE ml.item_def_id = $1 ORDER BY ml.drop_chance DESC
+  `, [id]);
+  if (drops.rows.length) {
+    section('Dropped By');
+    table(drops.rows);
+  }
+
+  // Which recipes use this as ingredient?
+  const ingredients = await pool.query(`
+    SELECT cr.id as recipe_id, cr.name as recipe, n.name as crafter_npc, ri.quantity as qty_needed
+    FROM recipe_ingredients ri
+    JOIN crafting_recipes cr ON cr.id = ri.recipe_id
+    JOIN npcs n ON n.id = cr.npc_id
+    WHERE ri.item_def_id = $1 ORDER BY cr.name
+  `, [id]);
+  if (ingredients.rows.length) {
+    section('Used in Recipes (as ingredient)');
+    table(ingredients.rows);
+  }
+
+  // Which recipes produce this?
+  const produced = await pool.query(`
+    SELECT cr.id as recipe_id, cr.name as recipe, n.name as crafter_npc, cr.output_quantity as qty_produced,
+      cr.cost_crowns, cr.craft_time_seconds as craft_time_s
+    FROM crafting_recipes cr JOIN npcs n ON n.id = cr.npc_id
+    WHERE cr.output_item_id = $1 ORDER BY cr.name
+  `, [id]);
+  if (produced.rows.length) {
+    section('Produced by Recipes');
+    table(produced.rows);
+  }
+
+  // Expedition rewards containing this item
+  const expeditions = await pool.query(`
+    SELECT ba.id as action_id, b.name as building, z.name as zone, ba.config
+    FROM building_actions ba
+    JOIN buildings b ON b.id = ba.building_id
+    JOIN map_zones z ON z.id = b.zone_id
+    WHERE ba.action_type = 'expedition' AND ba.config::text LIKE '%"item_def_id":' || $1::text || '%'
+  `, [id]);
+  if (expeditions.rows.length) {
+    section('Expedition Rewards');
+    for (const e of expeditions.rows) {
+      const itemEntry = (e.config.items || []).find(i => i.item_def_id === parseInt(id));
+      console.log(`  ${e.zone} / ${e.building} — base qty: ${itemEntry ? itemEntry.base_quantity : '?'}`);
+    }
+  }
+}
+
+async function monsters() {
+  const res = await pool.query(`
+    SELECT m.id, m.name, m.hp, m.attack, m.defense, m.xp_reward, m.min_crowns, m.max_crowns,
+      (SELECT string_agg(i.name || ' (' || ml.drop_chance || '%)', ', ' ORDER BY ml.drop_chance DESC)
+       FROM monster_loot ml JOIN item_definitions i ON i.id = ml.item_def_id
+       WHERE ml.monster_id = m.id) as loot_summary,
+      (SELECT string_agg(a.name || ' (' || mal.drop_chance || '%)', ', ' ORDER BY mal.drop_chance DESC)
+       FROM monster_ability_loot mal JOIN abilities a ON a.id = mal.ability_id
+       WHERE mal.monster_id = m.id) as ability_drops
+    FROM monsters m ORDER BY m.id
+  `);
+  section('All Monsters');
+  table(res.rows);
+}
+
+async function monsterDetail(id) {
+  const res = await pool.query(`SELECT * FROM monsters WHERE id = $1`, [id]);
+  if (!res.rows.length) { console.log(`Monster #${id} not found`); return; }
+  const m = res.rows[0];
+
+  section(`Monster #${id}: ${m.name}`);
+  console.log(`  HP:          ${m.hp}`);
+  console.log(`  Attack:      ${m.attack}`);
+  console.log(`  Defense:     ${m.defense}`);
+  console.log(`  XP Reward:   ${m.xp_reward}`);
+  console.log(`  Crowns:      ${m.min_crowns}–${m.max_crowns}`);
+  if (m.icon_filename) console.log(`  Icon:        ${m.icon_filename}`);
+
+  // Loot table
+  const loot = await pool.query(`
+    SELECT i.id as item_id, i.name as item, i.category, ml.drop_chance, ml.quantity
+    FROM monster_loot ml JOIN item_definitions i ON i.id = ml.item_def_id
+    WHERE ml.monster_id = $1 ORDER BY ml.drop_chance DESC
+  `, [id]);
+  if (loot.rows.length) {
+    section('Item Loot Table');
+    table(loot.rows);
+  }
+
+  // Ability drops
+  const abilityLoot = await pool.query(`
+    SELECT a.id as ability_id, a.name as ability, a.effect_type, a.mana_cost, mal.drop_chance
+    FROM monster_ability_loot mal JOIN abilities a ON a.id = mal.ability_id
+    WHERE mal.monster_id = $1 ORDER BY mal.drop_chance DESC
+  `, [id]);
+  if (abilityLoot.rows.length) {
+    section('Ability Drops');
+    table(abilityLoot.rows);
+  }
+
+  // Where does this monster appear?
+  const zones = await pool.query(`
+    SELECT z.id as zone_id, z.name as zone, b.name as building, ba.id as action_id,
+      (ba.config->'monsters') as encounter_config
+    FROM building_actions ba
+    JOIN buildings b ON b.id = ba.building_id
+    JOIN map_zones z ON z.id = b.zone_id
+    WHERE ba.action_type = 'explore' AND ba.config::text LIKE '%"monster_id":' || $1::text || '%'
+  `, [id]);
+  if (zones.rows.length) {
+    section('Appears in Explore Actions');
+    for (const z of zones.rows) {
+      const cfg = z.encounter_config || [];
+      const entry = cfg.find(e => e.monster_id === parseInt(id));
+      console.log(`  ${z.zone} / ${z.building} — weight: ${entry ? entry.weight : '?'}`);
+    }
+  }
+
+  // Random encounter tables
+  const encounters = await pool.query(`
+    SELECT z.id as zone_id, z.name as zone, ret.weight
+    FROM map_random_encounter_tables ret
+    JOIN map_zones z ON z.id = ret.zone_id
+    WHERE ret.monster_id = $1 ORDER BY z.id
+  `, [id]);
+  if (encounters.rows.length) {
+    section('Night Random Encounters');
+    table(encounters.rows);
+  }
+}
+
+async function maps() {
+  const res = await pool.query(`
+    SELECT z.id, z.name, z.map_type, z.min_level,
+      z.image_filename, z.tmx_filename,
+      (SELECT COUNT(*) FROM path_nodes pn WHERE pn.zone_id = z.id) as nodes,
+      (SELECT COUNT(*) FROM buildings b WHERE b.zone_id = z.id) as buildings,
+      (SELECT COUNT(*) FROM characters c WHERE c.zone_id = z.id) as online_chars
+    FROM map_zones z ORDER BY z.id
+  `);
+  section('All Zones');
+  table(res.rows);
+}
+
+async function zoneDetail(id) {
+  const res = await pool.query(`SELECT * FROM map_zones WHERE id = $1`, [id]);
+  if (!res.rows.length) { console.log(`Zone #${id} not found`); return; }
+  const z = res.rows[0];
+
+  section(`Zone #${id}: ${z.name}`);
+  console.log(`  Type:        ${z.map_type}`);
+  console.log(`  Min Level:   ${z.min_level}`);
+  if (z.map_type === 'image') {
+    console.log(`  Image:       ${z.image_filename} (${z.image_width_px}x${z.image_height_px})`);
+  } else {
+    console.log(`  TMX:         ${z.tmx_filename} (${z.width_tiles}x${z.height_tiles})`);
+  }
+  console.log(`  Spawn:       (${z.spawn_x}, ${z.spawn_y})`);
+
+  // Buildings
+  const buildings = await pool.query(`
+    SELECT b.id, b.name, b.description, pn.x, pn.y,
+      (SELECT COUNT(*) FROM building_actions ba WHERE ba.building_id = b.id) as actions,
+      (SELECT COUNT(*) FROM building_npcs bn WHERE bn.building_id = b.id) as npcs
+    FROM buildings b
+    LEFT JOIN path_nodes pn ON pn.id = b.node_id
+    WHERE b.zone_id = $1 ORDER BY b.id
+  `, [id]);
+  if (buildings.rows.length) {
+    section('Buildings');
+    table(buildings.rows);
+  }
+
+  // Building actions detail
+  for (const b of buildings.rows) {
+    const actions = await pool.query(`
+      SELECT ba.id, ba.action_type, ba.sort_order, ba.config
+      FROM building_actions ba WHERE ba.building_id = $1 ORDER BY ba.sort_order
+    `, [b.id]);
+    if (actions.rows.length) {
+      console.log(`\n  ── ${b.name} Actions ──`);
+      for (const a of actions.rows) {
+        const cfg = a.config || {};
+        if (a.action_type === 'travel') {
+          const targetZone = await pool.query(`SELECT name FROM map_zones WHERE id = $1`, [cfg.target_zone_id]);
+          console.log(`    [${a.id}] travel → ${targetZone.rows[0]?.name || 'zone ' + cfg.target_zone_id} (node ${cfg.target_node_id})`);
+        } else if (a.action_type === 'explore') {
+          const monsterNames = [];
+          for (const m of (cfg.monsters || [])) {
+            const mr = await pool.query(`SELECT name FROM monsters WHERE id = $1`, [m.monster_id]);
+            monsterNames.push(`${mr.rows[0]?.name || '?'} (w:${m.weight})`);
+          }
+          console.log(`    [${a.id}] explore — chance: ${cfg.encounter_chance}% — ${monsterNames.join(', ') || 'no monsters'}`);
+        } else if (a.action_type === 'expedition') {
+          const itemNames = [];
+          for (const it of (cfg.items || [])) {
+            const ir = await pool.query(`SELECT name FROM item_definitions WHERE id = $1`, [it.item_def_id]);
+            itemNames.push(`${ir.rows[0]?.name || '?'} x${it.base_quantity}`);
+          }
+          console.log(`    [${a.id}] expedition — gold: ${cfg.base_gold}, exp: ${cfg.base_exp} — items: ${itemNames.join(', ') || 'none'}`);
+        }
+      }
+    }
+
+    // NPCs in this building
+    const npcs = await pool.query(`
+      SELECT n.id, n.name, n.is_crafter,
+        (SELECT COUNT(*) FROM crafting_recipes cr WHERE cr.npc_id = n.id) as recipes
+      FROM building_npcs bn JOIN npcs n ON n.id = bn.npc_id
+      WHERE bn.building_id = $1 ORDER BY bn.sort_order
+    `, [b.id]);
+    if (npcs.rows.length) {
+      console.log(`\n  ── ${b.name} NPCs ──`);
+      table(npcs.rows);
+    }
+  }
+
+  // Random encounter table
+  const encounters = await pool.query(`
+    SELECT m.id as monster_id, m.name as monster, m.hp, m.attack, m.defense, ret.weight
+    FROM map_random_encounter_tables ret JOIN monsters m ON m.id = ret.monster_id
+    WHERE ret.zone_id = $1 ORDER BY ret.weight DESC
+  `, [id]);
+  if (encounters.rows.length) {
+    section('Night Random Encounters');
+    table(encounters.rows);
+  }
+}
+
+async function npcs() {
+  const res = await pool.query(`
+    SELECT n.id, n.name, n.is_crafter,
+      (SELECT string_agg(b.name || ' (' || z.name || ')', ', ')
+       FROM building_npcs bn JOIN buildings b ON b.id = bn.building_id JOIN map_zones z ON z.id = b.zone_id
+       WHERE bn.npc_id = n.id) as locations,
+      (SELECT COUNT(*) FROM crafting_recipes cr WHERE cr.npc_id = n.id) as recipes
+    FROM npcs n ORDER BY n.id
+  `);
+  section('All NPCs');
+  table(res.rows);
+}
+
+async function recipes(npcId) {
+  const q = npcId
+    ? `SELECT cr.id, cr.name, n.name as npc, i.name as output_item, cr.output_quantity as qty,
+         cr.cost_crowns as crowns, cr.craft_time_seconds as time_s,
+         (SELECT string_agg(id2.name || ' x' || ri.quantity, ', ' ORDER BY ri.id)
+          FROM recipe_ingredients ri JOIN item_definitions id2 ON id2.id = ri.item_def_id
+          WHERE ri.recipe_id = cr.id) as ingredients
+       FROM crafting_recipes cr
+       JOIN npcs n ON n.id = cr.npc_id
+       JOIN item_definitions i ON i.id = cr.output_item_id
+       WHERE cr.npc_id = $1 ORDER BY cr.sort_order, cr.id`
+    : `SELECT cr.id, cr.name, n.name as npc, i.name as output_item, cr.output_quantity as qty,
+         cr.cost_crowns as crowns, cr.craft_time_seconds as time_s,
+         (SELECT string_agg(id2.name || ' x' || ri.quantity, ', ' ORDER BY ri.id)
+          FROM recipe_ingredients ri JOIN item_definitions id2 ON id2.id = ri.item_def_id
+          WHERE ri.recipe_id = cr.id) as ingredients
+       FROM crafting_recipes cr
+       JOIN npcs n ON n.id = cr.npc_id
+       JOIN item_definitions i ON i.id = cr.output_item_id
+       ORDER BY n.name, cr.sort_order, cr.id`;
+  const params = npcId ? [npcId] : [];
+  const res = await pool.query(q, params);
+  section(npcId ? `Recipes for NPC #${npcId}` : 'All Crafting Recipes');
+  table(res.rows);
+}
+
+async function abilities() {
+  const res = await pool.query(`
+    SELECT a.id, a.name, a.effect_type, a.mana_cost, a.effect_value, a.duration_turns,
+      a.cooldown_turns, a.slot_type,
+      (SELECT string_agg(m.name || ' (' || mal.drop_chance || '%)', ', ')
+       FROM monster_ability_loot mal JOIN monsters m ON m.id = mal.monster_id
+       WHERE mal.ability_id = a.id) as dropped_by
+    FROM abilities a ORDER BY a.id
+  `);
+  section('All Abilities');
+  table(res.rows);
+}
+
+async function economy() {
+  section('Crown Sources (Monster Drops)');
+  const crownMonsters = await pool.query(`
+    SELECT id, name, min_crowns, max_crowns, hp, attack, defense, xp_reward
+    FROM monsters WHERE max_crowns > 0 ORDER BY max_crowns DESC
+  `);
+  table(crownMonsters.rows);
+
+  section('Crafting Costs (Crown Sinks)');
+  const crownRecipes = await pool.query(`
+    SELECT cr.name as recipe, n.name as npc, cr.cost_crowns, i.name as output,
+      cr.output_quantity as qty, cr.craft_time_seconds as time_s
+    FROM crafting_recipes cr
+    JOIN npcs n ON n.id = cr.npc_id
+    JOIN item_definitions i ON i.id = cr.output_item_id
+    WHERE cr.cost_crowns > 0 ORDER BY cr.cost_crowns DESC
+  `);
+  table(crownRecipes.rows);
+
+  section('Equipment Stats Summary');
+  const equipment = await pool.query(`
+    SELECT id, name, category, weapon_subtype, attack, defence,
+      dodge_chance, crit_chance, crit_damage, max_mana
+    FROM item_definitions
+    WHERE category IN ('weapon','helmet','chestplate','shield','greaves','bracer','boots')
+    ORDER BY category, attack DESC NULLS LAST, defence DESC NULLS LAST
+  `);
+  table(equipment.rows);
+
+  section('Expedition Rewards');
+  const expeditions = await pool.query(`
+    SELECT b.name as building, z.name as zone, ba.config
+    FROM building_actions ba
+    JOIN buildings b ON b.id = ba.building_id
+    JOIN map_zones z ON z.id = b.zone_id
+    WHERE ba.action_type = 'expedition' ORDER BY z.id, b.id
+  `);
+  for (const e of expeditions.rows) {
+    const cfg = e.config || {};
+    const itemNames = [];
+    for (const it of (cfg.items || [])) {
+      const ir = await pool.query(`SELECT name FROM item_definitions WHERE id = $1`, [it.item_def_id]);
+      itemNames.push(`${ir.rows[0]?.name || '?'} x${it.base_quantity}`);
+    }
+    console.log(`  ${e.zone} / ${e.building} — gold: ${cfg.base_gold}, exp: ${cfg.base_exp} — ${itemNames.join(', ') || 'no items'}`);
+  }
+}
+
+async function search(term) {
+  const like = `%${term}%`;
+  section(`Search: "${term}"`);
+
+  const itemRes = await pool.query(`SELECT id, name, category FROM item_definitions WHERE LOWER(name) LIKE LOWER($1) ORDER BY id`, [like]);
+  if (itemRes.rows.length) { console.log('\nItems:'); table(itemRes.rows); }
+
+  const monsterRes = await pool.query(`SELECT id, name, hp, attack FROM monsters WHERE LOWER(name) LIKE LOWER($1) ORDER BY id`, [like]);
+  if (monsterRes.rows.length) { console.log('\nMonsters:'); table(monsterRes.rows); }
+
+  const npcRes = await pool.query(`SELECT id, name, is_crafter FROM npcs WHERE LOWER(name) LIKE LOWER($1) ORDER BY id`, [like]);
+  if (npcRes.rows.length) { console.log('\nNPCs:'); table(npcRes.rows); }
+
+  const buildingRes = await pool.query(`
+    SELECT b.id, b.name, z.name as zone FROM buildings b JOIN map_zones z ON z.id = b.zone_id
+    WHERE LOWER(b.name) LIKE LOWER($1) ORDER BY b.id
+  `, [like]);
+  if (buildingRes.rows.length) { console.log('\nBuildings:'); table(buildingRes.rows); }
+
+  const abilityRes = await pool.query(`SELECT id, name, effect_type FROM abilities WHERE LOWER(name) LIKE LOWER($1) ORDER BY id`, [like]);
+  if (abilityRes.rows.length) { console.log('\nAbilities:'); table(abilityRes.rows); }
+
+  const recipeRes = await pool.query(`SELECT cr.id, cr.name, n.name as npc FROM crafting_recipes cr JOIN npcs n ON n.id = cr.npc_id WHERE LOWER(cr.name) LIKE LOWER($1) ORDER BY cr.id`, [like]);
+  if (recipeRes.rows.length) { console.log('\nRecipes:'); table(recipeRes.rows); }
+
+  const total = itemRes.rows.length + monsterRes.rows.length + npcRes.rows.length + buildingRes.rows.length + abilityRes.rows.length + recipeRes.rows.length;
+  if (total === 0) console.log('  No results found.');
+}
+
+// ─── SQL (raw query) ───────────────────────────────────────────────────────────
+
+async function rawSql(sql) {
+  section('SQL Query');
+  console.log(`  ${sql}\n`);
+  const res = await pool.query(sql);
+  if (res.rows.length) {
+    table(res.rows);
+  } else {
+    console.log('  (no rows returned)');
+  }
+  console.log(`\n  ${res.rowCount} row(s)`);
+}
+
+// ─── Main ──────────────────────────────────────────────────────────────────────
+
+const HELP = `
+Usage: node scripts/game-data.js <command> [args...]
+
+Commands:
+  overview                 High-level game stats
+  items [category]         List items (optional: resource|food|heal|weapon|boots|shield|greaves|bracer|tool|helmet|chestplate)
+  item <id>                Item detail with drop sources, recipe usage
+  monsters                 List all monsters with loot summaries
+  monster <id>             Monster detail with full loot table and zone appearances
+  maps                     List all zones
+  zone <id>                Full zone breakdown (buildings, actions, NPCs, encounters)
+  npcs                     List all NPCs with locations
+  recipes [npc_id]         Crafting recipes (optional: filter by NPC)
+  abilities                List all abilities with monster drop sources
+  economy                  Crown sources/sinks, equipment stats, expedition rewards
+  search <term>            Search across all entity types by name
+  sql "<query>"            Run a raw SELECT query
+`;
+
+async function main() {
+  const [cmd, ...args] = process.argv.slice(2);
+
+  if (!cmd || cmd === 'help' || cmd === '--help') {
+    console.log(HELP);
+    process.exit(0);
+  }
+
+  try {
+    switch (cmd) {
+      case 'overview':  await overview(); break;
+      case 'items':     await items(args[0]); break;
+      case 'item':      await itemDetail(args[0]); break;
+      case 'monsters':  await monsters(); break;
+      case 'monster':   await monsterDetail(args[0]); break;
+      case 'maps':      await maps(); break;
+      case 'zone':      await zoneDetail(args[0]); break;
+      case 'npcs':      await npcs(); break;
+      case 'recipes':   await recipes(args[0]); break;
+      case 'abilities': await abilities(); break;
+      case 'economy':   await economy(); break;
+      case 'search':    await search(args.join(' ')); break;
+      case 'sql':       await rawSql(args.join(' ')); break;
+      default:
+        console.error(`Unknown command: ${cmd}`);
+        console.log(HELP);
+        process.exit(1);
+    }
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    if (err.message.includes('ECONNREFUSED')) {
+      console.error('Could not connect to PostgreSQL. Is the database running?');
+    }
+    process.exit(1);
+  } finally {
+    await pool.end();
+  }
+}
+
+main();

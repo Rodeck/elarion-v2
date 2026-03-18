@@ -40,7 +40,10 @@
       "Bash(grep -E \"\\\\.\\(ts|tsx|sql\\)$\")",
       "Bash(grep -E \"\\\\.ts$\")",
       "Bash(grep -r \"craftingRecipe\\\\|recipe\\\\|craft\" /d/projects/elarion-v2/shared/protocol --include=*.ts)",
-      "Bash(node_modules/.bin/tsc --noEmit)"
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(find /d/projects/elarion-v2 -name .env* -o -name *.env)",
+      "Bash(find C:Userspajak.claude -type f \\\\\\(-name *.md -o -name *.json \\\\\\))",
+      "Bash(find /d/projects/elarion-v2/admin/backend/src -type f -name *.ts)"
     ]
   }
 }
