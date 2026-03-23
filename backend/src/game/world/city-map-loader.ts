@@ -5,6 +5,7 @@ import {
   CityMapBuilding,
   BuildingActionDto,
   type ExpeditionBuildingActionDto,
+  type GatherBuildingActionDto,
 } from '@elarion/protocol';
 import {
   getMapsByType,
@@ -71,6 +72,21 @@ function toProtocolBuilding(
           id: a.id,
           action_type: 'expedition',
           label: 'Expedition',
+        };
+        return dto;
+      }
+      if (a.action_type === 'gather') {
+        const cfg = a.config as Record<string, unknown>;
+        const dto: GatherBuildingActionDto = {
+          id: a.id,
+          action_type: 'gather',
+          label: `Gather (${cfg['required_tool_type']})`,
+          config: {
+            required_tool_type: String(cfg['required_tool_type'] ?? ''),
+            durability_per_second: Number(cfg['durability_per_second'] ?? 0),
+            min_seconds: Number(cfg['min_seconds'] ?? 0),
+            max_seconds: Number(cfg['max_seconds'] ?? 0),
+          },
         };
         return dto;
       }

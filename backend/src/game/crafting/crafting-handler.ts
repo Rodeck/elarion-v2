@@ -61,6 +61,7 @@ async function buildFullInventorySlots(characterId: string): Promise<InventorySl
     slot_id: r.id,
     item_def_id: r.item_def_id,
     quantity: r.quantity,
+    current_durability: r.current_durability ?? undefined,
     definition: {
       id: r.item_def_id,
       name: r.def_name,
@@ -80,6 +81,9 @@ async function buildFullInventorySlots(characterId: string): Promise<InventorySl
       dodge_chance: r.def_dodge_chance,
       crit_chance: r.def_crit_chance,
       crit_damage: r.def_crit_damage,
+      tool_type: r.def_tool_type ?? null,
+      max_durability: r.def_max_durability ?? null,
+      power: r.def_power ?? null,
     },
   }));
 }
@@ -130,6 +134,13 @@ async function handleCraftingStart(session: AuthenticatedSession, payload: unkno
   const { npc_id, recipe_id, quantity } = payload as CraftingStartPayload;
   const characterId = session.characterId;
   if (!characterId) { reject(session, 'start', 'NOT_AT_NPC'); return; }
+
+  // Gate: must not be gathering
+  const char = await findByAccountId(session.accountId);
+  if (char?.in_gathering) {
+    reject(session, 'start', 'NOT_AT_NPC', 'Cannot craft while gathering.');
+    return;
+  }
 
   // Validate quantity
   if (!Number.isInteger(quantity) || quantity < 1) {

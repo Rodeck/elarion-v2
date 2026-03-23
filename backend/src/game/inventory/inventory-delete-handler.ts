@@ -2,6 +2,7 @@ import { sendToSession } from '../../websocket/server';
 import type { AuthenticatedSession } from '../../websocket/server';
 import { log } from '../../logger';
 import { deleteInventoryItem } from '../../db/queries/inventory';
+import { findByAccountId } from '../../db/queries/characters';
 import type { InventoryDeleteItemPayload } from '../../../../shared/protocol/index';
 
 export async function handleInventoryDeleteItem(
@@ -15,6 +16,17 @@ export async function handleInventoryDeleteItem(
   }
 
   const characterId = session.characterId;
+
+  // Gate: must not be gathering
+  const char = await findByAccountId(session.accountId);
+  if (char?.in_gathering) {
+    sendToSession(session, 'inventory.delete_rejected', {
+      slot_id: payload.slot_id,
+      reason: 'NOT_FOUND' as 'NOT_FOUND',
+    });
+    return;
+  }
+
   const slotId = payload.slot_id;
 
   // 2. Validate slot_id is a positive integer

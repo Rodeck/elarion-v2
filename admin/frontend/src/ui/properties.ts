@@ -265,6 +265,10 @@ export class PropertiesPanel {
     } else if (action.action_type === 'expedition') {
       const cfg = action.config as ExpeditionActionConfig;
       labelEl.textContent = `Expedition (gold:${cfg.base_gold} exp:${cfg.base_exp} items:${cfg.items.length})`;
+    } else if (action.action_type === 'gather') {
+      const cfg = action.config as Record<string, unknown>;
+      const evts = Array.isArray(cfg['events']) ? cfg['events'].length : 0;
+      labelEl.textContent = `Gather (${cfg['required_tool_type']}, ${cfg['min_seconds']}–${cfg['max_seconds']}s, ${evts} event${evts !== 1 ? 's' : ''})`;
     } else {
       const cfg = action.config as ExploreActionConfig;
       labelEl.textContent = `Explore (${cfg.encounter_chance}% chance, ${cfg.monsters.length} monster${cfg.monsters.length !== 1 ? 's' : ''})`;
@@ -679,7 +683,7 @@ export class PropertiesPanel {
 
     const typeSelect = document.createElement('select');
     typeSelect.id = 'action-type-select';
-    const actionTypes: [string, string][] = [['travel', 'Travel'], ['explore', 'Explore'], ['expedition', 'Expedition']];
+    const actionTypes: [string, string][] = [['travel', 'Travel'], ['explore', 'Explore'], ['expedition', 'Expedition'], ['gather', 'Gather']];
     for (const [val, text] of actionTypes) {
       const opt = document.createElement('option');
       opt.value = val;
@@ -951,11 +955,321 @@ export class PropertiesPanel {
     expeditionFields.appendChild(addItemBtn);
     container.appendChild(expeditionFields);
 
+    // ── Gather fields ───────────────────────────────────────────────
+    const gatherFields = document.createElement('div');
+    gatherFields.id = 'gather-fields';
+    gatherFields.style.display = 'none';
+
+    gatherFields.appendChild(this.label('Required Tool Type', 'gather-tool-type'));
+    const toolTypeSelect = document.createElement('select');
+    toolTypeSelect.id = 'gather-tool-type';
+    for (const [val, txt] of [['pickaxe', 'Pickaxe'], ['axe', 'Axe']] as const) {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = txt;
+      toolTypeSelect.appendChild(opt);
+    }
+    gatherFields.appendChild(toolTypeSelect);
+
+    gatherFields.appendChild(this.label('Durability per Second', 'gather-dur-per-sec'));
+    const durPerSecInput = document.createElement('input');
+    durPerSecInput.id = 'gather-dur-per-sec';
+    durPerSecInput.type = 'number';
+    durPerSecInput.min = '1';
+    durPerSecInput.value = '5';
+    gatherFields.appendChild(durPerSecInput);
+
+    const durRow = document.createElement('div');
+    durRow.style.cssText = 'display:flex;gap:8px;';
+
+    const minSecDiv = document.createElement('div');
+    minSecDiv.style.flex = '1';
+    minSecDiv.appendChild(this.label('Min Seconds', 'gather-min-sec'));
+    const minSecInput = document.createElement('input');
+    minSecInput.id = 'gather-min-sec';
+    minSecInput.type = 'number';
+    minSecInput.min = '1';
+    minSecInput.value = '30';
+    minSecDiv.appendChild(minSecInput);
+    durRow.appendChild(minSecDiv);
+
+    const maxSecDiv = document.createElement('div');
+    maxSecDiv.style.flex = '1';
+    maxSecDiv.appendChild(this.label('Max Seconds', 'gather-max-sec'));
+    const maxSecInput = document.createElement('input');
+    maxSecInput.id = 'gather-max-sec';
+    maxSecInput.type = 'number';
+    maxSecInput.min = '1';
+    maxSecInput.value = '120';
+    maxSecDiv.appendChild(maxSecInput);
+    durRow.appendChild(maxSecDiv);
+
+    gatherFields.appendChild(durRow);
+
+    gatherFields.appendChild(this.label('Events', 'gather-events-list'));
+
+    const gatherEventsEl = document.createElement('div');
+    gatherEventsEl.id = 'gather-events-list';
+    gatherEventsEl.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-bottom:4px;';
+    gatherFields.appendChild(gatherEventsEl);
+
+    interface GatherEventEntry {
+      type: string;
+      weight: number;
+      item_def_id?: number;
+      quantity?: number;
+      min_amount?: number;
+      max_amount?: number;
+      monster_id?: number;
+      hp_damage?: number;
+      message?: string;
+    }
+    const gatherEvents: GatherEventEntry[] = [];
+
+    const buildGatherEventRow = (entry: GatherEventEntry): HTMLElement => {
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:6px;background:#12141e;border:1px solid #1e2232;border-radius:4px;display:flex;flex-direction:column;gap:4px;';
+
+      // Top line: type + weight + remove
+      const topLine = document.createElement('div');
+      topLine.style.cssText = 'display:flex;gap:4px;align-items:center;';
+
+      const typeSel = document.createElement('select');
+      typeSel.style.flex = '1';
+      for (const t of ['nothing', 'resource', 'gold', 'monster', 'accident']) {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t.charAt(0).toUpperCase() + t.slice(1);
+        opt.selected = t === entry.type;
+        typeSel.appendChild(opt);
+      }
+
+      const weightLabel = document.createElement('span');
+      weightLabel.style.cssText = 'font-size:0.65rem;color:#606888;';
+      weightLabel.textContent = 'Weight:';
+
+      const weightInput = document.createElement('input');
+      weightInput.type = 'number';
+      weightInput.min = '1';
+      weightInput.value = String(entry.weight);
+      weightInput.style.width = '52px';
+      weightInput.title = 'Relative probability weight (higher = more likely)';
+      weightInput.addEventListener('input', () => { entry.weight = parseInt(weightInput.value, 10) || 1; });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'btn btn--danger btn--small';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', () => {
+        const idx = gatherEvents.indexOf(entry);
+        if (idx !== -1) gatherEvents.splice(idx, 1);
+        row.remove();
+      });
+
+      topLine.appendChild(typeSel);
+      topLine.appendChild(weightLabel);
+      topLine.appendChild(weightInput);
+      topLine.appendChild(removeBtn);
+      row.appendChild(topLine);
+
+      // Extra fields container
+      const extraFields = document.createElement('div');
+      extraFields.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:2px;';
+
+      const tinyLabel = (text: string): HTMLElement => {
+        const lbl = document.createElement('span');
+        lbl.style.cssText = 'font-size:0.65rem;color:#606888;text-transform:uppercase;letter-spacing:0.04em;';
+        lbl.textContent = text;
+        return lbl;
+      };
+
+      const renderExtra = () => {
+        extraFields.innerHTML = '';
+        const t = typeSel.value;
+        entry.type = t;
+
+        if (t === 'resource') {
+          if (entry.quantity == null) entry.quantity = 1;
+          // Item picker (same pattern as expedition items)
+          const itemRow = document.createElement('div');
+          itemRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
+
+          const trigger = document.createElement('button');
+          trigger.type = 'button';
+          trigger.className = 'item-select-trigger';
+
+          const triggerIcon = document.createElement('div');
+          triggerIcon.className = 'item-select-trigger-icon';
+          triggerIcon.textContent = '?';
+
+          const triggerName = document.createElement('span');
+          triggerName.className = 'item-select-trigger-name item-select-trigger-name--placeholder';
+          triggerName.textContent = 'Select item\u2026';
+
+          // If entry already has an item, resolve name
+          if (entry.item_def_id) {
+            void resolveItemName(entry.item_def_id).then((name) => {
+              triggerName.textContent = name;
+              triggerName.classList.remove('item-select-trigger-name--placeholder');
+              triggerIcon.textContent = name[0]?.toUpperCase() ?? '?';
+            });
+          }
+
+          trigger.appendChild(triggerIcon);
+          trigger.appendChild(triggerName);
+          trigger.addEventListener('click', () => {
+            void openItemPicker((item) => {
+              entry.item_def_id = item.id;
+              triggerName.textContent = item.name;
+              triggerName.classList.remove('item-select-trigger-name--placeholder');
+              if (item.icon_url) {
+                triggerIcon.innerHTML = '';
+                const img = document.createElement('img');
+                img.src = item.icon_url;
+                img.alt = '';
+                triggerIcon.appendChild(img);
+              } else {
+                triggerIcon.textContent = (item.name[0] ?? '?').toUpperCase();
+              }
+            });
+          });
+          itemRow.appendChild(trigger);
+          extraFields.appendChild(itemRow);
+
+          // Quantity
+          const qtyRow = document.createElement('div');
+          qtyRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
+          qtyRow.appendChild(tinyLabel('Quantity'));
+          const qtyInput = document.createElement('input');
+          qtyInput.type = 'number';
+          qtyInput.min = '1';
+          qtyInput.value = entry.quantity ? String(entry.quantity) : '1';
+          qtyInput.style.width = '60px';
+          qtyInput.addEventListener('input', () => { entry.quantity = parseInt(qtyInput.value, 10) || 1; });
+          qtyRow.appendChild(qtyInput);
+          extraFields.appendChild(qtyRow);
+
+          // Message
+          const msgInput = document.createElement('input');
+          msgInput.type = 'text';
+          msgInput.placeholder = 'Message shown to player (e.g. "You found iron ore!")';
+          msgInput.value = entry.message ?? '';
+          msgInput.style.width = '100%';
+          msgInput.addEventListener('input', () => { entry.message = msgInput.value || undefined; });
+          extraFields.appendChild(msgInput);
+
+        } else if (t === 'gold') {
+          // Initialize defaults if not set
+          if (entry.min_amount == null) entry.min_amount = 1;
+          if (entry.max_amount == null) entry.max_amount = 10;
+
+          const goldRow = document.createElement('div');
+          goldRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+
+          goldRow.appendChild(tinyLabel('Min crowns'));
+          const minInput = document.createElement('input');
+          minInput.type = 'number';
+          minInput.min = '0';
+          minInput.value = String(entry.min_amount);
+          minInput.style.width = '60px';
+          minInput.addEventListener('input', () => { entry.min_amount = parseInt(minInput.value, 10) || 0; });
+          goldRow.appendChild(minInput);
+
+          goldRow.appendChild(tinyLabel('Max crowns'));
+          const maxInput = document.createElement('input');
+          maxInput.type = 'number';
+          maxInput.min = '0';
+          maxInput.value = String(entry.max_amount);
+          maxInput.style.width = '60px';
+          maxInput.addEventListener('input', () => { entry.max_amount = parseInt(maxInput.value, 10) || 0; });
+          goldRow.appendChild(maxInput);
+
+          extraFields.appendChild(goldRow);
+
+          const msgInput = document.createElement('input');
+          msgInput.type = 'text';
+          msgInput.placeholder = 'Message shown to player (e.g. "You found a gold vein!")';
+          msgInput.value = entry.message ?? '';
+          msgInput.style.width = '100%';
+          msgInput.addEventListener('input', () => { entry.message = msgInput.value || undefined; });
+          extraFields.appendChild(msgInput);
+
+        } else if (t === 'monster') {
+          const monsterRow = document.createElement('div');
+          monsterRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
+          monsterRow.appendChild(tinyLabel('Monster'));
+          const mSel = document.createElement('select');
+          mSel.style.flex = '1';
+          if (monsters.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'No monsters defined';
+            mSel.appendChild(opt);
+          } else {
+            for (const m of monsters) {
+              const opt = document.createElement('option');
+              opt.value = String(m.id);
+              opt.textContent = m.name;
+              opt.selected = m.id === entry.monster_id;
+              mSel.appendChild(opt);
+            }
+            if (!entry.monster_id && monsters.length > 0) entry.monster_id = monsters[0]!.id;
+          }
+          mSel.addEventListener('change', () => { entry.monster_id = parseInt(mSel.value, 10) || undefined; });
+          monsterRow.appendChild(mSel);
+          extraFields.appendChild(monsterRow);
+
+        } else if (t === 'accident') {
+          if (entry.hp_damage == null) entry.hp_damage = 5;
+
+          const accRow = document.createElement('div');
+          accRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+          accRow.appendChild(tinyLabel('HP damage'));
+          const dmgInput = document.createElement('input');
+          dmgInput.type = 'number';
+          dmgInput.min = '1';
+          dmgInput.value = entry.hp_damage ? String(entry.hp_damage) : '5';
+          dmgInput.style.width = '60px';
+          dmgInput.addEventListener('input', () => { entry.hp_damage = parseInt(dmgInput.value, 10) || 1; });
+          accRow.appendChild(dmgInput);
+          extraFields.appendChild(accRow);
+
+          const msgInput = document.createElement('input');
+          msgInput.type = 'text';
+          msgInput.placeholder = 'Message shown to player (e.g. "A rock falls on your head!")';
+          msgInput.value = entry.message ?? '';
+          msgInput.style.width = '100%';
+          msgInput.addEventListener('input', () => { entry.message = msgInput.value || undefined; });
+          extraFields.appendChild(msgInput);
+        }
+        // 'nothing' has no extra fields
+      };
+
+      typeSel.addEventListener('change', renderExtra);
+      renderExtra();
+
+      row.appendChild(extraFields);
+      return row;
+    };
+
+    const addEventBtn = document.createElement('button');
+    addEventBtn.className = 'btn btn--secondary';
+    addEventBtn.type = 'button';
+    addEventBtn.textContent = '+ Add Event';
+    addEventBtn.style.cssText = 'width:100%;font-size:11px;margin-bottom:4px;';
+    addEventBtn.addEventListener('click', () => {
+      const entry: GatherEventEntry = { type: 'nothing', weight: 10 };
+      gatherEvents.push(entry);
+      gatherEventsEl.appendChild(buildGatherEventRow(entry));
+    });
+    gatherFields.appendChild(addEventBtn);
+    container.appendChild(gatherFields);
+
     // ── Show/hide on type change ─────────────────────────────────────
     typeSelect.addEventListener('change', () => {
       travelFields.style.display = typeSelect.value === 'travel' ? '' : 'none';
       exploreFields.style.display = typeSelect.value === 'explore' ? '' : 'none';
       expeditionFields.style.display = typeSelect.value === 'expedition' ? '' : 'none';
+      gatherFields.style.display = typeSelect.value === 'gather' ? '' : 'none';
     });
 
     // ── Buttons ──────────────────────────────────────────────────────
@@ -996,6 +1310,32 @@ export class PropertiesPanel {
           await createBuildingAction(mapId, buildingId, {
             action_type: 'explore',
             config: { encounter_chance: encounterChance, monsters: monsterEntries } as ExploreActionConfig,
+          });
+        } else if (typeSelect.value === 'gather') {
+          const reqToolType = toolTypeSelect.value;
+          const durPerSec = parseInt(durPerSecInput.value, 10);
+          const minSec = parseInt(minSecInput.value, 10);
+          const maxSec = parseInt(maxSecInput.value, 10);
+          if (!reqToolType) { alert('Select a tool type.'); saveBtn.disabled = false; return; }
+          if (isNaN(durPerSec) || durPerSec < 1) { alert('Durability per second must be a positive integer.'); saveBtn.disabled = false; return; }
+          if (isNaN(minSec) || minSec < 1) { alert('Min seconds must be a positive integer.'); saveBtn.disabled = false; return; }
+          if (isNaN(maxSec) || maxSec < minSec) { alert('Max seconds must be >= min seconds.'); saveBtn.disabled = false; return; }
+          if (gatherEvents.length === 0) { alert('Add at least one event.'); saveBtn.disabled = false; return; }
+          for (const ev of gatherEvents) {
+            if (ev.type === 'resource' && (!ev.item_def_id || ev.item_def_id < 1)) { alert('Resource events need a valid Item Def ID.'); saveBtn.disabled = false; return; }
+            if (ev.type === 'monster' && (!ev.monster_id || ev.monster_id < 1)) { alert('Monster events need a selected monster.'); saveBtn.disabled = false; return; }
+            if (ev.type === 'accident' && (!ev.hp_damage || ev.hp_damage < 1)) { alert('Accident events need HP damage > 0.'); saveBtn.disabled = false; return; }
+            if (ev.type === 'gold' && (ev.min_amount == null || ev.max_amount == null)) { alert('Gold events need min and max amounts.'); saveBtn.disabled = false; return; }
+          }
+          await createBuildingAction(mapId, buildingId, {
+            action_type: 'gather' as const,
+            config: {
+              required_tool_type: reqToolType,
+              durability_per_second: durPerSec,
+              min_seconds: minSec,
+              max_seconds: maxSec,
+              events: gatherEvents,
+            },
           });
         } else {
           const baseGold = parseInt(baseGoldInput.value, 10);

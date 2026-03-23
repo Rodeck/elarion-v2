@@ -19,6 +19,7 @@ import { handleExpeditionDispatch, handleExpeditionCollect } from './game/expedi
 import { handleEquipmentEquip, handleEquipmentUnequip } from './game/equipment/equipment-handler';
 import { handleCombatTriggerActive, handleLoadoutRequest, handleLoadoutUpdate } from './game/combat/combat-handlers';
 import { registerCraftingHandlers } from './game/crafting/crafting-handler';
+import { handleGatheringStart, handleGatheringCancel } from './game/gathering/gathering-handler';
 import { sendWorldState, setZonePlayersGetter } from './websocket/handlers/world-state-handler';
 import { getZonePlayers } from './game/world/zone-registry';
 import { loadCityMaps } from './game/world/city-map-loader';
@@ -72,6 +73,8 @@ async function bootstrap(): Promise<void> {
   registerHandler('loadout:request', handleLoadoutRequest);
   registerHandler('loadout:update', handleLoadoutUpdate);
   registerCraftingHandlers();
+  registerHandler('gathering.start', handleGatheringStart);
+  registerHandler('gathering.cancel', handleGatheringCancel);
 
   // Start WebSocket server (also sends world.state on connect)
   startWebSocketServer();

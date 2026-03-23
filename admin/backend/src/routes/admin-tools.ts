@@ -5,6 +5,7 @@ import {
   getInventorySlotCount,
   findStackableSlot,
   insertInventoryItem,
+  insertToolInventoryItem,
   updateInventoryQuantity,
 } from '../../../../backend/src/db/queries/inventory';
 
@@ -96,7 +97,12 @@ adminToolsRouter.post('/grant-item', async (req, res) => {
         .json({ error: `${charName}'s inventory is full (20/20 slots)` });
     }
 
-    await insertInventoryItem(character_id, item_def_id, qty);
+    const isTool = itemDef.category === 'tool' && itemDef.max_durability != null;
+    if (isTool) {
+      await insertToolInventoryItem(character_id, item_def_id, itemDef.max_durability!);
+    } else {
+      await insertInventoryItem(character_id, item_def_id, qty);
+    }
     log('info', 'admin_tools_grant_item', {
       character_id,
       char_name: charName,

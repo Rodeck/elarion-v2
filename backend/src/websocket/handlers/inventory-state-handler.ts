@@ -22,6 +22,7 @@ export async function sendInventoryState(session: AuthenticatedSession): Promise
     slot_id: row.id,
     item_def_id: row.item_def_id,
     quantity: row.quantity,
+    current_durability: row.current_durability ?? undefined,
     definition: {
       id: row.item_def_id,
       name: row.def_name,
@@ -41,6 +42,9 @@ export async function sendInventoryState(session: AuthenticatedSession): Promise
       dodge_chance: row.def_dodge_chance,
       crit_chance: row.def_crit_chance,
       crit_damage: row.def_crit_damage,
+      tool_type: row.def_tool_type ?? null,
+      max_durability: row.def_max_durability ?? null,
+      power: row.def_power ?? null,
     },
   }));
 

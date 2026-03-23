@@ -81,9 +81,9 @@ export type BuildingActionConfig = TravelActionConfig | ExploreActionConfig | Ex
 export interface BuildingAction {
   id: number;
   building_id: number;
-  action_type: 'travel' | 'explore' | 'expedition';
+  action_type: 'travel' | 'explore' | 'expedition' | 'gather';
   sort_order: number;
-  config: BuildingActionConfig;
+  config: BuildingActionConfig | Record<string, unknown>;
   created_at: string;
 }
 
@@ -381,9 +381,9 @@ export async function createBuildingAction(
   mapId: number,
   buildingId: number,
   data: {
-    action_type: 'travel' | 'explore' | 'expedition';
+    action_type: 'travel' | 'explore' | 'expedition' | 'gather';
     sort_order?: number;
-    config: BuildingActionConfig;
+    config: BuildingActionConfig | Record<string, unknown>;
   },
 ): Promise<BuildingAction> {
   const res = await request<{ action: BuildingAction }>(
@@ -473,6 +473,9 @@ export interface ItemDefinitionResponse {
   food_power: number | null;
   stack_size: number | null;
   icon_url: string | null;
+  tool_type: string | null;
+  max_durability: number | null;
+  power: number | null;
   created_at: string;
 }
 

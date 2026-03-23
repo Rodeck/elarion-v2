@@ -3,6 +3,7 @@ import type { AuthenticatedSession } from '../../websocket/server';
 import { log } from '../../logger';
 import { equipItem, unequipItem, getEquipmentState } from '../../db/queries/equipment';
 import { getCharacterEffectiveStats } from '../../db/queries/inventory';
+import { findByAccountId } from '../../db/queries/characters';
 import type {
   EquipmentEquipPayload,
   EquipmentUnequipPayload,
@@ -28,6 +29,18 @@ export async function handleEquipmentEquip(
   }
 
   const characterId = session.characterId;
+
+  // Gate: must not be gathering
+  const char = await findByAccountId(session.accountId);
+  if (char?.in_gathering) {
+    sendToSession(session, 'equipment.equip_rejected', {
+      slot_id: 0,
+      slot_name: 'weapon' as EquipSlot,
+      reason: 'IN_GATHERING' as 'ITEM_NOT_FOUND',
+    });
+    return;
+  }
+
   const payload = rawPayload as EquipmentEquipPayload;
   const slotId = payload.slot_id;
   const slotName = payload.slot_name;
@@ -165,6 +178,17 @@ export async function handleEquipmentUnequip(
   }
 
   const characterId = session.characterId;
+
+  // Gate: must not be gathering
+  const charUneq = await findByAccountId(session.accountId);
+  if (charUneq?.in_gathering) {
+    sendToSession(session, 'equipment.unequip_rejected', {
+      slot_name: 'weapon' as EquipSlot,
+      reason: 'IN_GATHERING' as 'SLOT_EMPTY',
+    });
+    return;
+  }
+
   const payload = rawPayload as EquipmentUnequipPayload;
   const slotName = payload.slot_name;
 

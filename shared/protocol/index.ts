@@ -84,7 +84,19 @@ export interface ExpeditionBuildingActionDto {
   label: string;
 }
 
-export type BuildingActionDto = TravelBuildingActionDto | ExploreBuildingActionDto | ExpeditionBuildingActionDto;
+export interface GatherBuildingActionDto {
+  id: number;
+  action_type: 'gather';
+  label: string;
+  config: {
+    required_tool_type: string;
+    durability_per_second: number;
+    min_seconds: number;
+    max_seconds: number;
+  };
+}
+
+export type BuildingActionDto = TravelBuildingActionDto | ExploreBuildingActionDto | ExpeditionBuildingActionDto | GatherBuildingActionDto;
 
 // ---------------------------------------------------------------------------
 // Expedition sub-types
@@ -223,8 +235,20 @@ export interface CityMovePayload {
 export interface CityBuildingActionPayload {
   building_id: number;
   action_id: number;
-  action_type: 'travel' | 'explore';
+  action_type: 'travel' | 'explore' | 'gather';
 }
+
+// ---------------------------------------------------------------------------
+// Gathering: Client → Server payloads
+// ---------------------------------------------------------------------------
+
+export interface GatheringStartPayload {
+  building_id: number;
+  action_id: number;
+  duration: number;        // seconds, must be within [min_seconds, max_seconds]
+}
+
+export interface GatheringCancelPayload {}
 
 export interface ExpeditionDispatchPayload {
   building_id: number;
@@ -249,6 +273,8 @@ export type CityMoveMessage            = WsMessage<CityMovePayload>;
 export type CityBuildingActionMessage  = WsMessage<CityBuildingActionPayload>;
 export type ExpeditionDispatchMessage  = WsMessage<ExpeditionDispatchPayload>;
 export type ExpeditionCollectMessage   = WsMessage<ExpeditionCollectPayload>;
+export type GatheringStartMessage      = WsMessage<GatheringStartPayload>;
+export type GatheringCancelMessage     = WsMessage<GatheringCancelPayload>;
 
 // ---------------------------------------------------------------------------
 // Server → Client payloads
@@ -353,6 +379,8 @@ export interface CityBuildingActionRejectedPayload {
     | 'INVALID_ACTION'
     | 'INVALID_DESTINATION'
     | 'IN_COMBAT'
+    | 'IN_GATHERING'
+    | 'HP_ZERO'
     | 'NOT_CITY_MAP'
     | 'EXPLORE_FAILED';
 }
@@ -448,7 +476,13 @@ export type AnyServerMessage =
   | CraftingCancelledMessage
   | CraftingCollectedMessage
   | CraftingRejectedMessage
-  | CraftingSessionsUpdatedMessage;
+  | CraftingSessionsUpdatedMessage
+  | GatheringStartedMessage
+  | GatheringTickMessage
+  | GatheringCombatPauseMessage
+  | GatheringCombatResumeMessage
+  | GatheringEndedMessage
+  | GatheringRejectedMessage;
 
 export type AnyClientMessage =
   | AuthRegisterMessage
@@ -469,7 +503,9 @@ export type AnyClientMessage =
   | CraftingOpenMessage
   | CraftingStartMessage
   | CraftingCancelMessage
-  | CraftingCollectMessage;
+  | CraftingCollectMessage
+  | GatheringStartMessage
+  | GatheringCancelMessage;
 
 // ---------------------------------------------------------------------------
 // Inventory: shared sub-types
@@ -504,6 +540,10 @@ export interface ItemDefinitionDto {
   dodge_chance: number;
   crit_chance: number;
   crit_damage: number;
+  // Tool-specific (null for non-tools)
+  tool_type: string | null;
+  max_durability: number | null;
+  power: number | null;
 }
 
 /** A single occupied inventory slot as sent to the client. */
@@ -511,6 +551,7 @@ export interface InventorySlotDto {
   slot_id: number;             // inventory_items.id — used for deletion
   item_def_id: number;
   quantity: number;
+  current_durability?: number | null;  // present for tool items
   definition: ItemDefinitionDto;
 }
 
@@ -913,6 +954,97 @@ export type LoadoutUpdateRejectedMessage    = WsMessage<LoadoutUpdateRejectedPay
 export type CombatTriggerActiveMessage      = WsMessage<CombatTriggerActivePayload>;
 export type LoadoutUpdateMessage            = WsMessage<LoadoutUpdatePayload>;
 export type LoadoutRequestMessage           = WsMessage<LoadoutRequestPayload>;
+
+// ---------------------------------------------------------------------------
+// Gathering System: Server → Client payloads
+// ---------------------------------------------------------------------------
+
+export interface GatheringStartedPayload {
+  action_id: number;
+  building_id: number;
+  duration: number;
+  durability_cost: number;
+  tool_slot_ids: number[];
+  started_at: string; // ISO 8601
+}
+
+export interface GatheringTickEvent {
+  type: 'resource' | 'gold' | 'monster' | 'accident' | 'nothing';
+  message?: string;
+  item_name?: string;
+  item_icon_url?: string;
+  quantity?: number;
+  crowns?: number;
+  hp_damage?: number;
+  monster_name?: string;
+  monster_icon_url?: string;
+}
+
+export interface GatheringTickPayload {
+  tick: number;
+  total_ticks: number;
+  event: GatheringTickEvent;
+  current_hp: number;
+  tool_durability: number;
+}
+
+export interface GatheringCombatPausePayload {
+  tick: number;
+  monster_name: string;
+  monster_icon_url?: string | null;
+}
+
+export interface GatheringCombatResumePayload {
+  tick: number;
+  remaining_ticks: number;
+  combat_result: 'win' | 'loss';
+  current_hp: number;
+}
+
+export interface GatheringSummary {
+  resources_gained: { item_name: string; quantity: number }[];
+  crowns_gained: number;
+  combats_fought: number;
+  combats_won: number;
+  accidents: number;
+  total_hp_lost: number;
+}
+
+export interface GatheringEndedPayload {
+  reason: 'completed' | 'cancelled' | 'death';
+  ticks_completed: number;
+  total_ticks: number;
+  summary: GatheringSummary;
+  tool_destroyed: boolean;
+  tool_remaining_durability: number | null;
+}
+
+export type GatheringRejectionReason =
+  | 'NOT_AT_BUILDING'
+  | 'IN_COMBAT'
+  | 'IN_GATHERING'
+  | 'HP_ZERO'
+  | 'INVALID_ACTION'
+  | 'INVALID_DURATION'
+  | 'NO_TOOL'
+  | 'WRONG_TOOL_TYPE'
+  | 'INSUFFICIENT_DURABILITY';
+
+export interface GatheringRejectedPayload {
+  reason: GatheringRejectionReason;
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// Gathering System: message type aliases
+// ---------------------------------------------------------------------------
+
+export type GatheringStartedMessage       = WsMessage<GatheringStartedPayload>;
+export type GatheringTickMessage          = WsMessage<GatheringTickPayload>;
+export type GatheringCombatPauseMessage   = WsMessage<GatheringCombatPausePayload>;
+export type GatheringCombatResumeMessage  = WsMessage<GatheringCombatResumePayload>;
+export type GatheringEndedMessage         = WsMessage<GatheringEndedPayload>;
+export type GatheringRejectedMessage      = WsMessage<GatheringRejectedPayload>;
 
 // ---------------------------------------------------------------------------
 // Crafting System: shared sub-types

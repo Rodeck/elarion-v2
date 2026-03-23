@@ -269,6 +269,11 @@ export class InventoryPanel {
     if (def.dodge_chance > 0) stats.push(`Dodge: ${def.dodge_chance}%`);
     if (def.crit_chance > 0) stats.push(`Crit Chance: ${def.crit_chance}%`);
     if (def.crit_damage !== 150) stats.push(`Crit Dmg: ${def.crit_damage}%`);
+    if (def.tool_type) stats.push(`Type: ${def.tool_type}`);
+    if (def.power != null && def.power > 0) stats.push(`Power: ${def.power}`);
+    if (slot.current_durability != null && def.max_durability != null) {
+      stats.push(`Durability: ${slot.current_durability} / ${def.max_durability}`);
+    }
 
     // Map raw DB category to display label
     const categoryLabel = this.resolveDisplayCategory(def.category);

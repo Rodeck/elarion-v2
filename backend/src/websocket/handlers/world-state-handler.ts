@@ -13,6 +13,8 @@ import { getExpeditionStateForBuilding } from '../../game/world/city-movement-ha
 import { getSpawnNodeForZone } from '../../db/queries/city-maps';
 import { setCharacterInCombat } from '../../db/queries/loadouts';
 import { CombatSessionManager } from '../../game/combat/combat-session-manager';
+import { updateCharacter } from '../../db/queries/characters';
+import { GatheringSessionManager } from '../../game/gathering/gathering-service';
 import {
   getSquiresForCharacter,
   createSquire,
@@ -43,6 +45,13 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
     await setCharacterInCombat(character.id, false).catch(() => undefined);
     character.in_combat = false;
     log('warn', 'world-state', 'stale_in_combat_cleared', { characterId: character.id });
+  }
+
+  // Same for in_gathering — clear stale flag if no live session exists.
+  if (character.in_gathering && !GatheringSessionManager.has(character.id)) {
+    await updateCharacter(character.id, { in_gathering: false }).catch(() => undefined);
+    character.in_gathering = false;
+    log('warn', 'world-state', 'stale_in_gathering_cleared', { characterId: character.id });
   }
 
   const cls = await findClassById(character.class_id);

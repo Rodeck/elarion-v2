@@ -262,8 +262,8 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
     config: Record<string, unknown>;
   };
 
-  if (action_type !== 'travel' && action_type !== 'explore' && action_type !== 'expedition') {
-    return res.status(400).json({ error: 'action_type must be "travel", "explore", or "expedition"' });
+  if (action_type !== 'travel' && action_type !== 'explore' && action_type !== 'expedition' && action_type !== 'gather') {
+    return res.status(400).json({ error: 'action_type must be "travel", "explore", "expedition", or "gather"' });
   }
 
   try {
@@ -317,6 +317,68 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
       };
       const action = await createBuildingAction(buildingId, 'explore', exploreConfig, sort_order ?? 0);
       log('info', 'Created explore action', { building_id: buildingId, action_id: action.id, admin: req.username });
+      return res.status(201).json({ action });
+    } else if (action_type === 'gather') {
+      const cfg = config as {
+        required_tool_type?: unknown;
+        durability_per_second?: unknown;
+        min_seconds?: unknown;
+        max_seconds?: unknown;
+        events?: unknown[];
+      };
+      const toolType = String(cfg.required_tool_type ?? '');
+      if (!['pickaxe', 'axe'].includes(toolType)) {
+        return res.status(400).json({ error: 'required_tool_type must be "pickaxe" or "axe"' });
+      }
+      const durPerSec = Number(cfg.durability_per_second);
+      if (!Number.isInteger(durPerSec) || durPerSec < 1) {
+        return res.status(400).json({ error: 'durability_per_second must be a positive integer' });
+      }
+      const minSec = Number(cfg.min_seconds);
+      const maxSec = Number(cfg.max_seconds);
+      if (!Number.isInteger(minSec) || minSec < 1) {
+        return res.status(400).json({ error: 'min_seconds must be a positive integer' });
+      }
+      if (!Number.isInteger(maxSec) || maxSec < minSec) {
+        return res.status(400).json({ error: 'max_seconds must be >= min_seconds' });
+      }
+      const events = cfg.events ?? [];
+      if (!Array.isArray(events) || events.length === 0) {
+        return res.status(400).json({ error: 'events must be a non-empty array' });
+      }
+      const validEventTypes = ['resource', 'gold', 'monster', 'accident', 'nothing'];
+      for (const ev of events) {
+        const e = ev as Record<string, unknown>;
+        if (!validEventTypes.includes(String(e['type']))) {
+          return res.status(400).json({ error: `event type must be one of: ${validEventTypes.join(', ')}` });
+        }
+        if (!Number.isInteger(e['weight']) || (e['weight'] as number) < 1) {
+          return res.status(400).json({ error: 'each event must have a positive integer weight' });
+        }
+        if (e['type'] === 'resource') {
+          if (!Number.isInteger(e['item_def_id'])) return res.status(400).json({ error: 'resource event requires integer item_def_id' });
+          if (!Number.isInteger(e['quantity']) || (e['quantity'] as number) < 1) return res.status(400).json({ error: 'resource event requires positive integer quantity' });
+        }
+        if (e['type'] === 'gold') {
+          if (!Number.isInteger(e['min_amount']) || (e['min_amount'] as number) < 0) return res.status(400).json({ error: 'gold event requires non-negative integer min_amount' });
+          if (!Number.isInteger(e['max_amount']) || (e['max_amount'] as number) < (e['min_amount'] as number)) return res.status(400).json({ error: 'gold event max_amount must be >= min_amount' });
+        }
+        if (e['type'] === 'monster') {
+          if (!Number.isInteger(e['monster_id'])) return res.status(400).json({ error: 'monster event requires integer monster_id' });
+        }
+        if (e['type'] === 'accident') {
+          if (!Number.isInteger(e['hp_damage']) || (e['hp_damage'] as number) < 1) return res.status(400).json({ error: 'accident event requires positive integer hp_damage' });
+        }
+      }
+      const gatherConfig = {
+        required_tool_type: toolType,
+        durability_per_second: durPerSec,
+        min_seconds: minSec,
+        max_seconds: maxSec,
+        events: events as Array<Record<string, unknown>>,
+      };
+      const action = await createBuildingAction(buildingId, 'gather' as 'travel', gatherConfig as unknown as TravelActionConfig, sort_order ?? 0);
+      log('info', 'Created gather action', { building_id: buildingId, action_id: action.id, admin: req.username });
       return res.status(201).json({ action });
     } else {
       // expedition

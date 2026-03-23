@@ -63,6 +63,12 @@ import type {
   CraftingCollectedPayload,
   CraftingRejectedPayload,
   CraftingSessionsUpdatedPayload,
+  GatheringStartedPayload,
+  GatheringTickPayload,
+  GatheringEndedPayload,
+  GatheringRejectedPayload,
+  GatheringCombatPausePayload,
+  GatheringCombatResumePayload,
 } from '@elarion/protocol';
 
 const TILE_SIZE = 32;
@@ -106,6 +112,8 @@ export class GameScene extends Phaser.Scene {
 
   // Building open when combat started — restored when combat screen closes
   private buildingBeforeCombat: CityMapBuilding | null = null;
+  // True while combat is happening during a gathering session
+  private gatheringCombatActive = false;
 
   // City map state
   private isCityMap = false;
@@ -173,6 +181,13 @@ export class GameScene extends Phaser.Scene {
     });
     this.buildingPanel.getCraftingModal().setSendFn((type, payload) => {
       this.client.send(type, payload);
+    });
+    this.buildingPanel.setInventorySlotsGetter(() => this.leftPanel.getInventorySlots());
+    this.buildingPanel.setOnGatheringStart((payload) => {
+      this.client.send('gathering.start', payload);
+    });
+    this.buildingPanel.setOnGatheringCancel(() => {
+      this.client.send('gathering.cancel', {});
     });
 
     this.combatScreen = new CombatScreen(() => {
@@ -313,6 +328,14 @@ export class GameScene extends Phaser.Scene {
       this.combatLog.appendError(payload.message);
     });
 
+    this.client.on<{ current_hp: number; max_hp: number }>('character.hp_changed', (payload) => {
+      if (this.myCharacter) {
+        this.myCharacter.current_hp = payload.current_hp;
+        this.myCharacter.max_hp = payload.max_hp;
+        this.statsBar?.setHp(payload.current_hp, payload.max_hp);
+      }
+    });
+
     this.client.on<CharacterLevelledUpPayload>('character.levelled_up', (payload) => {
       if (this.myCharacter) {
         this.myCharacter.level = payload.new_level;
@@ -448,6 +471,11 @@ export class GameScene extends Phaser.Scene {
     // Inventory handlers
     this.client.on<InventoryStatePayload>('inventory.state', (payload) => {
       this.leftPanel.onInventoryState(payload);
+      // Re-render building panel if open so gather sections pick up the updated inventory
+      const bld = this.buildingPanel.getCurrentBuilding();
+      if (bld && !this.buildingPanel.isGatheringActive()) {
+        this.buildingPanel.show(bld, this.expeditionStateByBuilding.get(bld.id));
+      }
     });
 
     this.client.on<InventoryItemDeletedPayload>('inventory.item_deleted', (payload) => {
@@ -551,12 +579,50 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
+    // Gathering handlers
+    this.client.on<GatheringStartedPayload>('gathering.started', (payload) => {
+      this.buildingPanel.handleGatheringStarted(payload);
+    });
+    this.client.on<GatheringTickPayload>('gathering.tick', (payload) => {
+      this.buildingPanel.handleGatheringTick(payload);
+      if (payload.event.type === 'accident' && payload.event.hp_damage) {
+        if (this.myCharacter) this.myCharacter.current_hp = payload.current_hp;
+        this.statsBar?.setHp(payload.current_hp, this.myCharacter?.max_hp ?? 0);
+      }
+    });
+    this.client.on<GatheringEndedPayload>('gathering.ended', (payload) => {
+      this.gatheringCombatActive = false;
+      this.buildingPanel.handleGatheringEnded(payload);
+    });
+    this.client.on<GatheringRejectedPayload>('gathering.rejected', (payload) => {
+      this.buildingPanel.handleGatheringRejected(payload);
+    });
+    this.client.on<GatheringCombatPausePayload>('gathering.combat_pause', (payload) => {
+      this.gatheringCombatActive = true;
+      this.chatBox.addSystemMessage('A monster attacks during gathering!');
+      this.buildingPanel.handleGatheringCombatPause(payload.monster_name, payload.monster_icon_url ?? null);
+    });
+    this.client.on<GatheringCombatResumePayload>('gathering.combat_resume', (payload) => {
+      this.gatheringCombatActive = false;
+      this.chatBox.addSystemMessage(`Combat resolved (${payload.combat_result}). Gathering resumes...`);
+      if (this.myCharacter) this.myCharacter.current_hp = payload.current_hp;
+      this.statsBar?.setHp(payload.current_hp, this.myCharacter?.max_hp ?? 0);
+      this.buildingPanel.handleGatheringCombatResume();
+    });
+
     // Combat handlers
     this.client.on<CombatStartPayload>('combat:start', (payload) => {
-      this.buildingBeforeCombat = this.buildingPanel.getCurrentBuilding();
-      this.buildingPanel.hide();
-      this.leftPanel.setLoadoutLocked(true);
-      this.combatScreen?.open(payload);
+      if (this.gatheringCombatActive) {
+        // During gathering: embed combat inside the gathering modal
+        const container = this.buildingPanel.getGatheringModal().enterCombatMode();
+        this.leftPanel.setLoadoutLocked(true);
+        this.combatScreen?.openEmbedded(payload, container);
+      } else {
+        this.buildingBeforeCombat = this.buildingPanel.getCurrentBuilding();
+        this.buildingPanel.hide();
+        this.leftPanel.setLoadoutLocked(true);
+        this.combatScreen?.open(payload);
+      }
     });
 
     this.client.on<CombatTurnResultPayload>('combat:turn_result', (payload) => {
@@ -568,8 +634,20 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.client.on<CombatEndPayload>('combat:end', (payload) => {
-      this.combatScreen?.showOutcome(payload);
-      this.leftPanel.setLoadoutLocked(false);
+      if (this.gatheringCombatActive) {
+        // During gathering: auto-close combat (no rewards screen), show loot in gathering log
+        this.combatScreen?.close();
+        this.buildingPanel.addGatheringCombatLoot({
+          outcome: payload.outcome,
+          xp_gained: payload.xp_gained,
+          crowns_gained: payload.crowns_gained,
+          items_dropped: payload.items_dropped.map((d) => ({ name: d.name, quantity: d.quantity, icon_url: d.icon_url })),
+        });
+        this.leftPanel.setLoadoutLocked(false);
+      } else {
+        this.combatScreen?.showOutcome(payload);
+        this.leftPanel.setLoadoutLocked(false);
+      }
     });
 
     this.client.on('connection_lost', () => {

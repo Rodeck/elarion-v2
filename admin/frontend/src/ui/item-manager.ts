@@ -3,6 +3,8 @@ import {
   createItem,
   updateItem,
   deleteItem,
+  getCharacters,
+  grantItem,
   type ItemDefinitionResponse,
 } from '../editor/api';
 import { ImageGenDialog } from './image-gen-dialog';
@@ -99,6 +101,25 @@ export class ItemManager {
               <div id="field-stack_size" style="display:none">
                 <label for="item-stack">Stack Size *</label>
                 <input id="item-stack" name="stack_size" type="number" min="1" style="width:120px" />
+              </div>
+
+              <div id="field-tool_type" style="display:none">
+                <label for="item-tool-type">Tool Type *</label>
+                <select id="item-tool-type" name="tool_type">
+                  <option value="">— select —</option>
+                  <option value="pickaxe">Pickaxe</option>
+                  <option value="axe">Axe</option>
+                </select>
+              </div>
+
+              <div id="field-max_durability" style="display:none">
+                <label for="item-max-durability">Max Durability *</label>
+                <input id="item-max-durability" name="max_durability" type="number" min="1" style="width:120px" />
+              </div>
+
+              <div id="field-power" style="display:none">
+                <label for="item-power">Power</label>
+                <input id="item-power" name="power" type="number" min="1" style="width:120px" />
               </div>
 
               <label>Icon (PNG, max 2 MB)</label>
@@ -254,6 +275,9 @@ export class ItemManager {
     show('heal_power', category === 'heal');
     show('food_power', category === 'food');
     show('stack_size', category !== '' && STACKABLE_CATEGORIES.has(category));
+    show('tool_type', category === 'tool');
+    show('max_durability', category === 'tool');
+    show('power', category === 'tool');
   }
 
   private async handleFormSubmit(form: HTMLFormElement): Promise<void> {
@@ -263,7 +287,7 @@ export class ItemManager {
     const formData = new FormData(form);
 
     // Prune empty optional fields so they don't overwrite existing values on edit
-    for (const key of ['weapon_subtype', 'attack', 'defence', 'heal_power', 'food_power', 'stack_size']) {
+    for (const key of ['weapon_subtype', 'attack', 'defence', 'heal_power', 'food_power', 'stack_size', 'tool_type', 'max_durability', 'power']) {
       const val = formData.get(key);
       if (val === '' || val === null) formData.delete(key);
     }
@@ -335,6 +359,12 @@ export class ItemManager {
     setNum('heal_power', item.heal_power);
     setNum('food_power', item.food_power);
     setNum('stack_size', item.stack_size);
+    setNum('max_durability', item.max_durability);
+    setNum('power', item.power);
+    if (item.tool_type) {
+      const toolTypeSelect = form.querySelector<HTMLSelectElement>('[name="tool_type"]');
+      if (toolTypeSelect) toolTypeSelect.value = item.tool_type;
+    }
 
     if (item.icon_url) {
       const preview = this.container.querySelector<HTMLElement>('#icon-preview')!;
@@ -363,6 +393,7 @@ export class ItemManager {
     table.innerHTML = `
       <thead>
         <tr>
+          <th>ID</th>
           <th>Icon</th>
           <th>Name</th>
           <th>Category</th>
@@ -385,13 +416,27 @@ export class ItemManager {
       const stats = this.formatStats(item);
 
       tr.innerHTML = `
+        <td style="color:#6a6a8a;font-size:0.75rem;">${item.id}</td>
         <td>${iconHtml}</td>
         <td>${this.escHtml(item.name)}</td>
         <td>${this.labelFor(item.category)}</td>
         <td>${stats}</td>
         <td>
-          <button class="btn btn--sm btn-edit" data-id="${item.id}">Edit</button>
-          <button class="btn btn--sm btn--danger btn-delete" data-id="${item.id}">Delete</button>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+            <button class="btn btn--sm btn-edit" data-id="${item.id}">Edit</button>
+            <button class="btn btn--sm btn--danger btn-delete" data-id="${item.id}">Delete</button>
+            <button class="btn btn--sm btn-give" data-id="${item.id}" style="background:#1a3d2a;color:#70e89a;border-color:#2a5a3a;">Give</button>
+          </div>
+          <div class="give-panel" data-id="${item.id}" style="display:none;margin-top:6px;padding:6px;background:#151520;border:1px solid #2a2a40;border-radius:4px;">
+            <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+              <select class="give-player" style="flex:1;min-width:120px;font-size:0.75rem;padding:3px;background:#1a1a2e;color:#c8c8e0;border:1px solid #3a3a5a;">
+                <option value="">Loading...</option>
+              </select>
+              <input class="give-qty" type="number" min="1" value="1" style="width:50px;font-size:0.75rem;padding:3px;background:#1a1a2e;color:#c8c8e0;border:1px solid #3a3a5a;" />
+              <button class="btn btn--sm btn-give-confirm" style="background:#0e3d22;color:#70e89a;border-color:#2a5a3a;font-size:0.7rem;">Send</button>
+            </div>
+            <div class="give-result" style="font-size:0.7rem;margin-top:4px;display:none;"></div>
+          </div>
         </td>
       `;
 
@@ -414,6 +459,47 @@ export class ItemManager {
         }
       });
 
+      // Give-to-player toggle
+      const giveBtn = tr.querySelector<HTMLButtonElement>('.btn-give')!;
+      const givePanel = tr.querySelector<HTMLElement>('.give-panel')!;
+      const giveSelect = givePanel.querySelector<HTMLSelectElement>('.give-player')!;
+      const giveQty = givePanel.querySelector<HTMLInputElement>('.give-qty')!;
+      const giveConfirm = givePanel.querySelector<HTMLButtonElement>('.btn-give-confirm')!;
+      const giveResult = givePanel.querySelector<HTMLElement>('.give-result')!;
+
+      giveBtn.addEventListener('click', async () => {
+        const isOpen = givePanel.style.display !== 'none';
+        givePanel.style.display = isOpen ? 'none' : '';
+        if (!isOpen && giveSelect.options.length <= 1 && giveSelect.options[0]?.text === 'Loading...') {
+          try {
+            const players = await getCharacters();
+            giveSelect.innerHTML = '<option value="">— select player —</option>' +
+              players.map((p) => `<option value="${p.id}">${this.escHtml(p.name)} (Lv${p.level} ${this.escHtml(p.class_name)})</option>`).join('');
+          } catch {
+            giveSelect.innerHTML = '<option value="">Failed to load</option>';
+          }
+        }
+      });
+
+      giveConfirm.addEventListener('click', async () => {
+        const charId = giveSelect.value;
+        if (!charId) { giveResult.textContent = 'Select a player'; giveResult.style.color = '#ff6060'; giveResult.style.display = ''; return; }
+        const qty = parseInt(giveQty.value, 10) || 1;
+        giveConfirm.disabled = true;
+        giveResult.style.display = 'none';
+        try {
+          const data = await grantItem(charId, item.id, qty);
+          giveResult.textContent = data.message ?? 'Done';
+          giveResult.style.color = data.success ? '#70e89a' : '#ff6060';
+          giveResult.style.display = '';
+        } catch (err) {
+          giveResult.textContent = `Error: ${(err as Error).message}`;
+          giveResult.style.color = '#ff6060';
+          giveResult.style.display = '';
+        }
+        giveConfirm.disabled = false;
+      });
+
       tbody.appendChild(tr);
     }
 
@@ -429,6 +515,9 @@ export class ItemManager {
     if (item.defence != null)     pills.push(this.pill(`DEF: ${item.defence}`,       '#1a2e50', '#80aaff'));
     if (item.heal_power != null)  pills.push(this.pill(`Heal: ${item.heal_power}`,   '#0e3d22', '#70e89a'));
     if (item.food_power != null)  pills.push(this.pill(`Food: ${item.food_power}`,   '#3d2800', '#ffbe5c'));
+    if (item.tool_type)           pills.push(this.pill(`${item.tool_type}`,           '#2a2a3d', '#8888cc'));
+    if (item.max_durability != null) pills.push(this.pill(`Dur: ${item.max_durability}`, '#2a2a3d', '#8888cc'));
+    if (item.power != null)       pills.push(this.pill(`Power: ${item.power}`,         '#2a2a3d', '#8888cc'));
     return pills.length
       ? `<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">${pills.join('')}</div>`
       : '—';

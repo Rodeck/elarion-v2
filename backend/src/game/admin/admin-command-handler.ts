@@ -40,8 +40,9 @@ export async function handleAdminCommand(session: AuthenticatedSession, rawMessa
     case '/crown':           return handleGiveCrowns(session, args, reply);
     case '/skill_all':       return handleSkillAll(session, args, reply);
     case '/crafting_finish': return handleCraftingFinish(session, args, reply);
+    case '/heal':            return handleHeal(session, args, reply);
     default:
-      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown, /skill_all, /crafting_finish`);
+      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown, /skill_all, /crafting_finish, /heal`);
   }
 }
 
@@ -385,4 +386,52 @@ async function handleCraftingFinish(session: AuthenticatedSession, args: string[
   });
 
   reply(true, `Completed ${count} crafting session${count !== 1 ? 's' : ''} for ${playerName}.`);
+}
+
+// ---------------------------------------------------------------------------
+// /heal <player>
+// ---------------------------------------------------------------------------
+
+async function handleHeal(session: AuthenticatedSession, args: string[], reply: ReplyFn): Promise<void> {
+  const playerName = args[0];
+  if (!playerName) {
+    reply(false, 'Usage: /heal <player>');
+    return;
+  }
+
+  const character = await findByName(playerName);
+  if (!character) {
+    reply(false, `Player '${playerName}' not found.`);
+    return;
+  }
+
+  if (character.current_hp >= character.max_hp) {
+    reply(true, `${playerName} is already at full HP (${character.max_hp}).`);
+    return;
+  }
+
+  await updateCharacter(character.id, { current_hp: character.max_hp });
+
+  // Notify target player if online
+  const targetSession = getSessionByCharacterId(character.id);
+  if (targetSession) {
+    sendToSession(targetSession, 'character.hp_changed', {
+      current_hp: character.max_hp,
+      max_hp: character.max_hp,
+    });
+  }
+
+  log('info', 'admin', 'admin_command', {
+    event: 'admin_command',
+    admin_account_id: session.accountId,
+    admin_character_id: session.characterId,
+    command: '/heal',
+    target_player: playerName,
+    target_character_id: character.id,
+    old_hp: character.current_hp,
+    new_hp: character.max_hp,
+    success: true,
+  });
+
+  reply(true, `Healed ${playerName} to full HP (${character.current_hp} → ${character.max_hp}).`);
 }

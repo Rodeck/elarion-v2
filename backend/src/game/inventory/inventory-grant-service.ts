@@ -8,6 +8,7 @@ import {
   updateInventoryQuantity,
   getInventorySlotCount,
   insertInventoryItem,
+  insertToolInventoryItem,
   getInventoryWithDefinitions,
 } from '../../db/queries/inventory';
 import type { InventorySlotDto, ItemCategory, WeaponSubtype } from '../../../../shared/protocol/index';
@@ -50,6 +51,7 @@ export async function grantItemToCharacter(
         slot_id: updatedSlot.id,
         item_def_id: def.id,
         quantity: updatedSlot.quantity,
+        current_durability: updatedSlot.current_durability ?? undefined,
         definition: {
           id: def.id,
           name: def.name,
@@ -69,6 +71,9 @@ export async function grantItemToCharacter(
           dodge_chance: def.dodge_chance,
           crit_chance: def.crit_chance,
           crit_damage: def.crit_damage,
+          tool_type: def.tool_type ?? null,
+          max_durability: def.max_durability ?? null,
+          power: def.power ?? null,
         },
       };
 
@@ -95,8 +100,11 @@ export async function grantItemToCharacter(
     return;
   }
 
-  // Insert new slot
-  const newSlot = await insertInventoryItem(characterId, itemDefId, quantityToGrant);
+  // Insert new slot (tools get durability initialized)
+  const isTool = def.category === 'tool' && def.max_durability != null;
+  const newSlot = isTool
+    ? await insertToolInventoryItem(characterId, itemDefId, def.max_durability!)
+    : await insertInventoryItem(characterId, itemDefId, quantityToGrant);
 
   // Fetch with definition for the full DTO
   const allSlots = await getInventoryWithDefinitions(characterId);
@@ -107,6 +115,7 @@ export async function grantItemToCharacter(
     slot_id: newSlotWithDef.id,
     item_def_id: newSlotWithDef.item_def_id,
     quantity: newSlotWithDef.quantity,
+    current_durability: newSlotWithDef.current_durability ?? undefined,
     definition: {
       id: newSlotWithDef.item_def_id,
       name: newSlotWithDef.def_name,
@@ -126,6 +135,9 @@ export async function grantItemToCharacter(
       dodge_chance: newSlotWithDef.def_dodge_chance,
       crit_chance: newSlotWithDef.def_crit_chance,
       crit_damage: newSlotWithDef.def_crit_damage,
+      tool_type: newSlotWithDef.def_tool_type ?? null,
+      max_durability: newSlotWithDef.def_max_durability ?? null,
+      power: newSlotWithDef.def_power ?? null,
     },
   };
 

@@ -36,6 +36,10 @@ export class LeftPanel {
 
   private inventorySlots: InventorySlotDto[] = [];
 
+  getInventorySlots(): InventorySlotDto[] {
+    return this.inventorySlots;
+  }
+
   constructor(
     container: HTMLElement,
     onEquip: (slotId: number, slotName: EquipSlot) => void,

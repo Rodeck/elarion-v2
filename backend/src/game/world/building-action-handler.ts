@@ -53,6 +53,13 @@ export async function handleBuildingAction(
     return;
   }
 
+  // Gate 2b: Must not be gathering
+  if (character.in_gathering) {
+    sendToSession(session, 'city.building_action_rejected', { reason: 'IN_GATHERING' });
+    log('debug', 'building-action', 'rejected_in_gathering', { characterId });
+    return;
+  }
+
   // Gate 3: building must exist and player must be at its node
   const building = await getBuildingById(building_id);
   if (!building || building.zone_id !== zoneId || building.node_id !== currentNodeId) {

@@ -49,6 +49,18 @@ export async function handleExpeditionDispatch(
     return;
   }
 
+  // Gate: must not be gathering
+  if ((character as unknown as { in_gathering: boolean }).in_gathering) {
+    sendToSession(session, 'expedition.dispatch_rejected', { reason: 'IN_COMBAT' as 'IN_COMBAT' });
+    return;
+  }
+
+  // Gate: must have HP > 0
+  if ((character as unknown as { current_hp: number }).current_hp <= 0) {
+    sendToSession(session, 'expedition.dispatch_rejected', { reason: 'IN_COMBAT' as 'IN_COMBAT' });
+    return;
+  }
+
   const currentNodeId = (character as unknown as { current_node_id: number | null }).current_node_id;
 
   // Gate: must be at the building

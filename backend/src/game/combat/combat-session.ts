@@ -103,7 +103,7 @@ export class CombatSession {
     this.loadout = this.buildLoadout(loadoutSlots);
 
     this.engineState = {
-      playerHp:          stats.maxHp,
+      playerHp:          character.current_hp,
       playerMana:        0,
       enemyHp:           monster.hp,
       activeEffects:     [],
@@ -393,6 +393,12 @@ export class CombatSession {
       }
     }
 
+    // Persist HP to database
+    const { updateCharacter } = await import('../../db/queries/characters');
+    await updateCharacter(this.characterId, { current_hp: this.engineState.playerHp }).catch((err) => {
+      log('error', 'combat', 'hp_persist_failed', { characterId: this.characterId, hp: this.engineState.playerHp, err });
+    });
+
     // Clear in_combat flag
     await setCharacterInCombat(this.characterId, false).catch((err) => {
       log('error', 'combat', 'in_combat_reset_failed', { characterId: this.characterId, err });
@@ -422,7 +428,7 @@ export class CombatSession {
 
     // Remove session from manager (lazy import to avoid circular deps)
     import('./combat-session-manager').then(({ CombatSessionManager }) => {
-      CombatSessionManager.end(this.characterId);
+      CombatSessionManager.end(this.characterId, outcome);
     }).catch(() => undefined);
   }
 

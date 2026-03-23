@@ -23,6 +23,9 @@ export interface ItemDefinition {
   dodge_chance: number;
   crit_chance: number;
   crit_damage: number;
+  tool_type: string | null;
+  max_durability: number | null;
+  power: number | null;
   created_at: Date;
 }
 
@@ -31,6 +34,7 @@ export interface InventoryItem {
   character_id: string;
   item_def_id: number;
   quantity: number;
+  current_durability: number | null;
   created_at: Date;
 }
 
@@ -52,6 +56,10 @@ export interface InventoryItemWithDefinition extends InventoryItem {
   def_dodge_chance: number;
   def_crit_chance: number;
   def_crit_damage: number;
+  def_tool_type: string | null;
+  def_max_durability: number | null;
+  def_power: number | null;
+  current_durability: number | null;
 }
 
 export interface CreateItemDefinitionData {
@@ -65,6 +73,9 @@ export interface CreateItemDefinitionData {
   food_power?: number | null;
   stack_size?: number | null;
   icon_filename?: string | null;
+  tool_type?: string | null;
+  max_durability?: number | null;
+  power?: number | null;
 }
 
 export interface UpdateItemDefinitionData {
@@ -78,6 +89,9 @@ export interface UpdateItemDefinitionData {
   food_power?: number | null;
   stack_size?: number | null;
   icon_filename?: string | null;
+  tool_type?: string | null;
+  max_durability?: number | null;
+  power?: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,8 +123,8 @@ export async function getItemDefinitionById(id: number): Promise<ItemDefinition 
 export async function createItemDefinition(data: CreateItemDefinitionData): Promise<ItemDefinition> {
   const result = await query<ItemDefinition>(
     `INSERT INTO item_definitions
-       (name, description, category, weapon_subtype, attack, defence, heal_power, food_power, stack_size, icon_filename)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       (name, description, category, weapon_subtype, attack, defence, heal_power, food_power, stack_size, icon_filename, tool_type, max_durability, power)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING *`,
     [
       data.name,
@@ -123,6 +137,9 @@ export async function createItemDefinition(data: CreateItemDefinitionData): Prom
       data.food_power ?? null,
       data.stack_size ?? null,
       data.icon_filename ?? null,
+      data.tool_type ?? null,
+      data.max_durability ?? null,
+      data.power ?? null,
     ],
   );
   return result.rows[0]!;
@@ -143,6 +160,9 @@ export async function updateItemDefinition(id: number, data: UpdateItemDefinitio
   if (data.food_power !== undefined)     { fields.push(`food_power = $${paramIdx++}`);     values.push(data.food_power); }
   if (data.stack_size !== undefined)     { fields.push(`stack_size = $${paramIdx++}`);     values.push(data.stack_size); }
   if (data.icon_filename !== undefined)  { fields.push(`icon_filename = $${paramIdx++}`);  values.push(data.icon_filename); }
+  if (data.tool_type !== undefined)      { fields.push(`tool_type = $${paramIdx++}`);      values.push(data.tool_type); }
+  if (data.max_durability !== undefined) { fields.push(`max_durability = $${paramIdx++}`); values.push(data.max_durability); }
+  if (data.power !== undefined)          { fields.push(`power = $${paramIdx++}`);          values.push(data.power); }
 
   if (fields.length === 0) {
     return getItemDefinitionById(id);
@@ -175,6 +195,7 @@ export async function getInventoryWithDefinitions(characterId: string): Promise<
        ii.character_id,
        ii.item_def_id,
        ii.quantity,
+       ii.current_durability,
        ii.created_at,
        d.name                  AS def_name,
        d.description           AS def_description,
@@ -192,7 +213,10 @@ export async function getInventoryWithDefinitions(characterId: string): Promise<
        d.mana_regen            AS def_mana_regen,
        d.dodge_chance          AS def_dodge_chance,
        d.crit_chance           AS def_crit_chance,
-       d.crit_damage           AS def_crit_damage
+       d.crit_damage           AS def_crit_damage,
+       d.tool_type             AS def_tool_type,
+       d.max_durability        AS def_max_durability,
+       d.power                 AS def_power
      FROM inventory_items ii
      JOIN item_definitions d ON d.id = ii.item_def_id
      WHERE ii.character_id = $1
@@ -290,4 +314,89 @@ export async function deleteInventoryItem(slotId: number, characterId: string): 
     [slotId, characterId],
   );
   return (result.rowCount ?? 0) > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Tool durability functions
+// ---------------------------------------------------------------------------
+
+export async function updateToolDurability(slotId: number, newDurability: number): Promise<void> {
+  await query(
+    `UPDATE inventory_items SET current_durability = $1 WHERE id = $2`,
+    [newDurability, slotId],
+  );
+}
+
+export async function insertToolInventoryItem(
+  characterId: string,
+  itemDefId: number,
+  durability: number,
+): Promise<InventoryItem> {
+  const result = await query<InventoryItem>(
+    `INSERT INTO inventory_items (character_id, item_def_id, quantity, current_durability)
+     VALUES ($1, $2, 1, $3)
+     RETURNING *`,
+    [characterId, itemDefId, durability],
+  );
+  return result.rows[0]!;
+}
+
+/** Find the first tool of a given type in a character's inventory (unequipped), ordered by oldest first. */
+export async function findToolByType(
+  characterId: string,
+  toolType: string,
+): Promise<(InventoryItem & { def_max_durability: number; def_power: number | null }) | null> {
+  const result = await query<InventoryItem & { def_max_durability: number; def_power: number | null }>(
+    `SELECT ii.*, d.max_durability AS def_max_durability, d.power AS def_power
+     FROM inventory_items ii
+     JOIN item_definitions d ON d.id = ii.item_def_id
+     WHERE ii.character_id = $1
+       AND d.tool_type = $2
+       AND ii.equipped_slot IS NULL
+     ORDER BY ii.created_at ASC
+     LIMIT 1`,
+    [characterId, toolType],
+  );
+  return result.rows[0] ?? null;
+}
+
+/** Get a single inventory slot by id with its definition, for the given character. */
+export async function getInventorySlotById(
+  slotId: number,
+  characterId: string,
+): Promise<InventoryItemWithDefinition | null> {
+  const result = await query<InventoryItemWithDefinition>(
+    `SELECT
+       ii.id,
+       ii.character_id,
+       ii.item_def_id,
+       ii.quantity,
+       ii.current_durability,
+       ii.created_at,
+       d.name                  AS def_name,
+       d.description           AS def_description,
+       d.category              AS def_category,
+       d.weapon_subtype        AS def_weapon_subtype,
+       d.attack                AS def_attack,
+       d.defence               AS def_defence,
+       d.heal_power            AS def_heal_power,
+       d.food_power            AS def_food_power,
+       d.stack_size            AS def_stack_size,
+       d.icon_filename         AS def_icon_filename,
+       d.max_mana              AS def_max_mana,
+       d.mana_on_hit           AS def_mana_on_hit,
+       d.mana_on_damage_taken  AS def_mana_on_damage_taken,
+       d.mana_regen            AS def_mana_regen,
+       d.dodge_chance          AS def_dodge_chance,
+       d.crit_chance           AS def_crit_chance,
+       d.crit_damage           AS def_crit_damage,
+       d.tool_type             AS def_tool_type,
+       d.max_durability        AS def_max_durability,
+       d.power                 AS def_power
+     FROM inventory_items ii
+     JOIN item_definitions d ON d.id = ii.item_def_id
+     WHERE ii.id = $1 AND ii.character_id = $2`,
+    [slotId, characterId],
+  );
+  return result.rows[0] ?? null;
 }

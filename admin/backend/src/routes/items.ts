@@ -61,9 +61,14 @@ function formatItem(item: ItemDefinition) {
     food_power: item.food_power ?? null,
     stack_size: item.stack_size ?? null,
     icon_url: buildIconUrl(item.icon_filename),
+    tool_type: item.tool_type ?? null,
+    max_durability: item.max_durability ?? null,
+    power: item.power ?? null,
     created_at: item.created_at,
   };
 }
+
+const VALID_TOOL_TYPES = ['pickaxe', 'axe'] as const;
 
 function validateItemFields(body: Record<string, unknown>, isCreate: boolean): string | null {
   const category = body['category'] as string | undefined;
@@ -105,6 +110,32 @@ function validateItemFields(body: Record<string, unknown>, isCreate: boolean): s
     }
     if (isCreate && !STACKABLE_CATEGORIES.has(category) && body['stack_size'] !== undefined && body['stack_size'] !== null) {
       return `stack_size is not allowed for category "${category}"`;
+    }
+
+    // Tool-specific validation
+    if (category === 'tool') {
+      const toolType = body['tool_type'] as string | undefined | null;
+      if (isCreate && !toolType) return 'tool_type is required for category "tool"';
+      if (toolType && !(VALID_TOOL_TYPES as readonly string[]).includes(toolType)) {
+        return `tool_type must be one of: ${VALID_TOOL_TYPES.join(', ')}`;
+      }
+      const maxDurability = body['max_durability'];
+      if (isCreate && (maxDurability === undefined || maxDurability === null)) {
+        return 'max_durability is required for category "tool"';
+      }
+      if (maxDurability !== undefined && maxDurability !== null) {
+        const n = Number(maxDurability);
+        if (!Number.isInteger(n) || n < 1) return 'max_durability must be a positive integer';
+      }
+      const power = body['power'];
+      if (power !== undefined && power !== null) {
+        const n = Number(power);
+        if (!Number.isInteger(n) || n < 1) return 'power must be a positive integer';
+      }
+    } else {
+      if (body['tool_type']) return 'tool_type is only allowed for category "tool"';
+      if (body['max_durability'] != null) return 'max_durability is only allowed for category "tool"';
+      if (body['power'] != null) return 'power is only allowed for category "tool"';
     }
   }
 
@@ -313,6 +344,9 @@ itemsRouter.post('/', upload.single('icon'), async (req: Request, res: Response)
       food_power: body['food_power'] != null ? Number(body['food_power']) : null,
       stack_size: body['stack_size'] != null ? Number(body['stack_size']) : null,
       icon_filename: iconFilename,
+      tool_type: body['tool_type'] ? String(body['tool_type']) : null,
+      max_durability: body['max_durability'] != null ? Number(body['max_durability']) : null,
+      power: body['power'] != null ? Number(body['power']) : null,
     });
     log('info', 'item_definition_created', { admin: req.username, item_id: item.id, name: item.name, category: item.category });
     return res.status(201).json(formatItem(item));
@@ -391,6 +425,9 @@ itemsRouter.put('/:id', upload.single('icon'), async (req: Request, res: Respons
   if (body['food_power'] !== undefined)     updateData['food_power']     = body['food_power'] != null ? Number(body['food_power']) : null;
   if (body['stack_size'] !== undefined)     updateData['stack_size']     = body['stack_size'] != null ? Number(body['stack_size']) : null;
   if (iconFilename !== undefined)           updateData['icon_filename']  = iconFilename;
+  if (body['tool_type'] !== undefined)     updateData['tool_type']      = body['tool_type'] || null;
+  if (body['max_durability'] !== undefined) updateData['max_durability'] = body['max_durability'] != null ? Number(body['max_durability']) : null;
+  if (body['power'] !== undefined)         updateData['power']          = body['power'] != null ? Number(body['power']) : null;
 
   try {
     const item = await updateItemDefinition(id, updateData as Parameters<typeof updateItemDefinition>[1]);

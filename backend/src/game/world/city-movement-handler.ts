@@ -153,6 +153,26 @@ export async function handleCityMove(session: AuthenticatedSession, payload: unk
     return;
   }
 
+  // ── In-gathering check ──────────────────────────────────────────────────
+  if (character.in_gathering) {
+    sendToSession(session, 'city.move_rejected', {
+      current_node_id: (character as unknown as { current_node_id: number | null }).current_node_id ?? 0,
+      reason: 'IN_GATHERING',
+    });
+    log('debug', 'city-movement', 'rejected_in_gathering', { characterId });
+    return;
+  }
+
+  // ── HP check ──────────────────────────────────────────────────────────
+  if (character.current_hp <= 0) {
+    sendToSession(session, 'city.move_rejected', {
+      current_node_id: (character as unknown as { current_node_id: number | null }).current_node_id ?? 0,
+      reason: 'HP_ZERO',
+    });
+    log('debug', 'city-movement', 'rejected_hp_zero', { characterId });
+    return;
+  }
+
   const zoneId = character.zone_id;
 
   // ── City-type map check ────────────────────────────────────────────────

@@ -28,6 +28,9 @@ export class CombatScreen {
   private onTriggerActive: () => void;
   private onClose: (() => void) | null = null;
 
+  /** When true, combat UI is rendered inside an external container (no backdrop) */
+  private embedded = false;
+
   // State stored from combat:start
   private combatId: string | null = null;
   private playerMaxHp = 0;
@@ -69,6 +72,7 @@ export class CombatScreen {
   open(payload: CombatStartPayload): void {
     this.close();
 
+    this.embedded      = false;
     this.combatId      = payload.combat_id;
     this.playerMaxHp   = payload.player.max_hp;
     this.playerMaxMana = payload.player.max_mana;
@@ -76,6 +80,20 @@ export class CombatScreen {
 
     this.ensureFlashStyles();
     this.buildOverlay(payload);
+  }
+
+  /** Render combat UI inside an external container (no backdrop overlay). */
+  openEmbedded(payload: CombatStartPayload, container: HTMLElement): void {
+    this.close();
+
+    this.embedded      = true;
+    this.combatId      = payload.combat_id;
+    this.playerMaxHp   = payload.player.max_hp;
+    this.playerMaxMana = payload.player.max_mana;
+    this.enemyMaxHp    = payload.monster.max_hp;
+
+    this.ensureFlashStyles();
+    this.buildOverlay(payload, container);
   }
 
   applyTurnResult(payload: CombatTurnResultPayload): void {
@@ -156,10 +174,16 @@ export class CombatScreen {
     this.clearActiveWindowTimer();
     this.removeActiveTooltip();
     if (this.overlay) {
-      this.overlay.remove();
+      if (this.embedded) {
+        // In embedded mode, just empty the container content
+        this.overlay.innerHTML = '';
+      } else {
+        this.overlay.remove();
+      }
       this.overlay = null;
       this.onClose?.();
     }
+    this.embedded = false;
     this.enemyIconEl = null;
     this.playerIconEl = null;
     this.enemyHpBar = null;
@@ -375,30 +399,44 @@ export class CombatScreen {
   // Build layout
   // ---------------------------------------------------------------------------
 
-  private buildOverlay(payload: CombatStartPayload): void {
-    // Semi-transparent backdrop
-    const overlay = document.createElement('div');
-    overlay.style.cssText = [
-      'position:fixed', 'inset:0', 'z-index:300',
-      'background:rgba(0,0,0,0.72)',
-      'display:flex', 'align-items:center', 'justify-content:center',
-      'font-family:Cinzel,serif', 'color:#c9a55c',
-    ].join(';');
+  private buildOverlay(payload: CombatStartPayload, externalContainer?: HTMLElement): void {
+    let overlay: HTMLElement;
+
+    if (externalContainer) {
+      // Embedded mode: render directly into the provided container
+      overlay = externalContainer;
+      overlay.innerHTML = '';
+      overlay.style.cssText = [
+        'display:flex', 'flex-direction:column',
+        'font-family:Cinzel,serif', 'color:#c9a55c',
+        'width:100%', 'height:100%',
+      ].join(';');
+    } else {
+      // Normal mode: full-screen backdrop overlay
+      overlay = document.createElement('div');
+      overlay.style.cssText = [
+        'position:fixed', 'inset:0', 'z-index:300',
+        'background:rgba(0,0,0,0.72)',
+        'display:flex', 'align-items:center', 'justify-content:center',
+        'font-family:Cinzel,serif', 'color:#c9a55c',
+      ].join(';');
+    }
 
     // Modal panel
     const modal = document.createElement('div');
     modal.className = 'cs-modal';
     modal.style.cssText = [
       'position:relative',
-      'width:728px', 'max-width:95vw',
-      'max-height:90vh',
+      externalContainer ? 'width:100%' : 'width:728px',
+      'max-width:95vw',
+      externalContainer ? 'flex:1;min-height:0' : 'max-height:90vh',
       'display:flex', 'flex-direction:column',
       'background:#0d0b08',
-      'border:1px solid #5a4a2a',
-      'border-radius:6px',
+      externalContainer ? '' : 'border:1px solid #5a4a2a',
+      externalContainer ? '' : 'border-radius:6px',
       'overflow:hidden',
-      'box-shadow:0 8px 40px rgba(0,0,0,0.9)',
-    ].join(';');
+      externalContainer ? '' : 'box-shadow:0 8px 40px rgba(0,0,0,0.9)',
+    ].filter(Boolean).join(';');
 
     // ── Combatants row ────────────────────────────────────────────────────
     const battleRow = document.createElement('div');
@@ -589,7 +627,9 @@ export class CombatScreen {
     modal.appendChild(logZone);
     overlay.appendChild(modal);
 
-    document.body.appendChild(overlay);
+    if (!externalContainer) {
+      document.body.appendChild(overlay);
+    }
     this.overlay = overlay;
 
     this.appendLogLine(`⚔ Combat started vs ${payload.monster.name}`);

@@ -6,14 +6,25 @@ import type {
   ExpeditionDispatchedPayload,
   ExpeditionCollectResultPayload,
   ExpeditionCompletedPayload,
+  GatherBuildingActionDto,
+  GatheringStartedPayload,
+  GatheringTickPayload,
+  GatheringEndedPayload,
+  GatheringRejectedPayload,
+  GatheringStartPayload,
 } from '@elarion/protocol';
 import { CombatModal } from './CombatModal';
 import { CraftingModal } from './CraftingModal';
+import { GatheringModal } from './GatheringModal';
+import type { GatheringCombatLoot } from './GatheringModal';
 
 type ActionCallback = (payload: CityBuildingActionPayload) => void;
 type ExpeditionDispatchCallback = (buildingId: number, actionId: number, durationHours: 1 | 3 | 6) => void;
 type ExpeditionCollectCallback = (expeditionId: number) => void;
 type CraftingOpenCallback = (npcId: number) => void;
+type GatheringStartCallback = (payload: GatheringStartPayload) => void;
+type GatheringCancelCallback = () => void;
+type InventorySlotsGetter = () => import('@elarion/protocol').InventorySlotDto[];
 
 export class BuildingPanel {
   private panel: HTMLElement;
@@ -25,14 +36,20 @@ export class BuildingPanel {
   private combatModal: CombatModal;
   private craftingModal: CraftingModal;
   private onCraftingOpen: CraftingOpenCallback | null = null;
+  private onGatheringStart: GatheringStartCallback | null = null;
+  private onGatheringCancel: GatheringCancelCallback | null = null;
+  private getInventorySlots: InventorySlotsGetter | null = null;
   private progressIntervals: number[] = [];
   private currentBuilding: CityMapBuilding | null = null;
   private currentExpeditionState: ExpeditionStateDto | undefined;
+  private gatheringActive = false;
+  private gatheringModal: GatheringModal;
 
   constructor(parent: HTMLElement, onAction: ActionCallback) {
     this.onAction = onAction;
     this.combatModal = new CombatModal(document.body);
     this.craftingModal = new CraftingModal(document.body);
+    this.gatheringModal = new GatheringModal();
 
     this.panel = document.createElement('div');
     this.panel.id = 'building-panel';
@@ -72,6 +89,18 @@ export class BuildingPanel {
 
   setOnCraftingOpen(cb: CraftingOpenCallback): void {
     this.onCraftingOpen = cb;
+  }
+
+  setOnGatheringStart(cb: GatheringStartCallback): void {
+    this.onGatheringStart = cb;
+  }
+
+  setOnGatheringCancel(cb: GatheringCancelCallback): void {
+    this.onGatheringCancel = cb;
+  }
+
+  setInventorySlotsGetter(getter: InventorySlotsGetter): void {
+    this.getInventorySlots = getter;
   }
 
   getCraftingModal(): CraftingModal {
@@ -209,6 +238,13 @@ export class BuildingPanel {
           continue;
         }
 
+        if (action.action_type === 'gather') {
+          actionsSection.appendChild(
+            this.renderGatherSection(building.id, action as GatherBuildingActionDto),
+          );
+          continue;
+        }
+
         const btn = document.createElement('button');
         btn.dataset['actionId'] = String(action.id);
         btn.dataset['actionType'] = action.action_type;
@@ -255,6 +291,175 @@ export class BuildingPanel {
     errorEl.style.cssText =
       'margin:0;font-family:"Crimson Text",serif;font-size:12px;color:#c0504a;display:none;';
     this.bodyEl.appendChild(errorEl);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Gather section
+  // ---------------------------------------------------------------------------
+
+  private renderGatherSection(buildingId: number, action: GatherBuildingActionDto): HTMLElement {
+    const cfg = action.config;
+    const section = document.createElement('div');
+    section.id = `gather-section-${action.id}`;
+    section.style.cssText = 'display:flex;flex-direction:column;gap:6px;padding:8px;background:rgba(60,50,30,0.3);border:1px solid #3a2e1a;border-radius:4px;';
+
+    // Title
+    const label = document.createElement('div');
+    label.style.cssText = 'font-size:13px;color:#e8c870;font-family:Cinzel,serif;';
+    label.textContent = action.label;
+    section.appendChild(label);
+
+    // Find ALL matching tools
+    const slots = this.getInventorySlots?.() ?? [];
+    const toolSlots = slots.filter(
+      (s) => s.definition.tool_type === cfg.required_tool_type && (s.current_durability ?? 0) > 0,
+    );
+    const totalDurability = toolSlots.reduce((sum, s) => sum + (s.current_durability ?? 0), 0);
+    const totalMaxDur = toolSlots.reduce((sum, s) => sum + (s.definition.max_durability ?? 0), 0);
+    const hasTools = toolSlots.length > 0;
+    const toolName = toolSlots[0]?.definition.name;
+
+    // Tool info
+    const toolInfo = document.createElement('div');
+    toolInfo.style.cssText = 'font-size:11px;font-family:"Crimson Text",serif;';
+    if (hasTools) {
+      toolInfo.style.color = '#a89060';
+      const countLabel = toolSlots.length > 1 ? ` (×${toolSlots.length})` : '';
+      toolInfo.innerHTML =
+        `<span style="color:#c8b88a;">${this.esc(toolName ?? cfg.required_tool_type)}${countLabel}</span> ` +
+        `<span style="color:${totalDurability > 100 ? '#8a9a6a' : '#c08060'};">${totalDurability} / ${totalMaxDur}</span> durability`;
+    } else {
+      toolInfo.style.color = '#c06050';
+      toolInfo.textContent = `No ${cfg.required_tool_type} in inventory`;
+    }
+    section.appendChild(toolInfo);
+
+    // Duration slider
+    const sliderLabel = document.createElement('div');
+    sliderLabel.style.cssText = 'font-size:10px;color:#6a5a3a;text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;';
+    sliderLabel.textContent = 'Gathering duration';
+    section.appendChild(sliderLabel);
+
+    const sliderRow = document.createElement('div');
+    sliderRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = String(cfg.min_seconds);
+    slider.max = String(cfg.max_seconds);
+    slider.value = String(cfg.min_seconds);
+    slider.style.cssText = 'flex:1;accent-color:#d4a84b;';
+
+    const durLabel = document.createElement('span');
+    durLabel.style.cssText = 'font-size:12px;color:#c8b88a;min-width:32px;text-align:right;';
+    durLabel.textContent = `${slider.value}s`;
+
+    sliderRow.appendChild(slider);
+    sliderRow.appendChild(durLabel);
+    section.appendChild(sliderRow);
+
+    // Durability cost display
+    const costInfo = document.createElement('div');
+    costInfo.style.cssText = 'font-size:11px;font-family:"Crimson Text",serif;';
+    const updateCost = () => {
+      const dur = Number(slider.value);
+      const cost = dur * cfg.durability_per_second;
+      const canAfford = totalDurability >= cost;
+      durLabel.textContent = `${dur}s`;
+      costInfo.innerHTML =
+        `<span style="color:#8a7a5a;">Durability cost:</span> ` +
+        `<span style="color:${canAfford ? '#8a9a6a' : '#c06050'};font-weight:600;">${cost}</span>` +
+        `<span style="color:#6a5a3a;"> (${cfg.durability_per_second}/s × ${dur}s)</span>`;
+    };
+    updateCost();
+    slider.addEventListener('input', updateCost);
+    section.appendChild(costInfo);
+
+    // Start button
+    const startBtn = document.createElement('button');
+    startBtn.style.cssText = [
+      'width:100%', 'padding:8px', 'background:rgba(90,74,42,0.5)', 'border:1px solid #5a4a2a',
+      'color:#e8c870', 'font-family:Cinzel,serif', 'font-size:12px', 'cursor:pointer',
+      'letter-spacing:0.06em', 'transition:background 0.15s', 'margin-top:2px',
+    ].join(';');
+    startBtn.textContent = 'Start Gathering';
+
+    if (!hasTools) {
+      startBtn.disabled = true;
+      startBtn.style.opacity = '0.4';
+      startBtn.style.cursor = 'default';
+    }
+
+    startBtn.addEventListener('mouseenter', () => {
+      if (!startBtn.disabled) startBtn.style.background = 'rgba(90,74,42,0.8)';
+    });
+    startBtn.addEventListener('mouseleave', () => {
+      if (!startBtn.disabled) startBtn.style.background = 'rgba(90,74,42,0.5)';
+    });
+
+    startBtn.addEventListener('click', () => {
+      if (!hasTools) return;
+      startBtn.disabled = true;
+      startBtn.style.opacity = '0.5';
+      this.onGatheringStart?.({
+        building_id: buildingId,
+        action_id: action.id,
+        duration: Number(slider.value),
+      });
+    });
+
+    section.appendChild(startBtn);
+    return section;
+  }
+
+  private esc(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // ── Gathering event handlers ───────────────────────────────────────────
+
+  isGatheringActive(): boolean {
+    return this.gatheringActive;
+  }
+
+  getGatheringModal(): GatheringModal {
+    return this.gatheringModal;
+  }
+
+  handleGatheringStarted(payload: GatheringStartedPayload): void {
+    this.gatheringActive = true;
+    this.gatheringModal.setOnCancel(() => this.onGatheringCancel?.());
+    this.gatheringModal.open(payload.duration);
+  }
+
+  handleGatheringTick(payload: GatheringTickPayload): void {
+    this.gatheringModal.handleTick(payload);
+  }
+
+  handleGatheringEnded(payload: GatheringEndedPayload): void {
+    this.gatheringActive = false;
+    this.gatheringModal.handleEnded(payload);
+  }
+
+  handleGatheringRejected(payload: GatheringRejectedPayload): void {
+    const errorEl = this.bodyEl.querySelector<HTMLElement>('#building-panel-error');
+    if (errorEl) {
+      errorEl.textContent = payload.message;
+      errorEl.style.display = 'block';
+    }
+    this.enableButtons();
+  }
+
+  addGatheringCombatLoot(loot: GatheringCombatLoot): void {
+    this.gatheringModal.addCombatLoot(loot);
+  }
+
+  handleGatheringCombatPause(monsterName: string, monsterIconUrl: string | null): void {
+    this.gatheringModal.handleCombatPause(monsterName, monsterIconUrl);
+  }
+
+  handleGatheringCombatResume(): void {
+    this.gatheringModal.handleCombatResume();
   }
 
   // ---------------------------------------------------------------------------
@@ -654,6 +859,7 @@ export class BuildingPanel {
 
   destroy(): void {
     this.clearProgressIntervals();
+    this.gatheringModal.close();
     this.panel.remove();
     this.combatModal.close();
     this.craftingModal.close();

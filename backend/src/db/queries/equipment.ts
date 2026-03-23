@@ -47,6 +47,7 @@ function buildInventorySlotDto(row: InventoryItemWithDefinition): InventorySlotD
     slot_id: row.id,
     item_def_id: row.item_def_id,
     quantity: row.quantity,
+    current_durability: row.current_durability ?? undefined,
     definition: {
       id: row.item_def_id,
       name: row.def_name,
@@ -66,6 +67,9 @@ function buildInventorySlotDto(row: InventoryItemWithDefinition): InventorySlotD
       dodge_chance: row.def_dodge_chance,
       crit_chance: row.def_crit_chance,
       crit_damage: row.def_crit_damage,
+      tool_type: row.def_tool_type ?? null,
+      max_durability: row.def_max_durability ?? null,
+      power: row.def_power ?? null,
     },
   };
 }
@@ -99,7 +103,11 @@ export async function getEquipmentState(characterId: string): Promise<EquipmentS
        d.mana_regen            AS def_mana_regen,
        d.dodge_chance          AS def_dodge_chance,
        d.crit_chance           AS def_crit_chance,
-       d.crit_damage           AS def_crit_damage
+       d.crit_damage           AS def_crit_damage,
+       d.tool_type             AS def_tool_type,
+       d.max_durability        AS def_max_durability,
+       d.power                 AS def_power,
+       ii.current_durability
      FROM inventory_items ii
      JOIN item_definitions d ON d.id = ii.item_def_id
      WHERE ii.character_id = $1
@@ -166,7 +174,11 @@ export async function equipItem(
          d.heal_power     AS def_heal_power,
          d.food_power     AS def_food_power,
          d.stack_size     AS def_stack_size,
-         d.icon_filename  AS def_icon_filename
+         d.icon_filename  AS def_icon_filename,
+         d.tool_type      AS def_tool_type,
+         d.max_durability AS def_max_durability,
+         d.power          AS def_power,
+         ii.current_durability
        FROM inventory_items ii
        JOIN item_definitions d ON d.id = ii.item_def_id
        WHERE ii.id = $1 AND ii.character_id = $2 AND ii.equipped_slot IS NULL`,
@@ -211,7 +223,11 @@ export async function equipItem(
          d.heal_power     AS def_heal_power,
          d.food_power     AS def_food_power,
          d.stack_size     AS def_stack_size,
-         d.icon_filename  AS def_icon_filename
+         d.icon_filename  AS def_icon_filename,
+         d.tool_type      AS def_tool_type,
+         d.max_durability AS def_max_durability,
+         d.power          AS def_power,
+         ii.current_durability
        FROM inventory_items ii
        JOIN item_definitions d ON d.id = ii.item_def_id
        WHERE ii.character_id = $1 AND ii.equipped_slot = $2`,
@@ -238,7 +254,11 @@ export async function equipItem(
            d.heal_power     AS def_heal_power,
            d.food_power     AS def_food_power,
            d.stack_size     AS def_stack_size,
-           d.icon_filename  AS def_icon_filename
+           d.icon_filename  AS def_icon_filename,
+           d.tool_type      AS def_tool_type,
+           d.max_durability AS def_max_durability,
+           d.power          AS def_power,
+           ii.current_durability
          FROM inventory_items ii
          JOIN item_definitions d ON d.id = ii.item_def_id
          WHERE ii.character_id = $1 AND ii.equipped_slot = 'left_arm'`,
@@ -326,7 +346,11 @@ export async function unequipItem(
          d.heal_power     AS def_heal_power,
          d.food_power     AS def_food_power,
          d.stack_size     AS def_stack_size,
-         d.icon_filename  AS def_icon_filename
+         d.icon_filename  AS def_icon_filename,
+         d.tool_type      AS def_tool_type,
+         d.max_durability AS def_max_durability,
+         d.power          AS def_power,
+         ii.current_durability
        FROM inventory_items ii
        JOIN item_definitions d ON d.id = ii.item_def_id
        WHERE ii.character_id = $1 AND ii.equipped_slot = $2`,

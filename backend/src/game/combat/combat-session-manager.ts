@@ -7,8 +7,11 @@ import { getCharacterLoadout } from '../../db/queries/loadouts';
 import { setCharacterInCombat } from '../../db/queries/loadouts';
 import { CombatSession } from './combat-session';
 
+export type CombatEndCallback = (characterId: string, outcome: 'win' | 'loss') => void;
+
 class CombatSessionManagerImpl {
   private sessions = new Map<string, CombatSession>();
+  private onEndCallbacks = new Map<string, CombatEndCallback>();
 
   async start(
     wsSession: AuthenticatedSession,
@@ -38,8 +41,20 @@ class CombatSessionManagerImpl {
     return this.sessions.get(characterId);
   }
 
-  end(characterId: string): void {
+  end(characterId: string, outcome?: 'win' | 'loss'): void {
     this.sessions.delete(characterId);
+    const cb = this.onEndCallbacks.get(characterId);
+    if (cb && outcome) {
+      this.onEndCallbacks.delete(characterId);
+      cb(characterId, outcome);
+    } else if (cb) {
+      this.onEndCallbacks.delete(characterId);
+    }
+  }
+
+  /** Register a one-time callback that fires when combat ends for this character. */
+  registerOnEnd(characterId: string, callback: CombatEndCallback): void {
+    this.onEndCallbacks.set(characterId, callback);
   }
 
   has(characterId: string): boolean {

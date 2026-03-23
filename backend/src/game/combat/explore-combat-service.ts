@@ -35,6 +35,12 @@ export async function resolveExplore(
   actionId: number,
   exploreConfig: ExploreActionConfig,
 ): Promise<BuildingExploreResultPayload> {
+  // ── HP gate ────────────────────────────────────────────────────────────────
+  if (character.current_hp <= 0) {
+    log('info', 'explore', 'rejected_hp_zero', { characterId: character.id, actionId });
+    return { action_id: actionId, outcome: 'no_encounter' };
+  }
+
   // ── Encounter roll ──────────────────────────────────────────────────────────
   const encounterRoll = Math.random() * 100;
   if (encounterRoll >= exploreConfig.encounter_chance) {

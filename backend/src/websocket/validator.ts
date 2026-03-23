@@ -76,6 +76,12 @@ const schemas: Record<string, Schema> = {
   'crafting.collect': {
     session_id: { type: 'number', required: true },
   },
+  'gathering.start': {
+    building_id: { type: 'number', required: true },
+    action_id: { type: 'number', required: true },
+    duration: { type: 'number', required: true },
+  },
+  'gathering.cancel': {},
 };
 
 export interface ValidationResult {
