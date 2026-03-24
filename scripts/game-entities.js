@@ -18,7 +18,9 @@ const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food']);
 const DEFENCE_CATEGORIES = new Set(['boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate']);
 const VALID_EFFECT_TYPES = ['damage', 'heal', 'buff', 'debuff', 'dot', 'reflect', 'drain'];
 const VALID_SLOT_TYPES = ['auto', 'active', 'both'];
-const VALID_ACTION_TYPES = ['travel', 'explore', 'expedition'];
+const VALID_ACTION_TYPES = ['travel', 'explore', 'expedition', 'gather'];
+const VALID_TOOL_TYPES = ['pickaxe', 'axe'];
+const VALID_GATHER_EVENT_TYPES = ['resource', 'gold', 'monster', 'accident', 'nothing'];
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -266,6 +268,47 @@ function validateBuildingAction(data) {
         if (!Number.isInteger(it.base_quantity) || it.base_quantity < 1) errors.push(`config.items[${i}].base_quantity must be a positive integer`);
       }
     }
+  } else if (data.action_type === 'gather') {
+    if (!data.config.required_tool_type || !VALID_TOOL_TYPES.includes(data.config.required_tool_type)) {
+      errors.push(`config.required_tool_type must be one of: ${VALID_TOOL_TYPES.join(', ')}`);
+    }
+    if (!Number.isInteger(data.config.durability_per_second) || data.config.durability_per_second < 1) {
+      errors.push('config.durability_per_second must be a positive integer');
+    }
+    if (!Number.isInteger(data.config.min_seconds) || data.config.min_seconds < 1) {
+      errors.push('config.min_seconds must be a positive integer');
+    }
+    if (!Number.isInteger(data.config.max_seconds) || data.config.max_seconds < 1) {
+      errors.push('config.max_seconds must be a positive integer');
+    }
+    if (data.config.min_seconds > data.config.max_seconds) {
+      errors.push('config.min_seconds must be <= config.max_seconds');
+    }
+    if (!Array.isArray(data.config.events) || data.config.events.length === 0) {
+      errors.push('config.events array is required and must not be empty');
+    } else {
+      for (let i = 0; i < data.config.events.length; i++) {
+        const ev = data.config.events[i];
+        if (!ev.type || !VALID_GATHER_EVENT_TYPES.includes(ev.type)) {
+          errors.push(`config.events[${i}].type must be one of: ${VALID_GATHER_EVENT_TYPES.join(', ')}`);
+        }
+        if (!Number.isInteger(ev.weight) || ev.weight < 1) {
+          errors.push(`config.events[${i}].weight must be a positive integer`);
+        }
+        if (ev.type === 'resource') {
+          if (!Number.isInteger(ev.item_def_id) || ev.item_def_id < 1) errors.push(`config.events[${i}].item_def_id must be a positive integer`);
+          if (!Number.isInteger(ev.quantity) || ev.quantity < 1) errors.push(`config.events[${i}].quantity must be a positive integer`);
+        } else if (ev.type === 'gold') {
+          if (!Number.isInteger(ev.min_amount) || ev.min_amount < 0) errors.push(`config.events[${i}].min_amount must be a non-negative integer`);
+          if (!Number.isInteger(ev.max_amount) || ev.max_amount < 1) errors.push(`config.events[${i}].max_amount must be a positive integer`);
+          if (ev.min_amount > ev.max_amount) errors.push(`config.events[${i}].min_amount must be <= max_amount`);
+        } else if (ev.type === 'monster') {
+          if (!Number.isInteger(ev.monster_id) || ev.monster_id < 1) errors.push(`config.events[${i}].monster_id must be a positive integer`);
+        } else if (ev.type === 'accident') {
+          if (!Number.isInteger(ev.hp_damage) || ev.hp_damage < 1) errors.push(`config.events[${i}].hp_damage must be a positive integer`);
+        }
+      }
+    }
   }
 
   return errors;
@@ -465,6 +508,123 @@ async function setEncounterCmd(data) {
   }
 }
 
+// ─── Quest Commands ──────────────────────────────────────────────────────────
+
+const VALID_QUEST_TYPES = ['main', 'side', 'daily', 'weekly', 'monthly', 'repeatable'];
+const VALID_OBJECTIVE_TYPES = ['kill_monster', 'collect_item', 'craft_item', 'spend_crowns', 'gather_resource', 'reach_level', 'visit_location', 'talk_to_npc'];
+const VALID_PREREQ_TYPES = ['min_level', 'has_item', 'completed_quest', 'class_required'];
+const VALID_REWARD_TYPES = ['item', 'xp', 'crowns'];
+
+function validateQuest(data) {
+  const errors = [];
+  if (!data.name || typeof data.name !== 'string' || !data.name.trim()) errors.push('name is required');
+  if (!data.description || typeof data.description !== 'string' || !data.description.trim()) errors.push('description is required');
+  if (!data.quest_type || !VALID_QUEST_TYPES.includes(data.quest_type)) errors.push(`quest_type must be one of: ${VALID_QUEST_TYPES.join(', ')}`);
+
+  if (!Array.isArray(data.objectives) || data.objectives.length === 0) {
+    errors.push('objectives array with at least one entry is required');
+  } else {
+    for (let i = 0; i < data.objectives.length; i++) {
+      const obj = data.objectives[i];
+      if (!obj.objective_type || !VALID_OBJECTIVE_TYPES.includes(obj.objective_type)) {
+        errors.push(`objectives[${i}].objective_type must be one of: ${VALID_OBJECTIVE_TYPES.join(', ')}`);
+      }
+      if (!obj.target_quantity || !Number.isInteger(obj.target_quantity) || obj.target_quantity < 1) {
+        errors.push(`objectives[${i}].target_quantity must be a positive integer`);
+      }
+    }
+  }
+
+  if (data.prerequisites && !Array.isArray(data.prerequisites)) {
+    errors.push('prerequisites must be an array');
+  } else if (data.prerequisites) {
+    for (let i = 0; i < data.prerequisites.length; i++) {
+      const p = data.prerequisites[i];
+      if (!p.prereq_type || !VALID_PREREQ_TYPES.includes(p.prereq_type)) {
+        errors.push(`prerequisites[${i}].prereq_type must be one of: ${VALID_PREREQ_TYPES.join(', ')}`);
+      }
+    }
+  }
+
+  if (data.rewards && !Array.isArray(data.rewards)) {
+    errors.push('rewards must be an array');
+  } else if (data.rewards) {
+    for (let i = 0; i < data.rewards.length; i++) {
+      const r = data.rewards[i];
+      if (!r.reward_type || !VALID_REWARD_TYPES.includes(r.reward_type)) {
+        errors.push(`rewards[${i}].reward_type must be one of: ${VALID_REWARD_TYPES.join(', ')}`);
+      }
+      if (!r.quantity || !Number.isInteger(r.quantity) || r.quantity < 1) {
+        errors.push(`rewards[${i}].quantity must be a positive integer`);
+      }
+    }
+  }
+
+  if (data.npc_ids && !Array.isArray(data.npc_ids)) {
+    errors.push('npc_ids must be an array of integer NPC IDs');
+  }
+
+  return errors;
+}
+
+async function createQuestCmd(data) {
+  const errors = validateQuest(data);
+  if (errors.length) return output('create-quest', false, errors);
+
+  const token = await authenticate();
+  const res = await apiPost('/api/quests', data, token);
+  if (res.status === 201) {
+    output('create-quest', true, res.data);
+  } else {
+    output('create-quest', false, [res.data.error || `HTTP ${res.status}`]);
+  }
+}
+
+async function updateQuestCmd(data) {
+  if (data.id == null || !Number.isInteger(data.id)) {
+    return output('update-quest', false, ['id is required (integer, the quest to update)']);
+  }
+  const questId = data.id;
+  const updateData = { ...data };
+  delete updateData.id;
+
+  // Validate objectives if provided
+  if (updateData.objectives) {
+    if (!Array.isArray(updateData.objectives) || updateData.objectives.length === 0) {
+      return output('update-quest', false, ['objectives must be a non-empty array if provided']);
+    }
+    for (let i = 0; i < updateData.objectives.length; i++) {
+      const obj = updateData.objectives[i];
+      if (!obj.objective_type || !VALID_OBJECTIVE_TYPES.includes(obj.objective_type)) {
+        return output('update-quest', false, [`objectives[${i}].objective_type must be one of: ${VALID_OBJECTIVE_TYPES.join(', ')}`]);
+      }
+    }
+  }
+
+  const token = await authenticate();
+  const res = await apiPut(`/api/quests/${questId}`, updateData, token);
+  if (res.status === 200) {
+    output('update-quest', true, res.data);
+  } else {
+    output('update-quest', false, [res.data.error || `HTTP ${res.status}`]);
+  }
+}
+
+async function deleteQuestCmd(data) {
+  if (data.id == null || !Number.isInteger(data.id)) {
+    return output('delete-quest', false, ['id is required (integer, the quest to delete)']);
+  }
+  const token = await authenticate();
+  const res = await httpRequest('DELETE', `${BASE_URL}/api/quests/${data.id}`, null, {
+    Authorization: `Bearer ${token}`,
+  });
+  if (res.status === 204) {
+    output('delete-quest', true, { deleted: data.id });
+  } else {
+    output('delete-quest', false, [res.data?.error || `HTTP ${res.status}`]);
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 const HELP = `
@@ -478,10 +638,13 @@ Commands:
   upload-npc-icon         Upload a PNG icon for NPC use
   set-npc-crafter         Set/unset an NPC's crafter flag
   create-recipe           Create a crafting recipe with ingredients
-  create-building-action  Create a building action (travel/explore/expedition)
+  create-building-action  Create a building action (travel/explore/expedition/gather)
   assign-building-npc     Assign an NPC to a building
   create-ability          Create a combat ability
   set-encounter           Set a night random encounter entry for a zone
+  create-quest            Create a quest with objectives, prereqs, rewards, NPC givers
+  update-quest            Update an existing quest (pass id + fields to change)
+  delete-quest            Delete a quest by id
 
 Environment:
   ADMIN_API_URL    Admin API base URL (default: http://localhost:4001)
@@ -497,9 +660,13 @@ Examples:
   node scripts/game-entities.js set-npc-crafter '{"npc_id":1,"is_crafter":true}'
   node scripts/game-entities.js create-recipe '{"name":"Iron Sword","npc_id":1,"output_item_id":10,"output_quantity":1,"cost_crowns":50,"craft_time_seconds":30,"ingredients":[{"item_def_id":5,"quantity":3}]}'
   node scripts/game-entities.js create-building-action '{"zone_id":1,"building_id":2,"action_type":"explore","config":{"encounter_chance":40,"monsters":[{"monster_id":1,"weight":10}]}}'
+  node scripts/game-entities.js create-building-action '{"zone_id":1,"building_id":3,"action_type":"gather","config":{"required_tool_type":"pickaxe","durability_per_second":2,"min_seconds":10,"max_seconds":60,"events":[{"type":"resource","weight":50,"item_def_id":5,"quantity":1},{"type":"gold","weight":20,"min_amount":1,"max_amount":5},{"type":"nothing","weight":20},{"type":"accident","weight":5,"hp_damage":3},{"type":"monster","weight":5,"monster_id":1}]}}'
   node scripts/game-entities.js assign-building-npc '{"zone_id":1,"building_id":2,"npc_id":1}'
   node scripts/game-entities.js create-ability '{"name":"Fireball","effect_type":"damage","mana_cost":10,"effect_value":25}'
   node scripts/game-entities.js set-encounter '{"zone_id":1,"monster_id":1,"weight":10}'
+  node scripts/game-entities.js create-quest '{"name":"Goblin Slayer","description":"Kill goblins","quest_type":"daily","objectives":[{"objective_type":"kill_monster","target_id":1,"target_quantity":5}],"rewards":[{"reward_type":"xp","quantity":50},{"reward_type":"crowns","quantity":20}],"npc_ids":[1]}'
+  node scripts/game-entities.js update-quest '{"id":1,"description":"Kill more goblins","objectives":[{"objective_type":"kill_monster","target_id":1,"target_quantity":10}]}'
+  node scripts/game-entities.js delete-quest '{"id":1}'
 `;
 
 async function main() {
@@ -537,6 +704,9 @@ async function main() {
       case 'assign-building-npc':   await assignBuildingNpcCmd(data); break;
       case 'create-ability':        await createAbilityCmd(data); break;
       case 'set-encounter':         await setEncounterCmd(data); break;
+      case 'create-quest':          await createQuestCmd(data); break;
+      case 'update-quest':          await updateQuestCmd(data); break;
+      case 'delete-quest':          await deleteQuestCmd(data); break;
       default:
         console.error(`Unknown command: ${cmd}`);
         console.log(HELP);

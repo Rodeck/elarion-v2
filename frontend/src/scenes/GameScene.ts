@@ -8,6 +8,9 @@ import { LogoutButton } from '../ui/LogoutButton';
 import { DayNightBar } from '../ui/DayNightBar';
 import { LeftPanel } from '../ui/LeftPanel';
 import { CombatScreen } from '../ui/CombatScreen';
+import { QuestPanel } from '../ui/QuestPanel';
+import { QuestLog } from '../ui/QuestLog';
+import { QuestTracker } from '../ui/QuestTracker';
 import { SessionStore } from '../auth/SessionStore';
 import { AnimatedSprite } from '../entities/AnimatedSprite';
 import { getSprite } from '../entities/SpriteRegistry';
@@ -69,6 +72,15 @@ import type {
   GatheringRejectedPayload,
   GatheringCombatPausePayload,
   GatheringCombatResumePayload,
+  QuestAvailableListPayload,
+  QuestAcceptedPayload,
+  QuestCompletedPayload,
+  QuestProgressPayload,
+  QuestRejectedPayload,
+  QuestAbandonedPayload,
+  QuestLogPayload,
+  QuestNpcDialogsResponsePayload,
+  QuestTalkCompletedPayload,
 } from '@elarion/protocol';
 
 const TILE_SIZE = 32;
@@ -87,6 +99,9 @@ export class GameScene extends Phaser.Scene {
   private leftPanel!: LeftPanel;
   private dayNightBar: DayNightBar | null = null;
   private combatScreen: CombatScreen | null = null;
+  private questPanel!: QuestPanel;
+  private questLog!: QuestLog;
+  private questTracker!: QuestTracker;
 
   // Remote players: characterId → sprite
   private remotePlayers = new Map<string, Phaser.GameObjects.Container>();
@@ -179,6 +194,25 @@ export class GameScene extends Phaser.Scene {
       this.buildingPanel.getCraftingModal().open(npcId);
       this.client.send('crafting.open', { npc_id: npcId });
     });
+    this.questPanel = new QuestPanel(document.getElementById('game')!);
+    this.questPanel.setSendFn((type, payload) => {
+      this.client.send(type, payload);
+    });
+    this.buildingPanel.setOnQuestOpen((npcId) => {
+      this.questPanel.open(npcId);
+      this.client.send('quest.list_available', { npc_id: npcId });
+    });
+    this.buildingPanel.setOnNpcDialogsRequest((npcId) => {
+      this.client.send('quest.npc_dialogs', { npc_id: npcId });
+    });
+    this.buildingPanel.setOnQuestTalkComplete((npcId, charQuestId, objectiveId) => {
+      this.client.send('quest.talk_complete', { npc_id: npcId, character_quest_id: charQuestId, objective_id: objectiveId });
+    });
+    this.questLog = new QuestLog(document.getElementById('game')!);
+    this.questLog.setSendFn((type, payload) => {
+      this.client.send(type, payload);
+    });
+    this.questTracker = new QuestTracker(document.getElementById('game')!);
     this.buildingPanel.getCraftingModal().setSendFn((type, payload) => {
       this.client.send(type, payload);
     });
@@ -576,6 +610,51 @@ export class GameScene extends Phaser.Scene {
       const modal = this.buildingPanel.getCraftingModal();
       if (modal.isOpen()) {
         this.client.send('crafting.open', { npc_id: modal.getNpcId() });
+      }
+    });
+
+    // Quest handlers
+    this.client.on<QuestAvailableListPayload>('quest.available_list', (payload) => {
+      this.questPanel.handleAvailableList(payload);
+    });
+    this.client.on<QuestAcceptedPayload>('quest.accepted', (payload) => {
+      this.questPanel.handleAccepted(payload);
+      this.questLog.handleQuestAccepted(payload.quest);
+      this.questTracker.addQuest(payload.quest);
+    });
+    this.client.on<QuestCompletedPayload>('quest.completed', (payload) => {
+      this.questPanel.handleCompleted(payload);
+      this.questTracker.removeQuest(payload.character_quest_id);
+      if (this.myCharacter) this.myCharacter.crowns = payload.new_crowns;
+      this.statsBar?.setCrowns(payload.new_crowns);
+      this.leftPanel.onInventoryState({ slots: payload.updated_slots, capacity: 20 });
+    });
+    this.client.on<QuestProgressPayload>('quest.progress', (payload) => {
+      this.questPanel.handleProgress(payload);
+      this.questLog.handleProgress(payload);
+      this.questTracker.handleProgress(payload);
+      if (payload.quest_complete) {
+        this.chatBox.addSystemMessage('Quest ready to turn in! Return to the quest giver.');
+      }
+    });
+    this.client.on<QuestRejectedPayload>('quest.rejected', (payload) => {
+      this.questPanel.handleRejected(payload);
+    });
+    this.client.on<QuestAbandonedPayload>('quest.abandoned', (payload) => {
+      this.questLog.handleAbandoned(payload);
+      this.questTracker.removeQuest(payload.character_quest_id);
+    });
+    this.client.on<QuestLogPayload>('quest.log', (payload) => {
+      this.questLog.handleQuestLog(payload);
+      this.questTracker.updateFromQuestLog(payload.active_quests);
+    });
+    this.client.on<QuestNpcDialogsResponsePayload>('quest.npc_dialogs', (payload) => {
+      this.buildingPanel.handleNpcDialogs(payload.npc_id, payload.dialogs);
+    });
+    this.client.on<QuestTalkCompletedPayload>('quest.talk_completed', (payload) => {
+      this.buildingPanel.handleTalkCompleted(payload.dialog_response);
+      if (payload.quest_complete) {
+        this.chatBox.addSystemMessage('Quest ready to turn in! Return to the quest giver.');
       }
     });
 
@@ -1101,6 +1180,23 @@ export class GameScene extends Phaser.Scene {
       c.crowns,
     );
     this.logoutButton = new LogoutButton(document.getElementById('top-bar')!, () => this.handleLogout());
+
+    // Quest log toggle button in top bar
+    const questLogBtn = document.createElement('button');
+    questLogBtn.textContent = 'Quests';
+    questLogBtn.style.cssText = [
+      'position:absolute', 'right:80px', 'top:50%', 'transform:translateY(-50%)',
+      'padding:4px 12px', 'background:rgba(90,74,42,0.4)', 'border:1px solid #5a4a2a',
+      'color:#e8c870', 'font-family:Cinzel,serif', 'font-size:12px', 'cursor:pointer',
+      'border-radius:2px', 'letter-spacing:0.05em',
+    ].join(';');
+    questLogBtn.addEventListener('click', () => {
+      this.questLog.toggle();
+      if (this.questLog.isVisible()) {
+        this.client.send('quest.log', {});
+      }
+    });
+    document.getElementById('top-bar')!.appendChild(questLogBtn);
   }
 
   private handleLogout(): void {

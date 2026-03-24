@@ -134,6 +134,7 @@ export interface NpcDto {
   description: string;
   icon_url: string;
   is_crafter: boolean;
+  is_quest_giver: boolean;
 }
 
 export interface CityMapBuilding {
@@ -894,6 +895,8 @@ export interface CombatActiveWindowPayload {
 export interface CombatEndPayload {
   combat_id: string;
   outcome: 'win' | 'loss';
+  monster_name: string;
+  monster_icon_url: string | null;
   xp_gained: number;
   crowns_gained: number;
   items_dropped: ItemDroppedDto[];
@@ -1172,3 +1175,205 @@ export type CraftingCancelledMessage        = WsMessage<CraftingCancelledPayload
 export type CraftingCollectedMessage        = WsMessage<CraftingCollectedPayload>;
 export type CraftingRejectedMessage         = WsMessage<CraftingRejectedPayload>;
 export type CraftingSessionsUpdatedMessage  = WsMessage<CraftingSessionsUpdatedPayload>;
+
+// ---------------------------------------------------------------------------
+// Quest System: enums
+// ---------------------------------------------------------------------------
+
+export type QuestType = 'main' | 'side' | 'daily' | 'weekly' | 'monthly' | 'repeatable';
+export type QuestStatus = 'active' | 'completed' | 'failed' | 'abandoned';
+export type ObjectiveType =
+  | 'kill_monster'
+  | 'collect_item'
+  | 'craft_item'
+  | 'spend_crowns'
+  | 'gather_resource'
+  | 'reach_level'
+  | 'visit_location'
+  | 'talk_to_npc';
+export type PrereqType = 'min_level' | 'has_item' | 'completed_quest' | 'class_required';
+export type RewardType = 'item' | 'xp' | 'crowns';
+
+// ---------------------------------------------------------------------------
+// Quest System: shared sub-types
+// ---------------------------------------------------------------------------
+
+export interface QuestObjectiveDto {
+  id: number;
+  objective_type: ObjectiveType;
+  target_id: number | null;
+  target_name: string | null;
+  target_icon_url: string | null;
+  target_quantity: number;
+  target_duration: number | null;
+  description: string | null;
+  dialog_prompt: string | null;
+  dialog_response: string | null;
+  current_progress: number;
+  is_complete: boolean;
+}
+
+export interface QuestRewardDto {
+  reward_type: RewardType;
+  target_id: number | null;
+  target_name: string | null;
+  target_icon_url: string | null;
+  quantity: number;
+}
+
+export interface QuestPrerequisiteDto {
+  prereq_type: PrereqType;
+  target_id: number | null;
+  target_value: number;
+  description: string;
+}
+
+export interface QuestDefinitionDto {
+  id: number;
+  name: string;
+  description: string;
+  quest_type: QuestType;
+  chain_id: string | null;
+  chain_step: number | null;
+  objectives: QuestObjectiveDto[];
+  rewards: QuestRewardDto[];
+  prerequisites: QuestPrerequisiteDto[];
+}
+
+export interface CharacterQuestDto {
+  character_quest_id: number;
+  quest: QuestDefinitionDto;
+  status: QuestStatus;
+  accepted_at: string;
+  completed_at: string | null;
+  objectives: QuestObjectiveDto[];
+}
+
+export type QuestRejectionReason =
+  | 'NOT_AT_NPC'
+  | 'QUEST_NOT_FOUND'
+  | 'PREREQUISITES_NOT_MET'
+  | 'QUEST_ALREADY_ACTIVE'
+  | 'QUEST_LOG_FULL'
+  | 'QUEST_NOT_COMPLETABLE'
+  | 'INVENTORY_FULL'
+  | 'INVALID_REQUEST';
+
+// ---------------------------------------------------------------------------
+// Quest System: Client → Server payloads
+// ---------------------------------------------------------------------------
+
+export interface QuestListAvailablePayload {
+  npc_id: number;
+}
+
+export interface QuestAcceptPayload {
+  npc_id: number;
+  quest_id: number;
+}
+
+export interface QuestCompletePayload {
+  character_quest_id: number;
+}
+
+export interface QuestAbandonPayload {
+  character_quest_id: number;
+}
+
+export interface QuestLogRequestPayload {}
+
+export interface QuestNpcDialogsPayload {
+  npc_id: number;
+}
+
+export interface QuestTalkCompletePayload {
+  npc_id: number;
+  character_quest_id: number;
+  objective_id: number;
+}
+
+// ---------------------------------------------------------------------------
+// Quest System: Server → Client payloads
+// ---------------------------------------------------------------------------
+
+export interface QuestAvailableListPayload {
+  npc_id: number;
+  available_quests: QuestDefinitionDto[];
+  active_quests: CharacterQuestDto[];
+  completable_quests: CharacterQuestDto[];
+}
+
+export interface QuestAcceptedPayload {
+  quest: CharacterQuestDto;
+}
+
+export interface QuestProgressPayload {
+  character_quest_id: number;
+  objective_id: number;
+  current_progress: number;
+  target_quantity: number;
+  is_complete: boolean;
+  quest_complete: boolean;
+}
+
+export interface QuestCompletedPayload {
+  character_quest_id: number;
+  rewards_granted: QuestRewardDto[];
+  new_crowns: number;
+  updated_slots: InventorySlotDto[];
+}
+
+export interface QuestAbandonedPayload {
+  character_quest_id: number;
+}
+
+export interface QuestLogPayload {
+  active_quests: CharacterQuestDto[];
+}
+
+export interface QuestNpcDialogDto {
+  character_quest_id: number;
+  quest_name: string;
+  objective_id: number;
+  dialog_prompt: string;
+  dialog_response: string;
+}
+
+export interface QuestNpcDialogsResponsePayload {
+  npc_id: number;
+  dialogs: QuestNpcDialogDto[];
+}
+
+export interface QuestTalkCompletedPayload {
+  character_quest_id: number;
+  objective_id: number;
+  dialog_response: string;
+  quest_complete: boolean;
+}
+
+export interface QuestRejectedPayload {
+  action: string;
+  reason: QuestRejectionReason;
+  details?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Quest System: message type aliases
+// ---------------------------------------------------------------------------
+
+export type QuestListAvailableMessage   = WsMessage<QuestListAvailablePayload>;
+export type QuestAcceptMessage          = WsMessage<QuestAcceptPayload>;
+export type QuestCompleteMessage        = WsMessage<QuestCompletePayload>;
+export type QuestAbandonMessage         = WsMessage<QuestAbandonPayload>;
+export type QuestLogRequestMessage      = WsMessage<QuestLogRequestPayload>;
+export type QuestAvailableListMessage   = WsMessage<QuestAvailableListPayload>;
+export type QuestAcceptedMessage        = WsMessage<QuestAcceptedPayload>;
+export type QuestProgressMessage        = WsMessage<QuestProgressPayload>;
+export type QuestCompletedMessage       = WsMessage<QuestCompletedPayload>;
+export type QuestAbandonedMessage       = WsMessage<QuestAbandonedPayload>;
+export type QuestLogMessage             = WsMessage<QuestLogPayload>;
+export type QuestRejectedMessage            = WsMessage<QuestRejectedPayload>;
+export type QuestNpcDialogsMessage          = WsMessage<QuestNpcDialogsPayload>;
+export type QuestTalkCompleteMessage        = WsMessage<QuestTalkCompletePayload>;
+export type QuestNpcDialogsResponseMessage  = WsMessage<QuestNpcDialogsResponsePayload>;
+export type QuestTalkCompletedMessage       = WsMessage<QuestTalkCompletedPayload>;

@@ -37,6 +37,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - TypeScript 5.x (admin frontend + admin backend) + Express 4 + multer (admin backend), Canvas 2D API (admin frontend), Vite 5 (admin frontend build) (019-sprite-sheet-tool)
 - PostgreSQL 16 (existing `item_definitions.icon_filename` column) + filesystem (`backend/assets/items/icons/`) (019-sprite-sheet-tool)
 - PostgreSQL 16 — migration 021 (alter item_definitions, inventory_items, building_actions, characters) (020-tool-gathering)
+- TypeScript 5.x (all packages: frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (game backend), Phaser 3.60 + Vite 5 (game frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT) (021-quest-system)
+- PostgreSQL 16 — 7 new tables + 1 ALTER via migration `022_quest_system.sql` (021-quest-system)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -62,9 +64,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 021-quest-system: Added TypeScript 5.x (all packages: frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (game backend), Phaser 3.60 + Vite 5 (game frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 020-tool-gathering: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client)
 - 019-sprite-sheet-tool: Added TypeScript 5.x (admin frontend + admin backend) + Express 4 + multer (admin backend), Canvas 2D API (admin frontend), Vite 5 (admin frontend build)
-- 018-building-item-overlay: Added TypeScript 5.x (admin backend + admin frontend) + Express 4 (admin backend), Canvas 2D API (admin frontend), `pg` (PostgreSQL client)
 
 
 

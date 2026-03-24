@@ -36,10 +36,11 @@ async function overview() {
     pool.query(`SELECT COUNT(*) as n FROM npcs`),
     pool.query(`SELECT COUNT(*) as n FROM crafting_recipes`),
     pool.query(`SELECT COUNT(*) as n FROM abilities`),
+    pool.query(`SELECT COUNT(*) as n FROM quest_definitions`),
     pool.query(`SELECT COUNT(*) as n FROM characters`),
     pool.query(`SELECT COUNT(*) as n FROM accounts`),
   ]);
-  const labels = ['Items', 'Monsters', 'Map Zones', 'Buildings', 'NPCs', 'Crafting Recipes', 'Abilities', 'Characters', 'Accounts'];
+  const labels = ['Items', 'Monsters', 'Map Zones', 'Buildings', 'NPCs', 'Crafting Recipes', 'Abilities', 'Quests', 'Characters', 'Accounts'];
   section('Game Overview');
   table(labels.map((l, i) => ({ entity: l, count: counts[i].rows[0].n })));
 
@@ -150,6 +151,22 @@ async function itemDetail(id) {
       console.log(`  ${e.zone} / ${e.building} — base qty: ${itemEntry ? itemEntry.base_quantity : '?'}`);
     }
   }
+
+  // Gathering event rewards containing this item
+  const gatherActions = await pool.query(`
+    SELECT ba.id as action_id, b.name as building, z.name as zone, ba.config
+    FROM building_actions ba
+    JOIN buildings b ON b.id = ba.building_id
+    JOIN map_zones z ON z.id = b.zone_id
+    WHERE ba.action_type = 'gather' AND ba.config::text LIKE '%"item_def_id":' || $1::text || '%'
+  `, [id]);
+  if (gatherActions.rows.length) {
+    section('Gathering Sources');
+    for (const g of gatherActions.rows) {
+      const ev = (g.config.events || []).find(e => e.type === 'resource' && e.item_def_id === parseInt(id));
+      console.log(`  ${g.zone} / ${g.building} — qty: ${ev ? ev.quantity : '?'}, weight: ${ev ? ev.weight : '?'}`);
+    }
+  }
 }
 
 async function monsters() {
@@ -231,6 +248,22 @@ async function monsterDetail(id) {
     section('Night Random Encounters');
     table(encounters.rows);
   }
+
+  // Gathering encounter appearances
+  const gatherEncounters = await pool.query(`
+    SELECT ba.id as action_id, b.name as building, z.name as zone, ba.config
+    FROM building_actions ba
+    JOIN buildings b ON b.id = ba.building_id
+    JOIN map_zones z ON z.id = b.zone_id
+    WHERE ba.action_type = 'gather' AND ba.config::text LIKE '%"monster_id":' || $1::text || '%'
+  `, [id]);
+  if (gatherEncounters.rows.length) {
+    section('Appears in Gathering Events');
+    for (const g of gatherEncounters.rows) {
+      const ev = (g.config.events || []).find(e => e.type === 'monster' && e.monster_id === parseInt(id));
+      console.log(`  ${g.zone} / ${g.building} — weight: ${ev ? ev.weight : '?'}`);
+    }
+  }
 }
 
 async function maps() {
@@ -302,6 +335,24 @@ async function zoneDetail(id) {
             itemNames.push(`${ir.rows[0]?.name || '?'} x${it.base_quantity}`);
           }
           console.log(`    [${a.id}] expedition — gold: ${cfg.base_gold}, exp: ${cfg.base_exp} — items: ${itemNames.join(', ') || 'none'}`);
+        } else if (a.action_type === 'gather') {
+          const eventSummary = [];
+          for (const ev of (cfg.events || [])) {
+            if (ev.type === 'resource') {
+              const ir = await pool.query(`SELECT name FROM item_definitions WHERE id = $1`, [ev.item_def_id]);
+              eventSummary.push(`${ir.rows[0]?.name || '?'} x${ev.quantity} (w:${ev.weight})`);
+            } else if (ev.type === 'gold') {
+              eventSummary.push(`gold ${ev.min_amount}-${ev.max_amount} (w:${ev.weight})`);
+            } else if (ev.type === 'monster') {
+              const mr = await pool.query(`SELECT name FROM monsters WHERE id = $1`, [ev.monster_id]);
+              eventSummary.push(`${mr.rows[0]?.name || '?'} encounter (w:${ev.weight})`);
+            } else if (ev.type === 'accident') {
+              eventSummary.push(`accident ${ev.hp_damage}dmg (w:${ev.weight})`);
+            } else if (ev.type === 'nothing') {
+              eventSummary.push(`nothing (w:${ev.weight})`);
+            }
+          }
+          console.log(`    [${a.id}] gather — tool: ${cfg.required_tool_type}, dur/s: ${cfg.durability_per_second}, time: ${cfg.min_seconds}-${cfg.max_seconds}s — ${eventSummary.join(', ')}`);
         }
       }
     }
@@ -429,6 +480,81 @@ async function economy() {
     }
     console.log(`  ${e.zone} / ${e.building} — gold: ${cfg.base_gold}, exp: ${cfg.base_exp} — ${itemNames.join(', ') || 'no items'}`);
   }
+
+  section('Gathering Rewards');
+  const gatherActions = await pool.query(`
+    SELECT b.name as building, z.name as zone, ba.config
+    FROM building_actions ba
+    JOIN buildings b ON b.id = ba.building_id
+    JOIN map_zones z ON z.id = b.zone_id
+    WHERE ba.action_type = 'gather' ORDER BY z.id, b.id
+  `);
+  if (gatherActions.rows.length) {
+    for (const g of gatherActions.rows) {
+      const cfg = g.config || {};
+      const parts = [`tool: ${cfg.required_tool_type}, ${cfg.min_seconds}-${cfg.max_seconds}s`];
+      for (const ev of (cfg.events || [])) {
+        if (ev.type === 'resource') {
+          const ir = await pool.query(`SELECT name FROM item_definitions WHERE id = $1`, [ev.item_def_id]);
+          parts.push(`${ir.rows[0]?.name || '?'} x${ev.quantity}`);
+        } else if (ev.type === 'gold') {
+          parts.push(`gold ${ev.min_amount}-${ev.max_amount}`);
+        }
+      }
+      console.log(`  ${g.zone} / ${g.building} — ${parts.join(', ')}`);
+    }
+  } else {
+    console.log('  (no gathering actions)');
+  }
+}
+
+async function gathering() {
+  const res = await pool.query(`
+    SELECT ba.id, b.name as building, z.name as zone, ba.config
+    FROM building_actions ba
+    JOIN buildings b ON b.id = ba.building_id
+    JOIN map_zones z ON z.id = b.zone_id
+    WHERE ba.action_type = 'gather' ORDER BY z.id, b.id
+  `);
+  section('All Gathering Actions');
+  if (!res.rows.length) { console.log('  (no gathering actions defined)'); return; }
+
+  for (const row of res.rows) {
+    const cfg = row.config || {};
+    console.log(`\n  [${row.id}] ${row.zone} / ${row.building}`);
+    console.log(`    Tool: ${cfg.required_tool_type}  |  Durability/s: ${cfg.durability_per_second}  |  Time: ${cfg.min_seconds}–${cfg.max_seconds}s`);
+
+    if (cfg.events && cfg.events.length) {
+      console.log('    Events:');
+      for (const ev of cfg.events) {
+        if (ev.type === 'resource') {
+          const ir = await pool.query(`SELECT name FROM item_definitions WHERE id = $1`, [ev.item_def_id]);
+          console.log(`      resource: ${ir.rows[0]?.name || `item#${ev.item_def_id}`} x${ev.quantity} (weight: ${ev.weight})`);
+        } else if (ev.type === 'gold') {
+          console.log(`      gold: ${ev.min_amount}–${ev.max_amount} crowns (weight: ${ev.weight})`);
+        } else if (ev.type === 'monster') {
+          const mr = await pool.query(`SELECT name FROM monsters WHERE id = $1`, [ev.monster_id]);
+          console.log(`      monster: ${mr.rows[0]?.name || `monster#${ev.monster_id}`} (weight: ${ev.weight})`);
+        } else if (ev.type === 'accident') {
+          console.log(`      accident: ${ev.hp_damage} HP damage (weight: ${ev.weight})`);
+        } else if (ev.type === 'nothing') {
+          console.log(`      nothing (weight: ${ev.weight})`);
+        }
+      }
+    }
+  }
+
+  // Tool items summary
+  section('Tool Items');
+  const tools = await pool.query(`
+    SELECT id, name, tool_type, max_durability, power
+    FROM item_definitions WHERE tool_type IS NOT NULL ORDER BY tool_type, id
+  `);
+  if (tools.rows.length) {
+    table(tools.rows);
+  } else {
+    console.log('  (no tool items defined)');
+  }
 }
 
 async function search(term) {
@@ -474,6 +600,141 @@ async function rawSql(sql) {
   console.log(`\n  ${res.rowCount} row(s)`);
 }
 
+// ─── Quests ─────────────────────────────────────────────────────────────────────
+
+async function quests(questType) {
+  const q = questType
+    ? `SELECT qd.id, qd.name, qd.quest_type, qd.is_active, qd.chain_id, qd.chain_step,
+         (SELECT COUNT(*) FROM quest_objectives qo WHERE qo.quest_id = qd.id) as objectives,
+         (SELECT COUNT(*) FROM quest_prerequisites qp WHERE qp.quest_id = qd.id) as prereqs,
+         (SELECT COUNT(*) FROM quest_rewards qr WHERE qr.quest_id = qd.id) as rewards,
+         (SELECT string_agg(n.name, ', ') FROM quest_npc_givers qng JOIN npcs n ON n.id = qng.npc_id WHERE qng.quest_id = qd.id) as npcs
+       FROM quest_definitions qd WHERE qd.quest_type = $1 ORDER BY qd.sort_order, qd.id`
+    : `SELECT qd.id, qd.name, qd.quest_type, qd.is_active, qd.chain_id, qd.chain_step,
+         (SELECT COUNT(*) FROM quest_objectives qo WHERE qo.quest_id = qd.id) as objectives,
+         (SELECT COUNT(*) FROM quest_prerequisites qp WHERE qp.quest_id = qd.id) as prereqs,
+         (SELECT COUNT(*) FROM quest_rewards qr WHERE qr.quest_id = qd.id) as rewards,
+         (SELECT string_agg(n.name, ', ') FROM quest_npc_givers qng JOIN npcs n ON n.id = qng.npc_id WHERE qng.quest_id = qd.id) as npcs
+       FROM quest_definitions qd ORDER BY qd.quest_type, qd.sort_order, qd.id`;
+  const params = questType ? [questType] : [];
+  const res = await pool.query(q, params);
+  section(questType ? `Quests — ${questType}` : 'All Quests');
+  table(res.rows);
+
+  if (!questType) {
+    console.log('\nTip: filter by type with: game-data quests <type>');
+    console.log('Types: main, side, daily, weekly, monthly, repeatable');
+  }
+}
+
+async function questDetail(id) {
+  const res = await pool.query('SELECT * FROM quest_definitions WHERE id = $1', [id]);
+  if (!res.rows.length) { console.log(`Quest #${id} not found`); return; }
+  const quest = res.rows[0];
+
+  section(`Quest #${quest.id}: ${quest.name}`);
+  console.log(`  Type: ${quest.quest_type}  |  Active: ${quest.is_active}  |  Chain: ${quest.chain_id || '—'} step ${quest.chain_step ?? '—'}`);
+  console.log(`  Description: ${quest.description}`);
+
+  // Objectives
+  section('Objectives');
+  const objs = await pool.query(
+    `SELECT qo.id, qo.objective_type, qo.target_id, qo.target_quantity, qo.target_duration, qo.description
+     FROM quest_objectives qo WHERE qo.quest_id = $1 ORDER BY qo.sort_order, qo.id`, [id]);
+  for (const obj of objs.rows) {
+    let targetName = '';
+    if (obj.target_id) {
+      if (obj.objective_type === 'kill_monster') {
+        const m = await pool.query('SELECT name FROM monsters WHERE id = $1', [obj.target_id]);
+        targetName = m.rows[0]?.name || `monster#${obj.target_id}`;
+      } else if (obj.objective_type === 'collect_item' || obj.objective_type === 'craft_item') {
+        const i = await pool.query('SELECT name FROM item_definitions WHERE id = $1', [obj.target_id]);
+        targetName = i.rows[0]?.name || `item#${obj.target_id}`;
+      } else if (obj.objective_type === 'talk_to_npc') {
+        const n = await pool.query('SELECT name FROM npcs WHERE id = $1', [obj.target_id]);
+        targetName = n.rows[0]?.name || `npc#${obj.target_id}`;
+      } else if (obj.objective_type === 'visit_location') {
+        const z = await pool.query('SELECT name FROM map_zones WHERE id = $1', [obj.target_id]);
+        targetName = z.rows[0]?.name || `zone#${obj.target_id}`;
+      } else if (obj.objective_type === 'gather_resource') {
+        const b = await pool.query('SELECT name FROM buildings WHERE id = $1', [obj.target_id]);
+        targetName = b.rows[0]?.name || `building#${obj.target_id}`;
+      }
+    }
+    const dur = obj.target_duration ? ` (${obj.target_duration}s)` : '';
+    const desc = obj.description ? ` — "${obj.description}"` : '';
+    console.log(`  [${obj.objective_type}] ${targetName || '—'} x${obj.target_quantity}${dur}${desc}`);
+  }
+
+  // Prerequisites
+  section('Prerequisites');
+  const prereqs = await pool.query(
+    'SELECT * FROM quest_prerequisites WHERE quest_id = $1 ORDER BY id', [id]);
+  if (!prereqs.rows.length) {
+    console.log('  (none)');
+  } else {
+    for (const p of prereqs.rows) {
+      let desc = '';
+      switch (p.prereq_type) {
+        case 'min_level': desc = `Level >= ${p.target_value}`; break;
+        case 'has_item': {
+          const i = await pool.query('SELECT name FROM item_definitions WHERE id = $1', [p.target_id]);
+          desc = `Have ${p.target_value}x ${i.rows[0]?.name || `item#${p.target_id}`}`; break;
+        }
+        case 'completed_quest': {
+          const q = await pool.query('SELECT name FROM quest_definitions WHERE id = $1', [p.target_id]);
+          desc = `Complete "${q.rows[0]?.name || `quest#${p.target_id}`}"`; break;
+        }
+        case 'class_required': desc = `Class ID = ${p.target_id}`; break;
+        default: desc = `${p.prereq_type} target=${p.target_id} value=${p.target_value}`;
+      }
+      console.log(`  [${p.prereq_type}] ${desc}`);
+    }
+  }
+
+  // Rewards
+  section('Rewards');
+  const rewards = await pool.query(
+    'SELECT * FROM quest_rewards WHERE quest_id = $1 ORDER BY id', [id]);
+  if (!rewards.rows.length) {
+    console.log('  (none)');
+  } else {
+    for (const r of rewards.rows) {
+      let desc = '';
+      switch (r.reward_type) {
+        case 'item': {
+          const i = await pool.query('SELECT name FROM item_definitions WHERE id = $1', [r.target_id]);
+          desc = `${r.quantity}x ${i.rows[0]?.name || `item#${r.target_id}`}`; break;
+        }
+        case 'xp': desc = `${r.quantity} XP`; break;
+        case 'crowns': desc = `${r.quantity} Crowns`; break;
+        default: desc = `${r.reward_type} x${r.quantity}`;
+      }
+      console.log(`  [${r.reward_type}] ${desc}`);
+    }
+  }
+
+  // NPC Givers
+  section('NPC Givers');
+  const givers = await pool.query(
+    `SELECT n.id, n.name FROM quest_npc_givers qng JOIN npcs n ON n.id = qng.npc_id WHERE qng.quest_id = $1 ORDER BY n.name`, [id]);
+  if (!givers.rows.length) {
+    console.log('  (none — quest has no NPC givers assigned)');
+  } else {
+    table(givers.rows);
+  }
+
+  // Player stats
+  section('Player Stats');
+  const stats = await pool.query(
+    `SELECT status, COUNT(*) as count FROM character_quests WHERE quest_id = $1 GROUP BY status`, [id]);
+  if (stats.rows.length) {
+    table(stats.rows);
+  } else {
+    console.log('  (no players have interacted with this quest)');
+  }
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 const HELP = `
@@ -490,6 +751,9 @@ Commands:
   npcs                     List all NPCs with locations
   recipes [npc_id]         Crafting recipes (optional: filter by NPC)
   abilities                List all abilities with monster drop sources
+  quests [type]            List quests (optional: main|side|daily|weekly|monthly|repeatable)
+  quest <id>               Quest detail with objectives, prerequisites, rewards, NPC givers
+  gathering                All gathering actions with events, tool requirements, and tool items
   economy                  Crown sources/sinks, equipment stats, expedition rewards
   search <term>            Search across all entity types by name
   sql "<query>"            Run a raw SELECT query
@@ -515,6 +779,9 @@ async function main() {
       case 'npcs':      await npcs(); break;
       case 'recipes':   await recipes(args[0]); break;
       case 'abilities': await abilities(); break;
+      case 'quests':    await quests(args[0]); break;
+      case 'quest':     await questDetail(args[0]); break;
+      case 'gathering': await gathering(); break;
       case 'economy':   await economy(); break;
       case 'search':    await search(args.join(' ')); break;
       case 'sql':       await rawSql(args.join(' ')); break;

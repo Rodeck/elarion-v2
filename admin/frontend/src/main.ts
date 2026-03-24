@@ -8,6 +8,7 @@ import { EncounterTableManager } from './ui/encounter-table-manager';
 import { NpcManager } from './ui/npc-manager';
 import { AbilityManager } from './ui/ability-manager';
 import { RecipeManager } from './ui/recipe-manager';
+import { QuestManager } from './ui/quest-manager';
 import { Toolbar } from './ui/toolbar';
 import { MapCanvas } from './editor/canvas';
 import { EditorModeManager } from './editor/modes';
@@ -43,6 +44,7 @@ let adminConfigManager: AdminConfigManager | null = null;
 let npcManager: NpcManager | null = null;
 let abilityManager: AbilityManager | null = null;
 let recipeManager: RecipeManager | null = null;
+let questManager: QuestManager | null = null;
 let toolbar: Toolbar | null = null;
 let canvas: MapCanvas | null = null;
 let modeManager: EditorModeManager | null = null;
@@ -116,7 +118,7 @@ function destroyAll(): void {
   app.innerHTML = '';
 }
 
-async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' = 'maps'): Promise<void> {
+async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' | 'quests' = 'maps'): Promise<void> {
   destroyAll();
 
   // Tab bar — hidden until authenticated
@@ -134,6 +136,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     <button class="btn ${activeTab === 'npcs' ? 'btn--active' : ''}" id="tab-npcs">NPCs</button>
     <button class="btn ${activeTab === 'abilities' ? 'btn--active' : ''}" id="tab-abilities">Abilities</button>
     <button class="btn ${activeTab === 'recipes' ? 'btn--active' : ''}" id="tab-recipes">Recipes</button>
+    <button class="btn ${activeTab === 'quests' ? 'btn--active' : ''}" id="tab-quests">Quests</button>
     <div style="flex:1"></div>
     <span style="font-size:0.75rem;color:#2d3347;align-self:center;padding-right:0.5rem;letter-spacing:0.05em;font-weight:600;">ELARION ADMIN</span>
   `;
@@ -185,7 +188,12 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
   recipeManagerPanel.style.display = activeTab === 'recipes' ? '' : 'none';
   app.appendChild(recipeManagerPanel);
 
-  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes'): void {
+  const questManagerPanel = document.createElement('div');
+  questManagerPanel.id = 'quest-manager';
+  questManagerPanel.style.display = activeTab === 'quests' ? '' : 'none';
+  app.appendChild(questManagerPanel);
+
+  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' | 'quests'): void {
     mapEditorPanel.style.display = tab === 'maps' ? '' : 'none';
     itemManagerPanel.style.display = tab === 'items' ? '' : 'none';
     monsterManagerPanel.style.display = tab === 'monsters' ? '' : 'none';
@@ -195,6 +203,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     npcManagerPanel.style.display = tab === 'npcs' ? '' : 'none';
     abilityManagerPanel.style.display = tab === 'abilities' ? '' : 'none';
     recipeManagerPanel.style.display = tab === 'recipes' ? '' : 'none';
+    questManagerPanel.style.display = tab === 'quests' ? '' : 'none';
     tabBar.querySelector('#tab-maps')!.classList.toggle('btn--active', tab === 'maps');
     tabBar.querySelector('#tab-items')!.classList.toggle('btn--active', tab === 'items');
     tabBar.querySelector('#tab-monsters')!.classList.toggle('btn--active', tab === 'monsters');
@@ -204,6 +213,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     tabBar.querySelector('#tab-npcs')!.classList.toggle('btn--active', tab === 'npcs');
     tabBar.querySelector('#tab-abilities')!.classList.toggle('btn--active', tab === 'abilities');
     tabBar.querySelector('#tab-recipes')!.classList.toggle('btn--active', tab === 'recipes');
+    tabBar.querySelector('#tab-quests')!.classList.toggle('btn--active', tab === 'quests');
   }
 
   tabBar.querySelector('#tab-maps')!.addEventListener('click', () => setActiveTab('maps'));
@@ -277,6 +287,15 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
       recipeManager = new RecipeManager();
       recipeManager.init(recipeManagerPanel);
       await recipeManager.load();
+    }
+  });
+
+  tabBar.querySelector('#tab-quests')!.addEventListener('click', async () => {
+    setActiveTab('quests');
+    if (!questManager) {
+      questManager = new QuestManager();
+      questManager.init(questManagerPanel);
+      await questManager.load();
     }
   });
 

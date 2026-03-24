@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import express, { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -66,6 +66,107 @@ function validatePngMagicBytes(buf: Buffer): boolean {
     buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a
   );
 }
+
+// ── POST /api/monsters/batch-icons ────────────────────────────────────────
+
+monstersRouter.post(
+  '/batch-icons',
+  express.json({ limit: '50mb' }),
+  async (req: Request, res: Response) => {
+    const body = req.body as Record<string, unknown>;
+    const icons = body['icons'];
+
+    if (!Array.isArray(icons) || icons.length === 0) {
+      return res.status(400).json({ error: 'icons must be a non-empty array' });
+    }
+    if (icons.length > 256) {
+      return res.status(400).json({ error: 'icons array must not exceed 256 entries' });
+    }
+
+    const monsterIds = icons.map((e: Record<string, unknown>) => e['monster_id']);
+    const idSet = new Set(monsterIds);
+    if (idSet.size !== monsterIds.length) {
+      return res.status(400).json({ error: 'Duplicate monster_id values in request' });
+    }
+
+    const results: Array<{ monster_id: number; icon_url?: string; error?: string; status: string }> = [];
+    let updated = 0;
+    let failed = 0;
+
+    for (const entry of icons) {
+      const monsterId = Number((entry as Record<string, unknown>)['monster_id']);
+      const iconBase64 = (entry as Record<string, unknown>)['icon_base64'] as string | undefined;
+
+      if (!Number.isInteger(monsterId) || monsterId <= 0) {
+        results.push({ monster_id: monsterId, error: 'Invalid monster_id', status: 'error' });
+        failed++;
+        continue;
+      }
+      if (!iconBase64 || typeof iconBase64 !== 'string') {
+        results.push({ monster_id: monsterId, error: 'Missing icon_base64', status: 'error' });
+        failed++;
+        continue;
+      }
+
+      let buf: Buffer;
+      try {
+        buf = Buffer.from(iconBase64, 'base64');
+      } catch {
+        results.push({ monster_id: monsterId, error: 'Invalid base64 data', status: 'error' });
+        failed++;
+        continue;
+      }
+
+      if (!validatePngMagicBytes(buf)) {
+        results.push({ monster_id: monsterId, error: 'Data is not a valid PNG', status: 'error' });
+        failed++;
+        continue;
+      }
+
+      try {
+        const existing = await getMonsterById(monsterId);
+        if (!existing) {
+          results.push({ monster_id: monsterId, error: 'Monster not found', status: 'error' });
+          failed++;
+          continue;
+        }
+
+        // Delete old icon if present
+        if (existing.icon_filename) {
+          const oldPath = path.resolve(ICONS_DIR, existing.icon_filename);
+          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        }
+
+        // Save new icon
+        const newFilename = `${randomUUID()}.png`;
+        const newPath = path.resolve(ICONS_DIR, newFilename);
+        fs.mkdirSync(ICONS_DIR, { recursive: true });
+        fs.writeFileSync(newPath, buf);
+
+        // Update DB
+        await updateMonster(monsterId, { icon_filename: newFilename });
+
+        results.push({ monster_id: monsterId, icon_url: buildIconUrl(newFilename)!, status: 'ok' });
+        updated++;
+      } catch (err) {
+        results.push({ monster_id: monsterId, error: String(err), status: 'error' });
+        failed++;
+      }
+    }
+
+    log('info', 'monster_batch_icons_updated', {
+      admin: req.username,
+      total: icons.length,
+      updated,
+      failed,
+    });
+
+    const status = failed > 0 && updated > 0 ? 207 : failed > 0 ? 400 : 200;
+    const responseBody: Record<string, unknown> = { updated, results };
+    if (failed > 0) responseBody['failed'] = failed;
+    return res.status(status).json(responseBody);
+  },
+);
 
 // ── GET /api/monsters ──────────────────────────────────────────────────────
 

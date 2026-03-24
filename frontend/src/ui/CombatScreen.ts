@@ -251,6 +251,32 @@ export class CombatScreen {
     title.textContent = win ? 'Victory!' : 'Defeated';
     header.appendChild(title);
 
+    // Monster icon + name under title
+    const monsterRow = document.createElement('div');
+    monsterRow.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px;';
+
+    if (payload.monster_icon_url) {
+      const mIcon = document.createElement('div');
+      mIcon.style.cssText = [
+        'width:80px', 'height:80px', 'flex-shrink:0',
+        'background:#1a1510', 'border:1px solid #3a2e1a', 'border-radius:4px',
+        'overflow:hidden', 'display:flex', 'align-items:center', 'justify-content:center',
+      ].join(';');
+      const mImg = document.createElement('img');
+      mImg.src = payload.monster_icon_url;
+      mImg.alt = payload.monster_name;
+      mImg.style.cssText = 'width:100%;height:100%;object-fit:contain;image-rendering:pixelated;';
+      mImg.onerror = () => { mImg.remove(); mIcon.textContent = '👹'; mIcon.style.color = '#c9a55c'; mIcon.style.fontSize = '1.2rem'; };
+      mIcon.appendChild(mImg);
+      monsterRow.appendChild(mIcon);
+    }
+
+    const mName = document.createElement('div');
+    mName.style.cssText = 'font-size:0.85rem;color:#8a7a5a;font-family:"Crimson Text",serif;';
+    mName.textContent = payload.monster_name;
+    monsterRow.appendChild(mName);
+    header.appendChild(monsterRow);
+
     if (!win) {
       const sub = document.createElement('div');
       sub.style.cssText = 'font-size:0.75rem;color:#8a7050;margin-top:6px;';
@@ -263,45 +289,31 @@ export class CombatScreen {
     // ── Rewards body (win only) ──
     if (win) {
       const body = document.createElement('div');
-      body.style.cssText = 'padding:14px 16px;display:flex;flex-direction:column;gap:8px;';
+      body.style.cssText = 'padding:14px 16px;display:flex;flex-direction:column;gap:10px;';
 
-      // XP row
-      if (payload.xp_gained > 0) {
-        body.appendChild(this.buildRewardRow(
-          this.buildTextIcon('✦', '#a78bfa'),
-          `+${payload.xp_gained} XP`,
-          '#a78bfa',
-        ));
-      }
+      const hasRewards = payload.xp_gained > 0 || payload.crowns_gained > 0
+        || payload.items_dropped.length > 0 || payload.ability_drops.length > 0;
 
-      // Crowns row
-      if (payload.crowns_gained > 0) {
-        body.appendChild(this.buildRewardRow(
-          this.buildTextIcon('♛', '#f0c060'),
-          `+${payload.crowns_gained} Crowns`,
-          '#f0c060',
-        ));
-      }
+      if (hasRewards) {
+        // Loot grid — icon tiles with quantity badges (like gathering results)
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;';
 
-      // Item drops
-      for (const item of payload.items_dropped) {
-        const icon = item.icon_url
-          ? this.buildImgIcon(item.icon_url, item.name)
-          : this.buildTextIcon('◆', '#c9a55c');
-        body.appendChild(this.buildRewardRow(icon, `${item.name} ×${item.quantity}`, '#c9a55c'));
-      }
+        if (payload.xp_gained > 0) {
+          grid.appendChild(this.buildLootTile(null, '✦', '#a78bfa', payload.xp_gained, `+${payload.xp_gained} XP`));
+        }
+        if (payload.crowns_gained > 0) {
+          grid.appendChild(this.buildLootTile(null, '♛', '#f0c060', payload.crowns_gained, `+${payload.crowns_gained} Crowns`));
+        }
+        for (const item of payload.items_dropped) {
+          grid.appendChild(this.buildLootTile(item.icon_url ?? null, '◆', '#c9a55c', item.quantity, item.name));
+        }
+        for (const ability of payload.ability_drops) {
+          grid.appendChild(this.buildLootTile(ability.icon_url ?? null, '✦', '#6ab4e8', 1, `New: ${ability.name}`));
+        }
 
-      // Ability drops
-      for (const ability of payload.ability_drops) {
-        const icon = ability.icon_url
-          ? this.buildImgIcon(ability.icon_url, ability.name)
-          : this.buildTextIcon('✦', '#6ab4e8');
-        body.appendChild(this.buildRewardRow(icon, `New: ${ability.name}`, '#6ab4e8'));
-      }
-
-      // Nothing dropped
-      if (payload.xp_gained === 0 && payload.crowns_gained === 0
-        && payload.items_dropped.length === 0 && payload.ability_drops.length === 0) {
+        body.appendChild(grid);
+      } else {
         const empty = document.createElement('div');
         empty.style.cssText = 'text-align:center;font-size:0.8rem;color:#5a4a2a;padding:8px 0;';
         empty.textContent = 'No drops this time.';
@@ -389,6 +401,50 @@ export class CombatScreen {
     img.onerror = () => { img.remove(); wrap.textContent = '◆'; wrap.style.color = '#c9a55c'; wrap.style.fontSize = '1rem'; };
     wrap.appendChild(img);
     return wrap;
+  }
+
+  private buildLootTile(
+    iconUrl: string | null,
+    fallbackSymbol: string,
+    color: string,
+    quantity: number,
+    tooltipText: string,
+  ): HTMLElement {
+    const tile = document.createElement('div');
+    tile.style.cssText = [
+      'position:relative',
+      'width:48px', 'height:48px',
+      'background:#1a1510', 'border:1px solid #3a2e1a', 'border-radius:4px',
+      'display:flex', 'align-items:center', 'justify-content:center',
+      'overflow:visible', 'cursor:default', 'flex-shrink:0',
+    ].join(';');
+    tile.title = tooltipText;
+
+    if (iconUrl) {
+      const img = document.createElement('img');
+      img.src = iconUrl;
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain;image-rendering:pixelated;';
+      img.onerror = () => { img.remove(); tile.textContent = fallbackSymbol; tile.style.color = color; tile.style.fontSize = '1.4rem'; };
+      tile.appendChild(img);
+    } else {
+      tile.textContent = fallbackSymbol;
+      tile.style.color = color;
+      tile.style.fontSize = '1.4rem';
+    }
+
+    // Quantity badge
+    const badge = document.createElement('div');
+    badge.style.cssText = [
+      'position:absolute', 'bottom:-2px', 'right:-2px',
+      'min-width:16px', 'height:16px', 'padding:0 3px',
+      'background:#0d0b08', 'border:1px solid #5a4a2a', 'border-radius:3px',
+      'font-size:0.6rem', 'font-family:Rajdhani,sans-serif', 'font-weight:700',
+      'color:#e8c870', 'text-align:center', 'line-height:16px',
+    ].join(';');
+    badge.textContent = quantity > 1 ? String(quantity) : '+1';
+    tile.appendChild(badge);
+
+    return tile;
   }
 
   getCombatId(): string | null {

@@ -27,6 +27,7 @@ import {
 } from './combat-engine';
 import type { DerivedCombatStats, LoadoutSlotSnapshot, ActiveEffect, EngineState, AutoSlotConfig } from './combat-engine';
 import type { AuthenticatedSession } from '../../websocket/server';
+import { QuestTracker } from '../quest/quest-tracker';
 import type { Character } from '../../db/queries/characters';
 import type { Monster } from '../../db/queries/monsters';
 import type {
@@ -384,6 +385,15 @@ export class CombatSession {
             });
           }
         }
+        // Quest tracking: monster killed
+        try {
+          const questProgress = await QuestTracker.onMonsterKilled(this.characterId, this.monster.id);
+          for (const p of questProgress) {
+            sendToSession(this.wsSession, 'quest.progress', p);
+          }
+        } catch (qErr) {
+          log('error', 'combat', 'quest_tracker_error', { characterId: this.characterId, err: qErr });
+        }
       } catch (err) {
         log('error', 'combat', 'combat_reward_error', {
           combatId:    this.combatId,
@@ -419,6 +429,8 @@ export class CombatSession {
     const endPayload: CombatEndPayload = {
       combat_id:      this.combatId,
       outcome,
+      monster_name:     this.monster.name,
+      monster_icon_url: this.buildMonsterIconUrl(this.monster.icon_filename),
       xp_gained:      xpGained,
       crowns_gained:  crownsGained,
       items_dropped:  itemsDropped,

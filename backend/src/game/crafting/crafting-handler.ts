@@ -28,6 +28,7 @@ import {
 } from '../../db/queries/inventory';
 import { buildRecipeDto, buildSessionDto, calculateProgress } from './crafting-service';
 import { grantItemToCharacter } from '../inventory/inventory-grant-service';
+import { QuestTracker } from '../quest/quest-tracker';
 import type {
   CraftingOpenPayload,
   CraftingStartPayload,
@@ -422,6 +423,16 @@ async function handleCraftingCollect(session: AuthenticatedSession, payload: unk
     outputItemId: recipe.output_item_id,
     totalOutputQty,
   });
+
+  // Quest tracking: item crafted
+  try {
+    const questProgress = await QuestTracker.onItemCrafted(characterId, recipe.output_item_id, totalOutputQty);
+    for (const p of questProgress) {
+      sendToSession(session, 'quest.progress', p);
+    }
+  } catch (qErr) {
+    log('warn', 'crafting', 'quest_tracker_error', { characterId, err: qErr });
+  }
 
   sendToSession(session, 'crafting.collected', {
     session_id,

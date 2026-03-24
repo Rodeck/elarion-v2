@@ -12,6 +12,7 @@ import {
 import type { ExpeditionActionConfig } from '../../db/queries/squires';
 import { buildExpeditionStateDto } from '../expedition/expedition-service';
 import { rollNightEncounter } from './night-encounter-service';
+import { QuestTracker } from '../quest/quest-tracker';
 import { query } from '../../db/connection';
 import { log } from '../../logger';
 import { sendToSession } from '../../websocket/server';
@@ -346,6 +347,13 @@ export async function handleCityMove(session: AuthenticatedSession, payload: unk
           final_node: stepNodeId,
           zoneId,
         });
+
+        // Quest tracking: location visited
+        void QuestTracker.onLocationVisited(characterId, zoneId).then((questProgress) => {
+          for (const p of questProgress) {
+            sendToSession(session, 'quest.progress', p);
+          }
+        }).catch(() => undefined);
       }
     }, delay);
 

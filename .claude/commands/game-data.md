@@ -1,5 +1,5 @@
 ---
-description: Connect to the game database and fetch items, NPCs, maps, buildings, monsters, abilities, crafting recipes, and economy data. Use this skill when planning game changes, designing new content, or reviewing existing game data.
+description: Connect to the game database and fetch items, NPCs, maps, buildings, monsters, abilities, crafting recipes, gathering actions, and economy data. Use this skill when planning game changes, designing new content, or reviewing existing game data.
 ---
 
 ## Goal
@@ -26,7 +26,10 @@ Run via Bash: `node scripts/game-data.js <command> [args...]`
 | `npcs` | All NPCs with building locations and recipe counts |
 | `recipes [npc_id]` | Crafting recipes with ingredients, optionally filtered by NPC |
 | `abilities` | All abilities with effect details and monster drop sources |
-| `economy` | Crown sources (monster drops), crown sinks (crafting costs), equipment stats, expedition rewards |
+| `quests [type]` | All quests with objective/reward/NPC counts, optionally filtered (main, side, daily, weekly, monthly, repeatable) |
+| `quest <id>` | Quest detail: objectives with resolved target names, prerequisites, rewards, NPC givers, player stats |
+| `gathering` | All gathering actions with tool requirements, duration ranges, events (resource/gold/monster/accident/nothing), and tool items |
+| `economy` | Crown sources (monster drops), crown sinks (crafting costs), equipment stats, expedition rewards, gathering rewards |
 | `search <term>` | Cross-entity name search (items, monsters, NPCs, buildings, abilities, recipes) |
 | `sql "<query>"` | Run a raw SELECT query for ad-hoc analysis |
 
@@ -55,8 +58,22 @@ When the user wants to plan game content changes:
 4. `node scripts/game-data.js maps` — decide which zone it should appear in
 5. `node scripts/game-data.js zone <id>` — check zone's existing encounters
 
+### "I want to add or review quests"
+1. `node scripts/game-data.js quests` — see existing quests, types, NPC assignments
+2. `node scripts/game-data.js quest <id>` — full quest detail with objectives, prereqs, rewards
+3. `node scripts/game-data.js npcs` — see which NPCs could be quest givers
+4. `node scripts/game-data.js monsters` — see monsters for kill objectives
+5. `node scripts/game-data.js items` — see items for collect/craft objectives and rewards
+
+### "I want to add or review gathering actions"
+1. `node scripts/game-data.js gathering` — see all gathering actions with tool types, durations, events
+2. `node scripts/game-data.js items tool` — see existing tool items (pickaxe, axe)
+3. `node scripts/game-data.js items resource` — see resource items available as rewards
+4. `node scripts/game-data.js zone <id>` — check which buildings could host gathering
+5. `node scripts/game-data.js monsters` — see monsters for encounter events
+
 ### "I want to review game balance"
-1. `node scripts/game-data.js economy` — full economic overview
+1. `node scripts/game-data.js economy` — full economic overview (includes gathering rewards)
 2. `node scripts/game-data.js monsters` — compare HP/attack/rewards across all monsters
 3. `node scripts/game-data.js items weapon` — compare weapon stats
 4. `node scripts/game-data.js recipes` — check crafting costs vs reward value

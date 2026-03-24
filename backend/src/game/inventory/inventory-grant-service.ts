@@ -11,6 +11,7 @@ import {
   insertToolInventoryItem,
   getInventoryWithDefinitions,
 } from '../../db/queries/inventory';
+import { QuestTracker } from '../quest/quest-tracker';
 import type { InventorySlotDto, ItemCategory, WeaponSubtype } from '../../../../shared/protocol/index';
 
 const INVENTORY_CAPACITY = 20;
@@ -84,6 +85,16 @@ export async function grantItemToCharacter(
         quantity: quantityToGrant,
         stacked: true,
       });
+
+      // Quest tracking: inventory changed (stacking path)
+      try {
+        const questProgress = await QuestTracker.onInventoryChanged(characterId);
+        for (const p of questProgress) {
+          sendToSession(session, 'quest.progress', p);
+        }
+      } catch (qErr) {
+        log('warn', 'inventory', 'quest_tracker_error', { character_id: characterId, err: qErr });
+      }
       return;
     }
   }
@@ -148,4 +159,14 @@ export async function grantItemToCharacter(
     quantity: quantityToGrant,
     stacked: false,
   });
+
+  // Quest tracking: inventory changed (runs after both stacking and new-slot paths)
+  try {
+    const questProgress = await QuestTracker.onInventoryChanged(characterId);
+    for (const p of questProgress) {
+      sendToSession(session, 'quest.progress', p);
+    }
+  } catch (qErr) {
+    log('warn', 'inventory', 'quest_tracker_error', { character_id: characterId, err: qErr });
+  }
 }

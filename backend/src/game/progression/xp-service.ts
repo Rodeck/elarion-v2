@@ -2,6 +2,7 @@ import { findByAccountId, findClassById, updateCharacter } from '../../db/querie
 import { checkLevelUp } from './level-up-service';
 import { getSessionByCharacterId, sendToSocket } from '../../websocket/server';
 import { log } from '../../logger';
+import { QuestTracker } from '../quest/quest-tracker';
 
 const XP_THRESHOLDS = [0, 100, 250, 500, 900, 1400];
 
@@ -64,6 +65,13 @@ export async function awardXp(characterId: string, amount: number): Promise<XpAw
         new_defence: levelResult.newDefence,
         new_experience: newXp,
       });
+    }
+
+    // Quest tracking: level up (best-effort, progress picked up on next quest log if session unavailable)
+    try {
+      await QuestTracker.onLevelUp(characterId, levelResult.newLevel!);
+    } catch {
+      // silently ignore — quest progress will be picked up on next quest log request
     }
 
     log('info', 'xp-service', 'xp_awarded_with_level_up', {

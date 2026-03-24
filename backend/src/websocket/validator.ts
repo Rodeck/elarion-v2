@@ -82,6 +82,28 @@ const schemas: Record<string, Schema> = {
     duration: { type: 'number', required: true },
   },
   'gathering.cancel': {},
+  'quest.list_available': {
+    npc_id: { type: 'number', required: true },
+  },
+  'quest.accept': {
+    npc_id: { type: 'number', required: true },
+    quest_id: { type: 'number', required: true },
+  },
+  'quest.complete': {
+    character_quest_id: { type: 'number', required: true },
+  },
+  'quest.abandon': {
+    character_quest_id: { type: 'number', required: true },
+  },
+  'quest.log': {},
+  'quest.npc_dialogs': {
+    npc_id: { type: 'number', required: true },
+  },
+  'quest.talk_complete': {
+    npc_id: { type: 'number', required: true },
+    character_quest_id: { type: 'number', required: true },
+    objective_id: { type: 'number', required: true },
+  },
 };
 
 export interface ValidationResult {

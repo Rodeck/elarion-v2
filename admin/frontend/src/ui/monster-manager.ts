@@ -12,6 +12,7 @@ import {
   type ItemDefinitionResponse,
 } from '../editor/api';
 import { ImageGenDialog } from './image-gen-dialog';
+import { SpriteSheetDialog } from './sprite-sheet-dialog';
 
 export class MonsterManager {
   private container!: HTMLElement;
@@ -115,6 +116,10 @@ export class MonsterManager {
         </div>
 
         <div class="monster-list-col">
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
+            <button class="btn btn--secondary" id="mm-sprite-sheet-btn" title="Cut icons from a sprite sheet">&#x2702; Sprite Sheet</button>
+            <button class="btn" id="mm-refresh-btn" title="Refresh monster list">&#x21bb; Refresh</button>
+          </div>
           <div id="mm-list-wrap">
             <p style="color:#3d4262;font-size:0.875rem;">Loading...</p>
           </div>
@@ -148,6 +153,20 @@ export class MonsterManager {
 
     this.container.querySelector('#mm-ai-gen-btn')!.addEventListener('click', () => {
       void this.handleAiGen();
+    });
+
+    this.container.querySelector('#mm-sprite-sheet-btn')!.addEventListener('click', async () => {
+      const dialog = new SpriteSheetDialog('monsters', () => this.load());
+      await dialog.open();
+    });
+
+    this.container.querySelector('#mm-refresh-btn')!.addEventListener('click', async () => {
+      const btn = this.container.querySelector<HTMLButtonElement>('#mm-refresh-btn')!;
+      btn.disabled = true;
+      btn.textContent = '↻ Refreshing...';
+      await this.load();
+      btn.disabled = false;
+      btn.textContent = '↻ Refresh';
     });
     const nameInput = this.container.querySelector<HTMLInputElement>('#mm-name')!;
     nameInput.addEventListener('input', () => {

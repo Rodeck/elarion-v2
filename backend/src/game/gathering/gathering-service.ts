@@ -22,6 +22,7 @@ import { getCharacterLoadout } from '../../db/queries/loadouts';
 import { setCharacterInCombat } from '../../db/queries/loadouts';
 import { CombatSession } from '../combat/combat-session';
 import type { Monster } from '../../db/queries/monsters';
+import { QuestTracker } from '../quest/quest-tracker';
 import type {
   GatheringTickEvent,
   GatheringSummary,
@@ -466,6 +467,16 @@ class GatheringSessionManagerImpl {
         sendToSession(session.wsSession, 'character.crowns_changed', {
           crowns: charAfter?.crowns ?? 0,
         });
+      }
+
+      // Quest tracking: gathering completed
+      try {
+        const questProgress = await QuestTracker.onGatheringCompleted(characterId, session.buildingId);
+        for (const p of questProgress) {
+          sendToSession(session.wsSession, 'quest.progress', p);
+        }
+      } catch (qErr) {
+        log('warn', 'gathering', 'quest_tracker_error', { characterId, err: qErr });
       }
     }
 

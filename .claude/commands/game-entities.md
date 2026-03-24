@@ -1,5 +1,5 @@
 ---
-description: Create game entities (items, monsters, NPCs, recipes, abilities, building actions, encounters) via the admin REST API. Use this skill when the user wants to add new game content.
+description: Create game entities (items, monsters, NPCs, recipes, abilities, building actions, encounters, quests, gathering actions) via the admin REST API. Use this skill when the user wants to add new game content.
 ---
 
 ## Goal
@@ -28,10 +28,13 @@ Run via Bash: `node scripts/game-entities.js <command> '<json-data>'`
 | `upload-npc-icon` | Upload PNG icon for NPC use | POST `/api/npcs/upload` |
 | `set-npc-crafter` | Set/unset NPC crafter flag | PUT `/api/npcs/:id/crafter` |
 | `create-recipe` | Create a crafting recipe | POST `/api/recipes` |
-| `create-building-action` | Create building action (travel/explore/expedition) | POST `/api/maps/:z/buildings/:b/actions` |
+| `create-building-action` | Create building action (travel/explore/expedition/gather) | POST `/api/maps/:z/buildings/:b/actions` |
 | `assign-building-npc` | Assign NPC to a building | POST `/api/maps/:z/buildings/:b/npcs` |
 | `create-ability` | Create a combat ability | POST `/api/abilities` |
 | `set-encounter` | Set night random encounter entry | PUT `/api/encounter-tables/:zoneId` |
+| `create-quest` | Create a quest with objectives, prereqs, rewards, NPC givers | POST `/api/quests` |
+| `update-quest` | Update an existing quest (pass id + fields to change) | PUT `/api/quests/:id` |
+| `delete-quest` | Delete a quest by id | DELETE `/api/quests/:id` |
 
 ## Data Format Reference
 
@@ -141,7 +144,34 @@ Returns `{ "icon_filename": "uuid.png" }` — use this in create-npc.
     "items": [{ "item_def_id": 5, "base_quantity": 2 }]
   }
 }
+
+// Gather action
+{
+  "zone_id": 1, "building_id": 3,
+  "action_type": "gather",
+  "config": {
+    "required_tool_type": "pickaxe",    // required: pickaxe|axe
+    "durability_per_second": 2,          // required, positive integer — tool durability consumed per second
+    "min_seconds": 10,                   // required, positive integer — minimum gathering duration
+    "max_seconds": 60,                   // required, positive integer — maximum gathering duration (>= min)
+    "events": [                          // required, non-empty array — weighted random events per tick
+      { "type": "resource", "weight": 50, "item_def_id": 5, "quantity": 1 },
+      { "type": "gold", "weight": 20, "min_amount": 1, "max_amount": 5 },
+      { "type": "nothing", "weight": 15 },
+      { "type": "accident", "weight": 10, "hp_damage": 3 },
+      { "type": "monster", "weight": 5, "monster_id": 1 }
+    ]
+  }
+}
 ```
+
+**Gather event types:**
+- `resource` — grants item on session end: requires `item_def_id` (positive int), `quantity` (positive int)
+- `gold` — grants crowns on session end: requires `min_amount` (non-negative int), `max_amount` (positive int, >= min)
+- `monster` — triggers combat encounter (pauses gathering): requires `monster_id` (positive int)
+- `accident` — deals immediate HP damage: requires `hp_damage` (positive int)
+- `nothing` — no effect (silent tick)
+- All events require `weight` (positive int) for weighted random selection
 
 ### assign-building-npc
 ```json
@@ -173,6 +203,71 @@ Returns `{ "icon_filename": "uuid.png" }` — use this in create-npc.
   "zone_id": 1,                 // required, integer >= 1
   "monster_id": 1,              // required, integer >= 1
   "weight": 10                  // required, integer >= 1
+}
+```
+
+### create-quest
+```json
+{
+  "name": "Goblin Slayer",                    // required, unique
+  "description": "Defeat goblins in the forest", // required
+  "quest_type": "daily",                      // required: main|side|daily|weekly|monthly|repeatable
+  "sort_order": 0,                            // optional, default 0
+  "is_active": true,                          // optional, default true
+  "chain_id": "goblin_saga",                  // optional, groups chain quests
+  "chain_step": 1,                            // optional, ordering within chain
+  "objectives": [                             // required, at least one
+    {
+      "objective_type": "kill_monster",        // required: kill_monster|collect_item|craft_item|spend_crowns|gather_resource|reach_level|visit_location|talk_to_npc
+      "target_id": 1,                         // monster/item/npc/zone/building ID depending on type (null for spend_crowns, reach_level)
+      "target_quantity": 5,                   // required, positive integer
+      "target_duration": null,                // optional, seconds (gather_resource only)
+      "description": null,                    // optional, human-readable override
+      "dialog_prompt": null,                  // optional, for talk_to_npc: what player says (e.g. "Borin sent me")
+      "dialog_response": null                 // optional, for talk_to_npc: what NPC replies (e.g. "Ah yes, tell him I said hello")
+    }
+  ],
+  "prerequisites": [                          // optional
+    { "prereq_type": "min_level", "target_id": null, "target_value": 5 },
+    { "prereq_type": "has_item", "target_id": 10, "target_value": 1 },
+    { "prereq_type": "completed_quest", "target_id": 3, "target_value": 1 },
+    { "prereq_type": "class_required", "target_id": 1, "target_value": 1 }
+  ],
+  "rewards": [                                // optional
+    { "reward_type": "item", "target_id": 12, "quantity": 2 },
+    { "reward_type": "xp", "quantity": 100 },
+    { "reward_type": "crowns", "quantity": 50 }
+  ],
+  "npc_ids": [1, 3]                           // optional, NPC IDs that offer this quest
+}
+```
+
+**Objective type → target_id reference:**
+- `kill_monster` → monster ID (from `game-data monsters`)
+- `collect_item` → item_definition ID (from `game-data items`)
+- `craft_item` → item_definition ID
+- `spend_crowns` → null (amount in target_quantity)
+- `gather_resource` → building ID (from `game-data zone <id>`)
+- `reach_level` → null (level in target_quantity)
+- `visit_location` → zone ID (from `game-data maps`)
+- `talk_to_npc` → NPC ID (from `game-data npcs`)
+
+### update-quest
+```json
+{
+  "id": 1,                                    // required, quest to update
+  "description": "Updated description",       // any field from create-quest (except name uniqueness still applies)
+  "objectives": [...],                        // replaces all objectives if provided
+  "prerequisites": [...],                     // replaces all prerequisites if provided
+  "rewards": [...],                           // replaces all rewards if provided
+  "npc_ids": [1, 2]                           // replaces all NPC assignments if provided
+}
+```
+
+### delete-quest
+```json
+{
+  "id": 1                                     // required, quest to delete (cascades to objectives/prereqs/rewards/NPC assignments)
 }
 ```
 
@@ -219,6 +314,57 @@ node scripts/game-entities.js create-recipe '{"name":"Steel Sword","npc_id":1,"o
 
 # 4. Verify
 node scripts/game-data.js recipes
+```
+
+### Create a daily quest
+```bash
+# 1. Check existing quests, monsters, items, NPCs
+node scripts/game-data.js quests
+node scripts/game-data.js monsters
+node scripts/game-data.js items
+node scripts/game-data.js npcs
+
+# 2. Create the quest
+node scripts/game-entities.js create-quest '{"name":"Daily Goblin Hunt","description":"The village needs protection from goblins. Defeat them and collect their teeth as proof.","quest_type":"daily","objectives":[{"objective_type":"kill_monster","target_id":1,"target_quantity":5},{"objective_type":"collect_item","target_id":12,"target_quantity":3}],"rewards":[{"reward_type":"xp","quantity":75},{"reward_type":"crowns","quantity":30},{"reward_type":"item","target_id":8,"quantity":1}],"npc_ids":[1]}'
+
+# 3. Verify
+node scripts/game-data.js quest NEW_ID
+```
+
+### Create a chain quest
+```bash
+# 1. Create quest A (first in chain)
+node scripts/game-entities.js create-quest '{"name":"Blacksmith Apprentice I","description":"Gather materials for the blacksmith.","quest_type":"main","chain_id":"blacksmith_apprentice","chain_step":1,"objectives":[{"objective_type":"collect_item","target_id":5,"target_quantity":10}],"rewards":[{"reward_type":"xp","quantity":100}],"npc_ids":[1]}'
+
+# 2. Create quest B (requires A — use quest A's ID as target_id in completed_quest prerequisite)
+node scripts/game-entities.js create-quest '{"name":"Blacksmith Apprentice II","description":"Now craft your first weapon.","quest_type":"main","chain_id":"blacksmith_apprentice","chain_step":2,"objectives":[{"objective_type":"craft_item","target_id":10,"target_quantity":1}],"prerequisites":[{"prereq_type":"completed_quest","target_id":QUEST_A_ID,"target_value":1}],"rewards":[{"reward_type":"item","target_id":10,"quantity":1},{"reward_type":"xp","quantity":200}],"npc_ids":[1]}'
+
+# 3. Verify chain
+node scripts/game-data.js quests
+```
+
+### Add a gathering action to a building
+```bash
+# 1. Check zone buildings to pick a location
+node scripts/game-data.js zone 1
+
+# 2. Check existing gathering actions for balance reference
+node scripts/game-data.js gathering
+
+# 3. Check tool items (need matching tool_type)
+node scripts/game-data.js items tool
+
+# 4. Check resource items for rewards
+node scripts/game-data.js items resource
+
+# 5. Check monsters for encounter events
+node scripts/game-data.js monsters
+
+# 6. Create the gather action
+node scripts/game-entities.js create-building-action '{"zone_id":1,"building_id":3,"action_type":"gather","config":{"required_tool_type":"pickaxe","durability_per_second":2,"min_seconds":10,"max_seconds":60,"events":[{"type":"resource","weight":50,"item_def_id":5,"quantity":1},{"type":"gold","weight":20,"min_amount":1,"max_amount":5},{"type":"nothing","weight":15},{"type":"accident","weight":10,"hp_damage":3},{"type":"monster","weight":5,"monster_id":1}]}}'
+
+# 7. Verify
+node scripts/game-data.js gathering
 ```
 
 ### Set up an explore encounter in a building

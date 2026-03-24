@@ -193,7 +193,7 @@ export class ItemManager {
     const spriteSheetBtn = this.container.querySelector<HTMLButtonElement>('#sprite-sheet-btn');
     if (spriteSheetBtn) {
       spriteSheetBtn.addEventListener('click', async () => {
-        const dialog = new SpriteSheetDialog(() => this.load());
+        const dialog = new SpriteSheetDialog('items', () => this.load());
         await dialog.open();
       });
     }

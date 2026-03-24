@@ -6,6 +6,7 @@ export interface Npc {
   description: string;
   icon_filename: string;
   is_crafter: boolean;
+  is_quest_giver: boolean;
   created_at: Date;
 }
 
@@ -73,12 +74,13 @@ export interface BuildingNpc {
   name: string;
   icon_filename: string;
   is_crafter: boolean;
+  is_quest_giver: boolean;
   sort_order: number;
 }
 
 export async function getNpcsForBuilding(buildingId: number): Promise<BuildingNpc[]> {
   const result = await query<BuildingNpc>(
-    `SELECT bn.npc_id, n.name, n.icon_filename, n.is_crafter, bn.sort_order
+    `SELECT bn.npc_id, n.name, n.icon_filename, n.is_crafter, n.is_quest_giver, bn.sort_order
      FROM building_npcs bn
      JOIN npcs n ON n.id = bn.npc_id
      WHERE bn.building_id = $1
@@ -109,12 +111,13 @@ export interface ZoneNpcRow {
   npc_description: string;
   icon_filename: string;
   is_crafter: boolean;
+  is_quest_giver: boolean;
   sort_order: number;
 }
 
 export async function getNpcsForZone(zoneId: number): Promise<ZoneNpcRow[]> {
   const result = await query<ZoneNpcRow>(
-    `SELECT b.id AS building_id, n.id AS npc_id, n.name AS npc_name, n.description AS npc_description, n.icon_filename, n.is_crafter, bn.sort_order
+    `SELECT b.id AS building_id, n.id AS npc_id, n.name AS npc_name, n.description AS npc_description, n.icon_filename, n.is_crafter, n.is_quest_giver, bn.sort_order
      FROM buildings b
      JOIN building_npcs bn ON bn.building_id = b.id
      JOIN npcs n ON n.id = bn.npc_id

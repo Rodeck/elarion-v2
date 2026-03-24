@@ -536,6 +536,35 @@ export async function batchUpdateIcons(icons: BatchIconEntry[]): Promise<BatchIc
 }
 
 // ---------------------------------------------------------------------------
+// Batch Monster Icons (Sprite Sheet Tool)
+// ---------------------------------------------------------------------------
+
+export interface BatchMonsterIconEntry {
+  monster_id: number;
+  icon_base64: string;
+}
+
+export interface BatchMonsterIconResult {
+  monster_id: number;
+  icon_url?: string;
+  error?: string;
+  status: string;
+}
+
+export interface BatchMonsterIconsResponse {
+  updated: number;
+  failed?: number;
+  results: BatchMonsterIconResult[];
+}
+
+export async function batchUpdateMonsterIcons(icons: BatchMonsterIconEntry[]): Promise<BatchMonsterIconsResponse> {
+  return request<BatchMonsterIconsResponse>(`${MONSTERS_BASE}/batch-icons`, {
+    method: 'POST',
+    body: JSON.stringify({ icons }),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Monsters
 // ---------------------------------------------------------------------------
 
@@ -958,4 +987,108 @@ export async function toggleNpcCrafter(npcId: number, isCrafter: boolean): Promi
     method: 'PUT',
     body: JSON.stringify({ is_crafter: isCrafter }),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Quests
+// ---------------------------------------------------------------------------
+
+const QUESTS_BASE = '/api/quests';
+
+export interface QuestObjectiveData {
+  objective_type: string;
+  target_id?: number | null;
+  target_quantity: number;
+  target_duration?: number | null;
+  description?: string | null;
+  dialog_prompt?: string | null;
+  dialog_response?: string | null;
+  sort_order?: number;
+}
+
+export interface QuestPrerequisiteData {
+  prereq_type: string;
+  target_id?: number | null;
+  target_value: number;
+}
+
+export interface QuestRewardData {
+  reward_type: string;
+  target_id?: number | null;
+  quantity: number;
+}
+
+export interface QuestResponse {
+  id: number;
+  name: string;
+  description: string;
+  quest_type: string;
+  sort_order: number;
+  is_active: boolean;
+  chain_id: string | null;
+  chain_step: number | null;
+  created_at: string;
+  objectives: (QuestObjectiveData & { id: number })[];
+  prerequisites: (QuestPrerequisiteData & { id: number })[];
+  rewards: (QuestRewardData & { id: number })[];
+  npc_ids: number[];
+}
+
+export async function getQuests(filters?: { type?: string; npc_id?: number; active?: boolean }): Promise<QuestResponse[]> {
+  const params = new URLSearchParams();
+  if (filters?.type) params.set('type', filters.type);
+  if (filters?.npc_id) params.set('npc_id', String(filters.npc_id));
+  if (filters?.active !== undefined) params.set('active', String(filters.active));
+  const qs = params.toString();
+  return request<QuestResponse[]>(`${QUESTS_BASE}${qs ? `?${qs}` : ''}`, {});
+}
+
+export async function getQuestById(id: number): Promise<QuestResponse> {
+  return request<QuestResponse>(`${QUESTS_BASE}/${id}`, {});
+}
+
+export async function createQuest(data: {
+  name: string;
+  description: string;
+  quest_type: string;
+  sort_order?: number;
+  is_active?: boolean;
+  chain_id?: string | null;
+  chain_step?: number | null;
+  objectives: QuestObjectiveData[];
+  prerequisites?: QuestPrerequisiteData[];
+  rewards?: QuestRewardData[];
+  npc_ids?: number[];
+}): Promise<QuestResponse> {
+  return request<QuestResponse>(QUESTS_BASE, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateQuest(id: number, data: {
+  name?: string;
+  description?: string;
+  quest_type?: string;
+  sort_order?: number;
+  is_active?: boolean;
+  chain_id?: string | null;
+  chain_step?: number | null;
+  objectives?: QuestObjectiveData[];
+  prerequisites?: QuestPrerequisiteData[];
+  rewards?: QuestRewardData[];
+  npc_ids?: number[];
+}): Promise<QuestResponse> {
+  return request<QuestResponse>(`${QUESTS_BASE}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteQuest(id: number): Promise<void> {
+  return request<void>(`${QUESTS_BASE}/${id}`, { method: 'DELETE' });
+}
+
+export async function getQuestCatalog(): Promise<unknown> {
+  return request<unknown>(`${QUESTS_BASE}/catalog`, {});
 }

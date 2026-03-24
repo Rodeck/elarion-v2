@@ -22,6 +22,17 @@ type ActionCallback = (payload: CityBuildingActionPayload) => void;
 type ExpeditionDispatchCallback = (buildingId: number, actionId: number, durationHours: 1 | 3 | 6) => void;
 type ExpeditionCollectCallback = (expeditionId: number) => void;
 type CraftingOpenCallback = (npcId: number) => void;
+type QuestOpenCallback = (npcId: number) => void;
+type NpcDialogsRequestCallback = (npcId: number) => void;
+type QuestTalkCompleteCallback = (npcId: number, charQuestId: number, objectiveId: number) => void;
+
+interface NpcQuestDialog {
+  character_quest_id: number;
+  quest_name: string;
+  objective_id: number;
+  dialog_prompt: string;
+  dialog_response: string;
+}
 type GatheringStartCallback = (payload: GatheringStartPayload) => void;
 type GatheringCancelCallback = () => void;
 type InventorySlotsGetter = () => import('@elarion/protocol').InventorySlotDto[];
@@ -36,6 +47,11 @@ export class BuildingPanel {
   private combatModal: CombatModal;
   private craftingModal: CraftingModal;
   private onCraftingOpen: CraftingOpenCallback | null = null;
+  private onQuestOpen: QuestOpenCallback | null = null;
+  private onNpcDialogsRequest: NpcDialogsRequestCallback | null = null;
+  private onQuestTalkComplete: QuestTalkCompleteCallback | null = null;
+  private pendingNpcDialogs: NpcQuestDialog[] = [];
+  private currentNpcForDialogs: number | null = null;
   private onGatheringStart: GatheringStartCallback | null = null;
   private onGatheringCancel: GatheringCancelCallback | null = null;
   private getInventorySlots: InventorySlotsGetter | null = null;
@@ -89,6 +105,84 @@ export class BuildingPanel {
 
   setOnCraftingOpen(cb: CraftingOpenCallback): void {
     this.onCraftingOpen = cb;
+  }
+
+  setOnQuestOpen(cb: QuestOpenCallback): void {
+    this.onQuestOpen = cb;
+  }
+
+  setOnNpcDialogsRequest(cb: NpcDialogsRequestCallback): void {
+    this.onNpcDialogsRequest = cb;
+  }
+
+  setOnQuestTalkComplete(cb: QuestTalkCompleteCallback): void {
+    this.onQuestTalkComplete = cb;
+  }
+
+  /** Called when server responds with pending NPC dialogs */
+  handleNpcDialogs(npcId: number, dialogs: NpcQuestDialog[]): void {
+    if (this.currentNpcForDialogs !== npcId) return;
+    this.pendingNpcDialogs = dialogs;
+    // Re-render the dialog options area if we have a placeholder
+    const placeholder = this.bodyEl.querySelector('[data-quest-dialogs]');
+    if (placeholder && dialogs.length > 0) {
+      for (const d of dialogs) {
+        const option = this.buildDialogOption(`${d.dialog_prompt}`, () => {
+          this.showNpcResponse(d);
+        });
+        option.style.borderColor = '#4a6a3a';
+        option.style.color = '#b8e870';
+        placeholder.before(option);
+      }
+      placeholder.remove();
+    }
+  }
+
+  /** Called when server confirms talk objective completed — shows NPC response with typewriter animation */
+  handleTalkCompleted(response: string): void {
+    // Remove any existing response element to prevent duplicates
+    const existing = this.bodyEl.querySelector('[data-npc-response]');
+    if (existing) existing.remove();
+
+    const responseEl = document.createElement('div');
+    responseEl.setAttribute('data-npc-response', '');
+    responseEl.style.cssText = [
+      'padding:10px 12px',
+      'background:rgba(60,80,40,0.2)',
+      'border:1px solid #4a6a3a',
+      'border-radius:4px',
+      'font-family:"Crimson Text",serif',
+      'font-size:14px',
+      'color:#b8e870',
+      'font-style:italic',
+      'line-height:1.5',
+      'min-height:1.5em',
+    ].join(';');
+    this.bodyEl.appendChild(responseEl);
+
+    // Typewriter animation
+    const fullText = `"${response}"`;
+    let charIdx = 0;
+    const typeSpeed = 25; // ms per character
+    const type = () => {
+      if (charIdx < fullText.length) {
+        responseEl.textContent = fullText.slice(0, charIdx + 1);
+        charIdx++;
+        setTimeout(type, typeSpeed);
+      }
+    };
+    type();
+  }
+
+  private showNpcResponse(dialog: NpcQuestDialog): void {
+    // Send completion to server — server response will trigger handleTalkCompleted
+    if (this.currentNpcForDialogs != null) {
+      this.onQuestTalkComplete?.(this.currentNpcForDialogs, dialog.character_quest_id, dialog.objective_id);
+    }
+    // Remove this dialog option from pending
+    this.pendingNpcDialogs = this.pendingNpcDialogs.filter(
+      (d) => !(d.character_quest_id === dialog.character_quest_id && d.objective_id === dialog.objective_id),
+    );
   }
 
   setOnGatheringStart(cb: GatheringStartCallback): void {
@@ -466,7 +560,7 @@ export class BuildingPanel {
   // NPC panel
   // ---------------------------------------------------------------------------
 
-  private renderNpcPanel(npc: { id: number; name: string; description: string; icon_url: string; is_crafter: boolean }): void {
+  private renderNpcPanel(npc: { id: number; name: string; description: string; icon_url: string; is_crafter: boolean; is_quest_giver: boolean }): void {
     // Header: NPC name with back chevron
     this.headerEl.innerHTML = '';
 
@@ -558,6 +652,24 @@ export class BuildingPanel {
       });
       optionsEl.appendChild(craftOption);
     }
+
+    if (npc.is_quest_giver) {
+      const questOption = this.buildDialogOption('Do you have any tasks for me?', () => {
+        this.onQuestOpen?.(npc.id);
+      });
+      optionsEl.appendChild(questOption);
+    }
+
+    // Placeholder for quest dialog options (talk_to_npc objectives)
+    // These get injected when the server responds to quest.npc_dialogs
+    const dialogPlaceholder = document.createElement('div');
+    dialogPlaceholder.setAttribute('data-quest-dialogs', '');
+    optionsEl.appendChild(dialogPlaceholder);
+
+    // Request pending quest dialogs for this NPC
+    this.currentNpcForDialogs = npc.id;
+    this.pendingNpcDialogs = [];
+    this.onNpcDialogsRequest?.(npc.id);
 
     const backOption = this.buildDialogOption('Leave', () => {
       if (this.currentBuilding) {
