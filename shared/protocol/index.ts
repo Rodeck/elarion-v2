@@ -1023,7 +1023,7 @@ export interface GatheringCombatResumePayload {
 }
 
 export interface GatheringSummary {
-  resources_gained: { item_name: string; quantity: number }[];
+  resources_gained: { item_name: string; quantity: number; icon_url?: string }[];
   crowns_gained: number;
   combats_fought: number;
   combats_won: number;

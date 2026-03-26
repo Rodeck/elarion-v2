@@ -248,7 +248,7 @@ export class GatheringModal {
       grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;padding:4px 0;';
       this.lootTileIndex = 0;
       for (const r of s.resources_gained) {
-        grid.appendChild(this.buildLootTile(null, '◆', '#8a9a6a', r.quantity, `+${r.quantity} ${r.item_name}`));
+        grid.appendChild(this.buildLootTile(r.icon_url ?? null, '◆', '#8a9a6a', r.quantity, `+${r.quantity} ${r.item_name}`));
       }
       if (s.crowns_gained > 0) {
         grid.appendChild(this.buildLootTile(getCrownsIconUrl(), '♛', '#f0c060', s.crowns_gained, `+${s.crowns_gained} crowns`));

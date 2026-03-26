@@ -61,6 +61,7 @@ interface GatherEventResult {
   type: GatherEventConfig['type'];
   message?: string;
   item_name?: string;
+  item_icon_url?: string;
   quantity?: number;
   crowns?: number;
   hp_damage?: number;
@@ -254,6 +255,7 @@ class GatheringSessionManagerImpl {
           tickEvent.quantity = eventConfig.quantity;
           tickEvent.message = eventConfig.message;
           eventResult.item_name = itemName;
+          eventResult.item_icon_url = itemIconUrl;
           eventResult.quantity = eventConfig.quantity;
           eventResult.message = eventConfig.message;
         }
@@ -547,7 +549,7 @@ class GatheringSessionManagerImpl {
 
   // ── Build summary from event log ───────────────────────────────────────
   private buildSummary(events: GatherEventResult[]): GatheringSummary {
-    const resourceMap = new Map<string, number>();
+    const resourceMap = new Map<string, { quantity: number; icon_url?: string }>();
     let crownsGained = 0;
     let combatsFought = 0;
     let combatsWon = 0;
@@ -558,7 +560,11 @@ class GatheringSessionManagerImpl {
       switch (ev.type) {
         case 'resource':
           if (ev.item_name && ev.quantity) {
-            resourceMap.set(ev.item_name, (resourceMap.get(ev.item_name) ?? 0) + ev.quantity);
+            const existing = resourceMap.get(ev.item_name);
+            resourceMap.set(ev.item_name, {
+              quantity: (existing?.quantity ?? 0) + ev.quantity,
+              icon_url: existing?.icon_url ?? ev.item_icon_url,
+            });
           }
           break;
         case 'gold':
@@ -576,7 +582,7 @@ class GatheringSessionManagerImpl {
     }
 
     return {
-      resources_gained: Array.from(resourceMap.entries()).map(([item_name, quantity]) => ({ item_name, quantity })),
+      resources_gained: Array.from(resourceMap.entries()).map(([item_name, { quantity, icon_url }]) => ({ item_name, quantity, icon_url })),
       crowns_gained: crownsGained,
       combats_fought: combatsFought,
       combats_won: combatsWon,

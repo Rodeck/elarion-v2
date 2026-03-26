@@ -84,7 +84,11 @@
       "Bash(sed -i 's/- \\\\[ \\\\] T028/- [x] T028/' specs/022-squire-overhaul/tasks.md)",
       "Bash(sed -i 's/- \\\\[ \\\\] T029/- [x] T029/' specs/022-squire-overhaul/tasks.md)",
       "Bash(sed -i 's/- \\\\[ \\\\] T033/- [x] T033/' specs/022-squire-overhaul/tasks.md)",
-      "Bash(sed -i 's/- \\\\[ \\\\] T034/- [x] T034/' specs/022-squire-overhaul/tasks.md)"
+      "Bash(sed -i 's/- \\\\[ \\\\] T034/- [x] T034/' specs/022-squire-overhaul/tasks.md)",
+      "Bash(grep:*)",
+      "Bash(curl -s -u admin:admin -X DELETE http://localhost:4001/api/maps/2/buildings/13/actions/9)",
+      "Bash(curl -s -u admin:admin -X DELETE http://localhost:4001/api/maps/2/buildings/12/actions/18)",
+      "Bash(curl -s -u admin:admin -X DELETE http://localhost:4001/api/maps/2/buildings/16/actions/10)"
     ]
   }
 }
