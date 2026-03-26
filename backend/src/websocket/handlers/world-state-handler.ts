@@ -6,21 +6,21 @@ import { addPlayer } from '../../game/world/zone-registry';
 import { broadcastPlayerEntered } from '../../game/world/zone-broadcasts';
 import { onClientReconnect } from '../disconnect-handler';
 import { log } from '../../logger';
+import { config } from '../../config';
 import { sendToSession } from '../server';
 import type { AuthenticatedSession } from '../server';
 import { getCityMapCache } from '../../game/world/city-map-loader';
-import { getExpeditionStateForBuilding } from '../../game/world/city-movement-handler';
+import { getExpeditionStatesForBuilding } from '../../game/world/city-movement-handler';
 import { getSpawnNodeForZone } from '../../db/queries/city-maps';
 import { setCharacterInCombat } from '../../db/queries/loadouts';
 import { CombatSessionManager } from '../../game/combat/combat-session-manager';
 import { updateCharacter } from '../../db/queries/characters';
 import { GatheringSessionManager } from '../../game/gathering/gathering-service';
 import {
-  getSquiresForCharacter,
-  createSquire,
   getUnnotifiedCompletedExpeditions,
   markExpeditionNotified,
 } from '../../db/queries/squires';
+import { buildSquireRosterDto } from '../../game/squire/squire-grant-service';
 import { query } from '../../db/connection';
 
 let getZonePlayers: ((zoneId: number) => { characterId: string; name: string; classId: number; level: number; posX: number; posY: number; currentNodeId: number | null }[]) | null = null;
@@ -176,6 +176,15 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
 
   worldStatePayload.day_night_state = getDayCycleDto();
 
+  // Include UI icon URLs (XP, Crowns) from admin config
+  const { getConfigValue: getAdminConfigValue } = await import('../../db/queries/admin-config');
+  const xpIconFilename = await getAdminConfigValue('xp_icon_filename');
+  const crownsIconFilename = await getAdminConfigValue('crowns_icon_filename');
+  (worldStatePayload as Record<string, unknown>)['ui_icons'] = {
+    xp_icon_url: xpIconFilename ? `${config.adminBaseUrl}/ui-icons/${xpIconFilename}` : null,
+    crowns_icon_url: crownsIconFilename ? `${config.adminBaseUrl}/ui-icons/${crownsIconFilename}` : null,
+  };
+
   sendToSession(session, 'world.state', worldStatePayload);
 
   // If the player is already at a building node, send city.building_arrived so the
@@ -183,12 +192,13 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
   if (cityCache && currentNodeId !== null) {
     const building = cityCache.mapData.buildings.find((b) => b.node_id === currentNodeId);
     if (building) {
-      const expeditionState = await getExpeditionStateForBuilding(character.id, building).catch(() => undefined);
+      const expedition_states = await getExpeditionStatesForBuilding(character.id, building).catch(() => []);
       sendToSession(session, 'city.building_arrived', {
         building_id: building.id,
         building_name: building.name,
         node_id: currentNodeId,
-        ...(expeditionState !== undefined ? { expedition_state: expeditionState } : {}),
+        ...(expedition_states.length > 0 ? { expedition_state: expedition_states[0] } : {}),
+        expedition_states,
       });
     }
   }
@@ -196,18 +206,9 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
   // Send inventory state immediately after world state
   await sendInventoryState(session);
 
-  // Backfill: characters created before migration 012 have no squire — assign one now
-  const existingSquires = await getSquiresForCharacter(character.id);
-  if (existingSquires.length === 0) {
-    const names = ['Aldric', 'Brand', 'Cade', 'Daveth', 'Edgar', 'Finn', 'Gareth', 'Hadwyn'];
-    const squireName = names[Math.floor(Math.random() * names.length)]!;
-    await createSquire(character.id, squireName);
-    log('info', 'squire', 'squire.created', {
-      character_id: character.id,
-      squire_name: squireName,
-      reason: 'backfill_on_connect',
-    });
-  }
+  // Send squire roster on connect
+  const squireRoster = await buildSquireRosterDto(character.id);
+  sendToSession(session, 'squire.roster_update', squireRoster);
 
   // Notify player of any expeditions that completed while they were offline
   if (character.id) {

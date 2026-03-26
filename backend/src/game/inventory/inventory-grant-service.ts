@@ -99,68 +99,73 @@ export async function grantItemToCharacter(
     }
   }
 
-  // Need a new slot — check capacity
-  const slotCount = await getInventorySlotCount(characterId);
-  if (slotCount >= INVENTORY_CAPACITY) {
-    sendToSession(session, 'inventory.full', { item_name: def.name });
-    log('info', 'inventory', 'inventory_full', {
+  // Non-stackable items (weapons, armor, etc.) must each occupy their own slot.
+  // Loop once per unit for non-stackable items, once total for stackable overflow.
+  const isTool = def.category === 'tool' && def.max_durability != null;
+  const unitsToInsert = isStackable ? 1 : quantityToGrant;
+  const qtyPerSlot = isStackable ? quantityToGrant : 1;
+
+  for (let u = 0; u < unitsToInsert; u++) {
+    const slotCount = await getInventorySlotCount(characterId);
+    if (slotCount >= INVENTORY_CAPACITY) {
+      sendToSession(session, 'inventory.full', { item_name: def.name });
+      log('info', 'inventory', 'inventory_full', {
+        character_id: characterId,
+        item_def_id: itemDefId,
+        item_name: def.name,
+      });
+      return;
+    }
+
+    const newSlot = isTool
+      ? await insertToolInventoryItem(characterId, itemDefId, def.max_durability!)
+      : await insertInventoryItem(characterId, itemDefId, qtyPerSlot);
+
+    // Fetch with definition for the full DTO
+    const allSlots = await getInventoryWithDefinitions(characterId);
+    const newSlotWithDef = allSlots.find((s) => s.id === newSlot.id);
+    if (!newSlotWithDef) continue;
+
+    const slotDto: InventorySlotDto = {
+      slot_id: newSlotWithDef.id,
+      item_def_id: newSlotWithDef.item_def_id,
+      quantity: newSlotWithDef.quantity,
+      current_durability: newSlotWithDef.current_durability ?? undefined,
+      definition: {
+        id: newSlotWithDef.item_def_id,
+        name: newSlotWithDef.def_name,
+        description: newSlotWithDef.def_description ?? '',
+        category: newSlotWithDef.def_category as ItemCategory,
+        weapon_subtype: (newSlotWithDef.def_weapon_subtype as WeaponSubtype) ?? null,
+        attack: newSlotWithDef.def_attack,
+        defence: newSlotWithDef.def_defence,
+        heal_power: newSlotWithDef.def_heal_power,
+        food_power: newSlotWithDef.def_food_power,
+        stack_size: newSlotWithDef.def_stack_size,
+        icon_url: buildIconUrl(newSlotWithDef.def_icon_filename),
+        max_mana: newSlotWithDef.def_max_mana,
+        mana_on_hit: newSlotWithDef.def_mana_on_hit,
+        mana_on_damage_taken: newSlotWithDef.def_mana_on_damage_taken,
+        mana_regen: newSlotWithDef.def_mana_regen,
+        dodge_chance: newSlotWithDef.def_dodge_chance,
+        crit_chance: newSlotWithDef.def_crit_chance,
+        crit_damage: newSlotWithDef.def_crit_damage,
+        tool_type: newSlotWithDef.def_tool_type ?? null,
+        max_durability: newSlotWithDef.def_max_durability ?? null,
+        power: newSlotWithDef.def_power ?? null,
+      },
+    };
+
+    sendToSession(session, 'inventory.item_received', { slot: slotDto, stacked: false });
+    log('info', 'inventory', 'inventory_item_received', {
       character_id: characterId,
       item_def_id: itemDefId,
-      item_name: def.name,
+      quantity: 1,
+      stacked: false,
     });
-    return;
-  }
+  } // end for loop
 
-  // Insert new slot (tools get durability initialized)
-  const isTool = def.category === 'tool' && def.max_durability != null;
-  const newSlot = isTool
-    ? await insertToolInventoryItem(characterId, itemDefId, def.max_durability!)
-    : await insertInventoryItem(characterId, itemDefId, quantityToGrant);
-
-  // Fetch with definition for the full DTO
-  const allSlots = await getInventoryWithDefinitions(characterId);
-  const newSlotWithDef = allSlots.find((s) => s.id === newSlot.id);
-  if (!newSlotWithDef) return;
-
-  const slotDto: InventorySlotDto = {
-    slot_id: newSlotWithDef.id,
-    item_def_id: newSlotWithDef.item_def_id,
-    quantity: newSlotWithDef.quantity,
-    current_durability: newSlotWithDef.current_durability ?? undefined,
-    definition: {
-      id: newSlotWithDef.item_def_id,
-      name: newSlotWithDef.def_name,
-      description: newSlotWithDef.def_description ?? '',
-      category: newSlotWithDef.def_category as ItemCategory,
-      weapon_subtype: (newSlotWithDef.def_weapon_subtype as WeaponSubtype) ?? null,
-      attack: newSlotWithDef.def_attack,
-      defence: newSlotWithDef.def_defence,
-      heal_power: newSlotWithDef.def_heal_power,
-      food_power: newSlotWithDef.def_food_power,
-      stack_size: newSlotWithDef.def_stack_size,
-      icon_url: buildIconUrl(newSlotWithDef.def_icon_filename),
-      max_mana: newSlotWithDef.def_max_mana,
-      mana_on_hit: newSlotWithDef.def_mana_on_hit,
-      mana_on_damage_taken: newSlotWithDef.def_mana_on_damage_taken,
-      mana_regen: newSlotWithDef.def_mana_regen,
-      dodge_chance: newSlotWithDef.def_dodge_chance,
-      crit_chance: newSlotWithDef.def_crit_chance,
-      crit_damage: newSlotWithDef.def_crit_damage,
-      tool_type: newSlotWithDef.def_tool_type ?? null,
-      max_durability: newSlotWithDef.def_max_durability ?? null,
-      power: newSlotWithDef.def_power ?? null,
-    },
-  };
-
-  sendToSession(session, 'inventory.item_received', { slot: slotDto, stacked: false });
-  log('info', 'inventory', 'inventory_item_received', {
-    character_id: characterId,
-    item_def_id: itemDefId,
-    quantity: quantityToGrant,
-    stacked: false,
-  });
-
-  // Quest tracking: inventory changed (runs after both stacking and new-slot paths)
+  // Quest tracking: inventory changed (runs once after all units granted)
   try {
     const questProgress = await QuestTracker.onInventoryChanged(characterId);
     for (const p of questProgress) {

@@ -2,11 +2,16 @@ import { query } from '../connection';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
-export interface Squire {
+export interface CharacterSquire {
   id: number;
   character_id: string;
-  name: string;
+  squire_def_id: number;
+  level: number;
   created_at: Date;
+  /** Joined from squire_definitions */
+  name: string;
+  icon_filename: string | null;
+  power_level: number;
 }
 
 export interface ExpeditionRewardSnapshot {
@@ -16,6 +21,7 @@ export interface ExpeditionRewardSnapshot {
 }
 
 export interface ExpeditionActionConfig {
+  name?: string;
   base_gold: number;
   base_exp: number;
   items: { item_def_id: number; base_quantity: number }[];
@@ -42,20 +48,89 @@ export interface CompletedExpeditionRow extends SquireExpedition {
 
 // ─── Squire queries ───────────────────────────────────────────────────────────
 
-export async function createSquire(characterId: string, name: string): Promise<Squire> {
-  const result = await query<Squire>(
-    `INSERT INTO squires (character_id, name) VALUES ($1, $2) RETURNING *`,
-    [characterId, name],
+const SQUIRE_SELECT = `
+  cs.id, cs.character_id, cs.squire_def_id, cs.level, cs.created_at,
+  sd.name, sd.icon_filename, sd.power_level
+`;
+
+const SQUIRE_JOIN = `
+  FROM character_squires cs
+  JOIN squire_definitions sd ON sd.id = cs.squire_def_id
+`;
+
+export async function createCharacterSquire(
+  characterId: string,
+  squireDefId: number,
+  level: number,
+): Promise<CharacterSquire> {
+  const result = await query<CharacterSquire>(
+    `INSERT INTO character_squires (character_id, squire_def_id, level)
+     VALUES ($1, $2, $3)
+     RETURNING id, character_id, squire_def_id, level, created_at,
+       (SELECT name FROM squire_definitions WHERE id = $2) AS name,
+       (SELECT icon_filename FROM squire_definitions WHERE id = $2) AS icon_filename,
+       (SELECT power_level FROM squire_definitions WHERE id = $2) AS power_level`,
+    [characterId, squireDefId, level],
   );
   return result.rows[0]!;
 }
 
-export async function getSquiresForCharacter(characterId: string): Promise<Squire[]> {
-  const result = await query<Squire>(
-    `SELECT * FROM squires WHERE character_id = $1 ORDER BY id`,
+export async function getSquiresForCharacter(characterId: string): Promise<CharacterSquire[]> {
+  const result = await query<CharacterSquire>(
+    `SELECT ${SQUIRE_SELECT} ${SQUIRE_JOIN}
+     WHERE cs.character_id = $1
+     ORDER BY cs.id`,
     [characterId],
   );
   return result.rows;
+}
+
+export async function getCharacterSquireById(squireId: number): Promise<CharacterSquire | null> {
+  const result = await query<CharacterSquire>(
+    `SELECT ${SQUIRE_SELECT} ${SQUIRE_JOIN}
+     WHERE cs.id = $1`,
+    [squireId],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function getSquireCount(characterId: string): Promise<number> {
+  const result = await query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM character_squires WHERE character_id = $1`,
+    [characterId],
+  );
+  return parseInt(result.rows[0]!.count, 10);
+}
+
+export async function canAcquireSquire(characterId: string): Promise<boolean> {
+  const result = await query<{ can_acquire: boolean }>(
+    `SELECT (COUNT(cs.id) < c.squire_slots_unlocked) AS can_acquire
+     FROM characters c
+     LEFT JOIN character_squires cs ON cs.character_id = c.id
+     WHERE c.id = $1
+     GROUP BY c.squire_slots_unlocked`,
+    [characterId],
+  );
+  return result.rows[0]?.can_acquire ?? true;
+}
+
+/** Returns idle squires (not currently on an uncollected expedition). */
+export async function getIdleSquiresForCharacter(characterId: string): Promise<CharacterSquire[]> {
+  const result = await query<CharacterSquire>(
+    `SELECT ${SQUIRE_SELECT} ${SQUIRE_JOIN}
+     WHERE cs.character_id = $1
+       AND NOT EXISTS (
+         SELECT 1 FROM squire_expeditions se
+         WHERE se.squire_id = cs.id AND se.collected_at IS NULL
+       )
+     ORDER BY cs.id`,
+    [characterId],
+  );
+  return result.rows;
+}
+
+export async function deleteSquire(squireId: number): Promise<void> {
+  await query('DELETE FROM character_squires WHERE id = $1', [squireId]);
 }
 
 // ─── Expedition queries ───────────────────────────────────────────────────────
@@ -76,7 +151,7 @@ export async function getActiveExpeditionsForCharacter(characterId: string): Pro
   const result = await query<SquireExpedition>(
     `SELECT se.*
      FROM squire_expeditions se
-     JOIN squires s ON s.id = se.squire_id
+     JOIN character_squires cs ON cs.id = se.squire_id
      WHERE se.character_id = $1 AND se.collected_at IS NULL`,
     [characterId],
   );
@@ -115,10 +190,11 @@ export async function getUnnotifiedCompletedExpeditions(
   characterId: string,
 ): Promise<CompletedExpeditionRow[]> {
   const result = await query<CompletedExpeditionRow>(
-    `SELECT se.*, b.name AS building_name, sq.name AS squire_name
+    `SELECT se.*, b.name AS building_name, sd.name AS squire_name
      FROM squire_expeditions se
      JOIN buildings b ON b.id = se.building_id
-     JOIN squires sq ON sq.id = se.squire_id
+     JOIN character_squires cs ON cs.id = se.squire_id
+     JOIN squire_definitions sd ON sd.id = cs.squire_def_id
      WHERE se.character_id = $1
        AND se.collected_at IS NULL
        AND se.completes_at <= now()

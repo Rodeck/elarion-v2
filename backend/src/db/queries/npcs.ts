@@ -112,12 +112,13 @@ export interface ZoneNpcRow {
   icon_filename: string;
   is_crafter: boolean;
   is_quest_giver: boolean;
+  is_squire_dismisser: boolean;
   sort_order: number;
 }
 
 export async function getNpcsForZone(zoneId: number): Promise<ZoneNpcRow[]> {
   const result = await query<ZoneNpcRow>(
-    `SELECT b.id AS building_id, n.id AS npc_id, n.name AS npc_name, n.description AS npc_description, n.icon_filename, n.is_crafter, n.is_quest_giver, bn.sort_order
+    `SELECT b.id AS building_id, n.id AS npc_id, n.name AS npc_name, n.description AS npc_description, n.icon_filename, n.is_crafter, n.is_quest_giver, n.is_squire_dismisser, bn.sort_order
      FROM buildings b
      JOIN building_npcs bn ON bn.building_id = b.id
      JOIN npcs n ON n.id = bn.npc_id

@@ -13,6 +13,7 @@ import type {
   CombatEventDto,
   CombatAbilityStateDto,
 } from '../../../shared/protocol/index';
+import { getXpIconUrl, getCrownsIconUrl } from './ui-icons';
 
 // Border style constants
 const BORDER_IDLE   = '3px solid #5a4a2a';
@@ -292,7 +293,8 @@ export class CombatScreen {
       body.style.cssText = 'padding:14px 16px;display:flex;flex-direction:column;gap:10px;';
 
       const hasRewards = payload.xp_gained > 0 || payload.crowns_gained > 0
-        || payload.items_dropped.length > 0 || payload.ability_drops.length > 0;
+        || payload.items_dropped.length > 0 || payload.ability_drops.length > 0
+        || (payload.squires_dropped?.length ?? 0) > 0;
 
       if (hasRewards) {
         // Loot grid — icon tiles with quantity badges (like gathering results)
@@ -300,16 +302,19 @@ export class CombatScreen {
         grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;';
 
         if (payload.xp_gained > 0) {
-          grid.appendChild(this.buildLootTile(null, '✦', '#a78bfa', payload.xp_gained, `+${payload.xp_gained} XP`));
+          grid.appendChild(this.buildLootTile(getXpIconUrl(), '✦', '#a78bfa', payload.xp_gained, `+${payload.xp_gained} XP`));
         }
         if (payload.crowns_gained > 0) {
-          grid.appendChild(this.buildLootTile(null, '♛', '#f0c060', payload.crowns_gained, `+${payload.crowns_gained} Crowns`));
+          grid.appendChild(this.buildLootTile(getCrownsIconUrl(), '♛', '#f0c060', payload.crowns_gained, `+${payload.crowns_gained} Crowns`));
         }
         for (const item of payload.items_dropped) {
           grid.appendChild(this.buildLootTile(item.icon_url ?? null, '◆', '#c9a55c', item.quantity, item.name));
         }
         for (const ability of payload.ability_drops) {
           grid.appendChild(this.buildLootTile(ability.icon_url ?? null, '✦', '#6ab4e8', 1, `New: ${ability.name}`));
+        }
+        for (const squire of payload.squires_dropped ?? []) {
+          grid.appendChild(this.buildLootTile(squire.icon_url ?? null, '⚔', '#d4a84b', 1, `${squire.name} (${squire.rank})`));
         }
 
         body.appendChild(grid);

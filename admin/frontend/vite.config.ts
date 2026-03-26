@@ -34,6 +34,14 @@ export default defineConfig({
         target: 'http://localhost:4001',
         changeOrigin: true,
       },
+      '/squire-icons': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
+      '/ui-icons': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
     },
   },
 });

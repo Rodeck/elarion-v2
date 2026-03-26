@@ -20,7 +20,7 @@ const VALID_EFFECT_TYPES = ['damage', 'heal', 'buff', 'debuff', 'dot', 'reflect'
 const VALID_SLOT_TYPES = ['auto', 'active', 'both'];
 const VALID_ACTION_TYPES = ['travel', 'explore', 'expedition', 'gather'];
 const VALID_TOOL_TYPES = ['pickaxe', 'axe'];
-const VALID_GATHER_EVENT_TYPES = ['resource', 'gold', 'monster', 'accident', 'nothing'];
+const VALID_GATHER_EVENT_TYPES = ['resource', 'gold', 'monster', 'accident', 'nothing', 'squire'];
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -306,6 +306,10 @@ function validateBuildingAction(data) {
           if (!Number.isInteger(ev.monster_id) || ev.monster_id < 1) errors.push(`config.events[${i}].monster_id must be a positive integer`);
         } else if (ev.type === 'accident') {
           if (!Number.isInteger(ev.hp_damage) || ev.hp_damage < 1) errors.push(`config.events[${i}].hp_damage must be a positive integer`);
+        } else if (ev.type === 'squire') {
+          if (!Number.isInteger(ev.squire_def_id) || ev.squire_def_id < 1) errors.push(`config.events[${i}].squire_def_id must be a positive integer`);
+          const sqLvl = ev.squire_level ?? 1;
+          if (!Number.isInteger(sqLvl) || sqLvl < 1 || sqLvl > 20) errors.push(`config.events[${i}].squire_level must be 1–20`);
         }
       }
     }
@@ -345,6 +349,25 @@ function validateEncounterEntry(data) {
   if (data.zone_id == null || !Number.isInteger(data.zone_id) || data.zone_id < 1) errors.push('zone_id must be a positive integer');
   if (data.monster_id == null || !Number.isInteger(data.monster_id) || data.monster_id < 1) errors.push('monster_id must be a positive integer');
   if (data.weight == null || !Number.isInteger(data.weight) || data.weight < 1) errors.push('weight must be a positive integer');
+  return errors;
+}
+
+function validateSquireDefinition(data) {
+  const errors = [];
+  if (!data.name || typeof data.name !== 'string' || !data.name.trim()) errors.push('name is required');
+  if (data.power_level == null || !Number.isInteger(data.power_level) || data.power_level < 0 || data.power_level > 100) {
+    errors.push('power_level must be an integer 0–100');
+  }
+  return errors;
+}
+
+function validateMonsterSquireLoot(data) {
+  const errors = [];
+  if (!data.monster_id || !Number.isInteger(data.monster_id) || data.monster_id < 1) errors.push('monster_id must be a positive integer');
+  if (!data.squire_def_id || !Number.isInteger(data.squire_def_id) || data.squire_def_id < 1) errors.push('squire_def_id must be a positive integer');
+  if (!data.drop_chance || !Number.isInteger(data.drop_chance) || data.drop_chance < 1 || data.drop_chance > 100) errors.push('drop_chance must be 1–100');
+  const lvl = data.squire_level ?? 1;
+  if (!Number.isInteger(lvl) || lvl < 1 || lvl > 20) errors.push('squire_level must be 1–20');
   return errors;
 }
 
@@ -508,12 +531,73 @@ async function setEncounterCmd(data) {
   }
 }
 
+// ─── Squire Commands ─────────────────────────────────────────────────────────
+
+async function createSquireCmd(data) {
+  const errors = validateSquireDefinition(data);
+  if (errors.length) return output('create-squire', false, errors);
+
+  const token = await authenticate();
+  const res = await apiPost('/api/squire-definitions', data, token);
+  if (res.status === 201) {
+    output('create-squire', true, res.data);
+  } else {
+    output('create-squire', false, [res.data.error || `HTTP ${res.status}`]);
+  }
+}
+
+async function uploadSquireIconCmd(data) {
+  if (!data.squire_def_id || !Number.isInteger(data.squire_def_id) || data.squire_def_id < 1) {
+    return output('upload-squire-icon', false, ['squire_def_id must be a positive integer']);
+  }
+  if (!data.file_path) return output('upload-squire-icon', false, ['file_path is required (absolute path to PNG)']);
+  if (!fs.existsSync(data.file_path)) return output('upload-squire-icon', false, [`File not found: ${data.file_path}`]);
+
+  const token = await authenticate();
+  const res = await apiPostMultipart(`/api/squire-definitions/${data.squire_def_id}/icon`, data.file_path, 'icon', token);
+  if (res.status === 200) {
+    output('upload-squire-icon', true, res.data);
+  } else {
+    output('upload-squire-icon', false, [res.data.error || `HTTP ${res.status}`]);
+  }
+}
+
+async function createMonsterSquireLootCmd(data) {
+  const errors = validateMonsterSquireLoot(data);
+  if (errors.length) return output('create-monster-squire-loot', false, errors);
+
+  const token = await authenticate();
+  const res = await apiPost(`/api/monsters/${data.monster_id}/squire-loot`, {
+    squire_def_id: data.squire_def_id,
+    drop_chance: data.drop_chance,
+    squire_level: data.squire_level ?? 1,
+  }, token);
+  if (res.status === 201) {
+    output('create-monster-squire-loot', true, res.data);
+  } else {
+    output('create-monster-squire-loot', false, [res.data.error || `HTTP ${res.status}`]);
+  }
+}
+
+async function setNpcDismisserCmd(data) {
+  if (data.npc_id == null || !Number.isInteger(data.npc_id)) return output('set-npc-dismisser', false, ['npc_id is required (integer)']);
+  if (typeof data.is_squire_dismisser !== 'boolean') return output('set-npc-dismisser', false, ['is_squire_dismisser must be a boolean']);
+
+  const token = await authenticate();
+  const res = await apiPut(`/api/npcs/${data.npc_id}/squire-dismisser`, { is_squire_dismisser: data.is_squire_dismisser }, token);
+  if (res.status === 200) {
+    output('set-npc-dismisser', true, res.data);
+  } else {
+    output('set-npc-dismisser', false, [res.data.error || `HTTP ${res.status}`]);
+  }
+}
+
 // ─── Quest Commands ──────────────────────────────────────────────────────────
 
 const VALID_QUEST_TYPES = ['main', 'side', 'daily', 'weekly', 'monthly', 'repeatable'];
 const VALID_OBJECTIVE_TYPES = ['kill_monster', 'collect_item', 'craft_item', 'spend_crowns', 'gather_resource', 'reach_level', 'visit_location', 'talk_to_npc'];
 const VALID_PREREQ_TYPES = ['min_level', 'has_item', 'completed_quest', 'class_required'];
-const VALID_REWARD_TYPES = ['item', 'xp', 'crowns'];
+const VALID_REWARD_TYPES = ['item', 'xp', 'crowns', 'squire'];
 
 function validateQuest(data) {
   const errors = [];
@@ -556,6 +640,14 @@ function validateQuest(data) {
       }
       if (!r.quantity || !Number.isInteger(r.quantity) || r.quantity < 1) {
         errors.push(`rewards[${i}].quantity must be a positive integer`);
+      }
+      if (r.reward_type === 'squire') {
+        if (!r.target_id || !Number.isInteger(r.target_id) || r.target_id < 1) {
+          errors.push(`rewards[${i}].target_id (squire_def_id) must be a positive integer`);
+        }
+        if (!Number.isInteger(r.quantity) || r.quantity < 1 || r.quantity > 20) {
+          errors.push(`rewards[${i}].quantity (squire level) must be 1–20`);
+        }
       }
     }
   }
@@ -645,6 +737,10 @@ Commands:
   create-quest            Create a quest with objectives, prereqs, rewards, NPC givers
   update-quest            Update an existing quest (pass id + fields to change)
   delete-quest            Delete a quest by id
+  create-squire           Create a squire definition
+  upload-squire-icon      Upload a PNG icon for a squire definition
+  create-monster-squire-loot  Add a squire loot entry to a monster
+  set-npc-dismisser       Set/unset an NPC's squire dismisser flag
 
 Environment:
   ADMIN_API_URL    Admin API base URL (default: http://localhost:4001)
@@ -667,6 +763,10 @@ Examples:
   node scripts/game-entities.js create-quest '{"name":"Goblin Slayer","description":"Kill goblins","quest_type":"daily","objectives":[{"objective_type":"kill_monster","target_id":1,"target_quantity":5}],"rewards":[{"reward_type":"xp","quantity":50},{"reward_type":"crowns","quantity":20}],"npc_ids":[1]}'
   node scripts/game-entities.js update-quest '{"id":1,"description":"Kill more goblins","objectives":[{"objective_type":"kill_monster","target_id":1,"target_quantity":10}]}'
   node scripts/game-entities.js delete-quest '{"id":1}'
+  node scripts/game-entities.js create-squire '{"name":"Shadow Wolf","power_level":45}'
+  node scripts/game-entities.js upload-squire-icon '{"squire_def_id":1,"file_path":"/absolute/path/to/icon.png"}'
+  node scripts/game-entities.js create-monster-squire-loot '{"monster_id":1,"squire_def_id":1,"drop_chance":10,"squire_level":1}'
+  node scripts/game-entities.js set-npc-dismisser '{"npc_id":1,"is_squire_dismisser":true}'
 `;
 
 async function main() {
@@ -707,6 +807,10 @@ async function main() {
       case 'create-quest':          await createQuestCmd(data); break;
       case 'update-quest':          await updateQuestCmd(data); break;
       case 'delete-quest':          await deleteQuestCmd(data); break;
+      case 'create-squire':         await createSquireCmd(data); break;
+      case 'upload-squire-icon':    await uploadSquireIconCmd(data); break;
+      case 'create-monster-squire-loot': await createMonsterSquireLootCmd(data); break;
+      case 'set-npc-dismisser':     await setNpcDismisserCmd(data); break;
       default:
         console.error(`Unknown command: ${cmd}`);
         console.log(HELP);

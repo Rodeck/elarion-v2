@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { query } from '../../../../backend/src/db/connection';
 import {
   getAllQuests,
   getQuestById,
@@ -94,7 +95,7 @@ async function buildQuestResponse(quest: QuestDefinition): Promise<QuestResponse
 const VALID_QUEST_TYPES = ['main', 'side', 'daily', 'weekly', 'monthly', 'repeatable'];
 const VALID_OBJECTIVE_TYPES = ['kill_monster', 'collect_item', 'craft_item', 'spend_crowns', 'gather_resource', 'reach_level', 'visit_location', 'talk_to_npc'];
 const VALID_PREREQ_TYPES = ['min_level', 'has_item', 'completed_quest', 'class_required'];
-const VALID_REWARD_TYPES = ['item', 'xp', 'crowns'];
+const VALID_REWARD_TYPES = ['item', 'xp', 'crowns', 'squire'];
 
 // ─── GET /api/quests ──────────────────────────────────────────────────────────
 
@@ -162,6 +163,7 @@ questsRouter.get('/catalog', (_req: Request, res: Response) => {
       item: { description: 'Grant item(s) to player.', target_id: 'item_definition ID', quantity: 'number of items' },
       xp: { description: 'Grant experience points.', target_id: null, quantity: 'XP amount' },
       crowns: { description: 'Grant crowns (currency).', target_id: null, quantity: 'crowns amount' },
+      squire: { description: 'Grant a squire to the player.', target_id: 'squire_definition ID', quantity: 'squire level (1–20)' },
     },
     chain_quests: {
       description: 'Set chain_id to a shared string and chain_step to ordering (1, 2, 3). Use completed_quest prerequisites to enforce ordering.',
@@ -257,6 +259,18 @@ questsRouter.post('/', async (req: Request, res: Response) => {
       }
       if (!r.quantity || r.quantity < 1) {
         return res.status(400).json({ error: 'Each reward must have a positive quantity' });
+      }
+      if (r.reward_type === 'squire') {
+        if (!r.target_id || !Number.isInteger(r.target_id) || r.target_id < 1) {
+          return res.status(400).json({ error: 'squire reward requires target_id (squire_def_id) as a positive integer' });
+        }
+        if (!Number.isInteger(r.quantity) || r.quantity < 1 || r.quantity > 20) {
+          return res.status(400).json({ error: 'squire reward quantity (squire level) must be 1–20' });
+        }
+        const squireRow = await query<{ id: number }>('SELECT id FROM squire_definitions WHERE id = $1', [r.target_id]);
+        if (squireRow.rows.length === 0) {
+          return res.status(400).json({ error: `squire reward target_id ${r.target_id} references a non-existent squire definition` });
+        }
       }
     }
   }

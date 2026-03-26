@@ -12,6 +12,7 @@ import {
 } from '../../db/queries/quests';
 import { getInventorySlotCount } from '../../db/queries/inventory';
 import { grantItemToCharacter } from '../inventory/inventory-grant-service';
+import { grantSquireToCharacter } from '../squire/squire-grant-service';
 import { awardXp } from '../progression/xp-service';
 import { awardCrowns } from '../currency/crown-service';
 import type { AuthenticatedSession } from '../../websocket/server';
@@ -28,6 +29,7 @@ import type {
   RewardType,
   InventorySlotDto,
 } from '../../../../shared/protocol/index';
+import { getSquireRank } from '../../../../shared/protocol/index';
 import type { QuestObjective, QuestPrerequisite, QuestReward, CharacterQuest } from '../../db/queries/quests';
 
 const INVENTORY_CAPACITY = 20;
@@ -95,6 +97,16 @@ async function resolveRewardTarget(reward: QuestReward): Promise<ResolvedTarget>
     );
     const row = r.rows[0];
     return row ? { name: row.name, icon_url: buildIconUrl('item', row.icon_filename) } : { name: null, icon_url: null };
+  }
+  if (reward.reward_type === 'squire' && reward.target_id != null) {
+    const r = await query<{ name: string; icon_filename: string | null }>(
+      'SELECT name, icon_filename FROM squire_definitions WHERE id = $1', [reward.target_id],
+    );
+    const row = r.rows[0];
+    const iconUrl = row?.icon_filename
+      ? `${config.adminBaseUrl}/squire-icons/${row.icon_filename}`
+      : null;
+    return row ? { name: row.name, icon_url: iconUrl } : { name: null, icon_url: null };
   }
   return { name: null, icon_url: null };
 }
@@ -318,6 +330,18 @@ export async function grantQuestRewards(
         newCrowns = await awardCrowns(characterId, reward.quantity);
         break;
       }
+      case 'squire': {
+        if (reward.target_id != null) {
+          await grantSquireToCharacter(session, characterId, reward.target_id, reward.quantity, 'quest');
+          log('info', 'quest-service', 'squire_reward_granted', {
+            characterId,
+            questId,
+            squireDefId: reward.target_id,
+            squireLevel: reward.quantity,
+          });
+        }
+        break;
+      }
     }
 
     grantedRewards.push({
@@ -350,10 +374,22 @@ export { getCurrentResetKey } from '../../db/queries/quests';
 
 export async function hasInventorySpaceForRewards(characterId: string, questId: number): Promise<boolean> {
   const rewards = await getRewardsForQuest(questId);
-  const itemRewardCount = rewards.filter((r) => r.reward_type === 'item').length;
-  if (itemRewardCount === 0) return true;
 
-  const currentSlots = await getInventorySlotCount(characterId);
-  // Conservative check: each item reward may need a new slot (worst case, no stacking)
-  return (currentSlots + itemRewardCount) <= INVENTORY_CAPACITY;
+  // Check item inventory space
+  const itemRewardCount = rewards.filter((r) => r.reward_type === 'item').length;
+  if (itemRewardCount > 0) {
+    const currentSlots = await getInventorySlotCount(characterId);
+    // Conservative check: each item reward may need a new slot (worst case, no stacking)
+    if ((currentSlots + itemRewardCount) > INVENTORY_CAPACITY) return false;
+  }
+
+  // Check squire roster space
+  const squireRewardCount = rewards.filter((r) => r.reward_type === 'squire').length;
+  if (squireRewardCount > 0) {
+    const { canAcquireSquire } = await import('../../db/queries/squires');
+    const canAcquire = await canAcquireSquire(characterId);
+    if (!canAcquire) return false;
+  }
+
+  return true;
 }

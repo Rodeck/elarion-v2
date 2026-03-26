@@ -7,7 +7,7 @@ import { getBuildingActions } from '../../db/queries/city-maps';
 import type { ExploreActionConfig } from '../../db/queries/city-maps';
 import {
   getSquiresForCharacter,
-  getActiveExpeditionForSquire,
+  getIdleSquiresForCharacter,
 } from '../../db/queries/squires';
 import type { ExpeditionActionConfig } from '../../db/queries/squires';
 import { buildExpeditionStateDto } from '../expedition/expedition-service';
@@ -83,23 +83,28 @@ const STEP_DELAY_MS = 300;
 // Expedition state lookup for building_arrived
 // ---------------------------------------------------------------------------
 
-export async function getExpeditionStateForBuilding(
+export async function getExpeditionStatesForBuilding(
   characterId: string,
   building: CityMapBuilding,
-): Promise<ExpeditionStateDto | undefined> {
-  const expeditionActionDto = building.actions.find((a) => a.action_type === 'expedition');
-  if (!expeditionActionDto) return undefined;
+): Promise<ExpeditionStateDto[]> {
+  const expeditionActionDtos = building.actions.filter((a) => a.action_type === 'expedition');
+  if (expeditionActionDtos.length === 0) return [];
 
   const allActions = await getBuildingActions(building.id);
-  const dbAction = allActions.find((a) => a.id === expeditionActionDto.id && (a.action_type as string) === 'expedition');
-  if (!dbAction) return undefined;
+  const allSquires = await getSquiresForCharacter(characterId);
+  if (allSquires.length === 0) return [];
 
-  const squires = await getSquiresForCharacter(characterId);
-  const squire = squires[0];
-  if (!squire) return undefined;
+  const idleSquires = await getIdleSquiresForCharacter(characterId);
+  const states: ExpeditionStateDto[] = [];
 
-  const expedition = await getActiveExpeditionForSquire(squire.id);
-  return buildExpeditionStateDto(squire, dbAction.id, dbAction.config as unknown as ExpeditionActionConfig, expedition);
+  for (const dto of expeditionActionDtos) {
+    const dbAction = allActions.find((a) => a.id === dto.id && (a.action_type as string) === 'expedition');
+    if (!dbAction) continue;
+    const state = await buildExpeditionStateDto(idleSquires, allSquires, dbAction.id, dbAction.config as unknown as ExpeditionActionConfig);
+    states.push(state);
+  }
+
+  return states;
 }
 
 // ---------------------------------------------------------------------------
@@ -323,12 +328,14 @@ export async function handleCityMove(session: AuthenticatedSession, payload: unk
       const building = buildingByNode.get(stepNodeId);
       if (building) {
         void (async () => {
-          const expedition_state = await getExpeditionStateForBuilding(characterId, building).catch(() => undefined);
+          const expedition_states = await getExpeditionStatesForBuilding(characterId, building).catch(() => []);
           sendToSession(session, 'city.building_arrived', {
             building_id: building.id,
             building_name: building.name,
             node_id: stepNodeId,
-            ...(expedition_state !== undefined ? { expedition_state } : {}),
+            // Legacy single state for backward compat
+            ...(expedition_states.length > 0 ? { expedition_state: expedition_states[0] } : {}),
+            expedition_states,
           });
           log('debug', 'city-movement', 'building_arrived', {
             characterId,

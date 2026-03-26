@@ -21,6 +21,8 @@ import { handleCombatTriggerActive, handleLoadoutRequest, handleLoadoutUpdate } 
 import { registerCraftingHandlers } from './game/crafting/crafting-handler';
 import { registerQuestHandlers } from './game/quest/quest-handler';
 import { handleGatheringStart, handleGatheringCancel } from './game/gathering/gathering-handler';
+import { handleSquireRoster } from './game/squire/squire-grant-service';
+import { handleSquireDismissList, handleSquireDismissConfirm } from './game/squire/squire-dismiss-handler';
 import { sendWorldState, setZonePlayersGetter } from './websocket/handlers/world-state-handler';
 import { getZonePlayers } from './game/world/zone-registry';
 import { loadCityMaps } from './game/world/city-map-loader';
@@ -77,6 +79,9 @@ async function bootstrap(): Promise<void> {
   registerQuestHandlers();
   registerHandler('gathering.start', handleGatheringStart);
   registerHandler('gathering.cancel', handleGatheringCancel);
+  registerHandler('squire.roster', handleSquireRoster);
+  registerHandler('squire.dismiss_list', handleSquireDismissList);
+  registerHandler('squire.dismiss_confirm', handleSquireDismissConfirm);
 
   // Start WebSocket server (also sends world.state on connect)
   startWebSocketServer();

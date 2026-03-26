@@ -21,6 +21,7 @@ import { abilitiesRouter } from './routes/abilities';
 import { recipesRouter } from './routes/recipes';
 import { questsRouter } from './routes/quests';
 import { buildingItemsRouter } from './routes/building-items';
+import { squireDefinitionsRouter } from './routes/squire-definitions';
 
 const app = express();
 
@@ -51,6 +52,14 @@ app.use('/npc-icons', express.static(npcIconsDir));
 const abilityIconsDir = path.resolve(__dirname, '../../../backend/assets/ability-icons');
 app.use('/ability-icons', express.static(abilityIconsDir));
 
+// Serve squire icons statically
+const squireIconsDir = path.resolve(__dirname, '../../../backend/assets/squires/icons');
+app.use('/squire-icons', express.static(squireIconsDir));
+
+// Serve UI icons (XP, crowns) statically
+const uiIconsDir = path.resolve(__dirname, '../../../backend/assets/ui-icons');
+app.use('/ui-icons', express.static(uiIconsDir));
+
 // Public auth routes (must be before requireAdmin middleware)
 app.use(authRouter);
 
@@ -75,6 +84,7 @@ app.use('/api/npcs', npcsRouter);
 app.use('/api/abilities', abilitiesRouter);
 app.use('/api/recipes', recipesRouter);
 app.use('/api/quests', questsRouter);
+app.use('/api/squire-definitions', squireDefinitionsRouter);
 
 if (!process.env['OPENROUTER_API_KEY']) {
   console.log(JSON.stringify({ level: 'warn', event: 'openrouter_key_missing', msg: 'OPENROUTER_API_KEY not set — AI image generation will return 503', timestamp: new Date().toISOString() }));

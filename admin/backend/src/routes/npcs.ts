@@ -182,6 +182,33 @@ npcsRouter.put('/:id/crafter', async (req: Request, res: Response) => {
   }
 });
 
+// ── PUT /api/npcs/:id/squire-dismisser ───────────────────────────────────
+
+npcsRouter.put('/:id/squire-dismisser', async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id!, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid NPC id' });
+
+  const { is_squire_dismisser } = req.body as Record<string, unknown>;
+  if (typeof is_squire_dismisser !== 'boolean') {
+    return res.status(400).json({ error: 'is_squire_dismisser must be a boolean' });
+  }
+
+  try {
+    const existing = await getNpcById(id);
+    if (!existing) return res.status(404).json({ error: 'NPC not found' });
+
+    const { query } = await import('../../../../backend/src/db/connection');
+    await query('UPDATE npcs SET is_squire_dismisser = $1 WHERE id = $2', [is_squire_dismisser, id]);
+
+    const updated = await getNpcById(id);
+    log('info', 'Updated NPC squire dismisser status', { id, is_squire_dismisser, admin: req.username });
+    return res.json(npcToResponse(updated!));
+  } catch (err) {
+    log('error', 'Failed to update NPC squire dismisser status', { id, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── DELETE /api/npcs/:id ────────────────────────────────────────────────────
 
 npcsRouter.delete('/:id', async (req: Request, res: Response) => {

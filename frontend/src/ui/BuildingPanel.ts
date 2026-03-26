@@ -3,6 +3,8 @@ import type {
   CityBuildingActionPayload,
   BuildingExploreResultPayload,
   ExpeditionStateDto,
+  SquireRosterDto,
+  CharacterSquireDto,
   ExpeditionDispatchedPayload,
   ExpeditionCollectResultPayload,
   ExpeditionCompletedPayload,
@@ -14,12 +16,13 @@ import type {
   GatheringStartPayload,
 } from '@elarion/protocol';
 import { CombatModal } from './CombatModal';
+import { getXpIconUrl, getCrownsIconUrl } from './ui-icons';
 import { CraftingModal } from './CraftingModal';
 import { GatheringModal } from './GatheringModal';
 import type { GatheringCombatLoot } from './GatheringModal';
 
 type ActionCallback = (payload: CityBuildingActionPayload) => void;
-type ExpeditionDispatchCallback = (buildingId: number, actionId: number, durationHours: 1 | 3 | 6) => void;
+type ExpeditionDispatchCallback = (buildingId: number, actionId: number, durationHours: 1 | 3 | 6, squireId: number) => void;
 type ExpeditionCollectCallback = (expeditionId: number) => void;
 type CraftingOpenCallback = (npcId: number) => void;
 type QuestOpenCallback = (npcId: number) => void;
@@ -33,6 +36,8 @@ interface NpcQuestDialog {
   dialog_prompt: string;
   dialog_response: string;
 }
+type SquireDismissListCallback = (npcId: number) => void;
+type SquireDismissConfirmCallback = (squireId: number) => void;
 type GatheringStartCallback = (payload: GatheringStartPayload) => void;
 type GatheringCancelCallback = () => void;
 type InventorySlotsGetter = () => import('@elarion/protocol').InventorySlotDto[];
@@ -50,6 +55,8 @@ export class BuildingPanel {
   private onQuestOpen: QuestOpenCallback | null = null;
   private onNpcDialogsRequest: NpcDialogsRequestCallback | null = null;
   private onQuestTalkComplete: QuestTalkCompleteCallback | null = null;
+  private onSquireDismissList: SquireDismissListCallback | null = null;
+  private onSquireDismissConfirm: SquireDismissConfirmCallback | null = null;
   private pendingNpcDialogs: NpcQuestDialog[] = [];
   private currentNpcForDialogs: number | null = null;
   private onGatheringStart: GatheringStartCallback | null = null;
@@ -57,7 +64,8 @@ export class BuildingPanel {
   private getInventorySlots: InventorySlotsGetter | null = null;
   private progressIntervals: number[] = [];
   private currentBuilding: CityMapBuilding | null = null;
-  private currentExpeditionState: ExpeditionStateDto | undefined;
+  private expeditionStates = new Map<number, ExpeditionStateDto>(); // action_id → state
+  private currentSquireRoster: SquireRosterDto | null = null;
   private gatheringActive = false;
   private gatheringModal: GatheringModal;
 
@@ -117,6 +125,67 @@ export class BuildingPanel {
 
   setOnQuestTalkComplete(cb: QuestTalkCompleteCallback): void {
     this.onQuestTalkComplete = cb;
+  }
+
+  updateSquireRoster(roster: SquireRosterDto): void {
+    this.currentSquireRoster = roster;
+    // Refresh all expedition sections so idle squire lists are up-to-date
+    this.refreshAllExpeditionSections();
+  }
+
+  setOnSquireDismissList(cb: SquireDismissListCallback): void {
+    this.onSquireDismissList = cb;
+  }
+
+  setOnSquireDismissConfirm(cb: SquireDismissConfirmCallback): void {
+    this.onSquireDismissConfirm = cb;
+  }
+
+  /** Show the list of dismissable squires after server responds */
+  showSquireDismissList(squires: import('@elarion/protocol').CharacterSquireDto[]): void {
+    this.bodyEl.innerHTML = '';
+
+    const header = document.createElement('p');
+    header.style.cssText = 'margin:0 0 10px;font-family:"Crimson Text",serif;font-size:14px;color:#a89060;';
+    header.textContent = squires.length === 0
+      ? 'You have no squires available for dismissal.'
+      : 'Select a squire to dismiss:';
+    this.bodyEl.appendChild(header);
+
+    for (const sq of squires) {
+      const row = this.buildDialogOption(`${sq.name} — ${sq.rank} (Power: ${sq.power_level})`, () => {
+        this.showSquireDismissConfirm(sq);
+      });
+      this.bodyEl.appendChild(row);
+    }
+
+    const backBtn = this.buildDialogOption('Cancel', () => {
+      if (this.currentBuilding) {
+        this.renderBuilding(this.currentBuilding);
+      }
+    });
+    this.bodyEl.appendChild(backBtn);
+  }
+
+  private showSquireDismissConfirm(squire: import('@elarion/protocol').CharacterSquireDto): void {
+    this.bodyEl.innerHTML = '';
+
+    const confirm = document.createElement('p');
+    confirm.style.cssText = 'margin:0 0 12px;font-family:"Crimson Text",serif;font-size:14px;color:#c06050;';
+    confirm.textContent = `Are you sure you want to dismiss ${squire.name}? This is permanent.`;
+    this.bodyEl.appendChild(confirm);
+
+    const yesBtn = this.buildDialogOption('Yes, dismiss this squire', () => {
+      this.onSquireDismissConfirm?.(squire.id);
+    });
+    this.bodyEl.appendChild(yesBtn);
+
+    const noBtn = this.buildDialogOption('No, go back', () => {
+      if (this.currentBuilding) {
+        this.renderBuilding(this.currentBuilding);
+      }
+    });
+    this.bodyEl.appendChild(noBtn);
   }
 
   /** Called when server responds with pending NPC dialogs */
@@ -202,7 +271,17 @@ export class BuildingPanel {
   }
 
   show(building: CityMapBuilding, expeditionState?: ExpeditionStateDto): void {
+    if (expeditionState) {
+      this.expeditionStates.set(expeditionState.action_id, expeditionState);
+    }
     this.renderBuilding(building, expeditionState);
+  }
+
+  showWithStates(building: CityMapBuilding, states: ExpeditionStateDto[]): void {
+    for (const s of states) {
+      this.expeditionStates.set(s.action_id, s);
+    }
+    this.renderBuilding(building);
   }
 
   hide(): void {
@@ -225,7 +304,7 @@ export class BuildingPanel {
   private renderEmpty(): void {
     this.clearProgressIntervals();
     this.currentBuilding = null;
-    this.currentExpeditionState = undefined;
+    this.expeditionStates.clear();
     this.headerEl.innerHTML = '';
     const title = document.createElement('h2');
     title.style.cssText = 'margin:0;font-size:13px;letter-spacing:0.08em;color:#4a3a22;';
@@ -243,7 +322,9 @@ export class BuildingPanel {
   private renderBuilding(building: CityMapBuilding, expeditionState?: ExpeditionStateDto): void {
     this.clearProgressIntervals();
     this.currentBuilding = building;
-    this.currentExpeditionState = expeditionState;
+    if (expeditionState) {
+      this.expeditionStates.set(expeditionState.action_id, expeditionState);
+    }
     // Header
     this.headerEl.innerHTML = '';
     const title = document.createElement('h2');
@@ -326,8 +407,9 @@ export class BuildingPanel {
 
       for (const action of building.actions) {
         if (action.action_type === 'expedition') {
+          const actionExpState = this.expeditionStates.get(action.id);
           actionsSection.appendChild(
-            this.renderExpeditionSection(building.id, action.id, expeditionState),
+            this.renderExpeditionSection(building.id, action.id, actionExpState, undefined, action.label),
           );
           continue;
         }
@@ -560,7 +642,7 @@ export class BuildingPanel {
   // NPC panel
   // ---------------------------------------------------------------------------
 
-  private renderNpcPanel(npc: { id: number; name: string; description: string; icon_url: string; is_crafter: boolean; is_quest_giver: boolean }): void {
+  private renderNpcPanel(npc: { id: number; name: string; description: string; icon_url: string; is_crafter: boolean; is_quest_giver: boolean; is_squire_dismisser?: boolean }): void {
     // Header: NPC name with back chevron
     this.headerEl.innerHTML = '';
 
@@ -579,7 +661,7 @@ export class BuildingPanel {
     backBtn.textContent = '‹';
     backBtn.addEventListener('click', () => {
       if (this.currentBuilding) {
-        this.renderBuilding(this.currentBuilding, this.currentExpeditionState);
+        this.renderBuilding(this.currentBuilding);
       }
     });
 
@@ -660,6 +742,13 @@ export class BuildingPanel {
       optionsEl.appendChild(questOption);
     }
 
+    if (npc.is_squire_dismisser) {
+      const dismissOption = this.buildDialogOption('I want to dismiss a squire', () => {
+        this.onSquireDismissList?.(npc.id);
+      });
+      optionsEl.appendChild(dismissOption);
+    }
+
     // Placeholder for quest dialog options (talk_to_npc objectives)
     // These get injected when the server responds to quest.npc_dialogs
     const dialogPlaceholder = document.createElement('div');
@@ -673,7 +762,7 @@ export class BuildingPanel {
 
     const backOption = this.buildDialogOption('Leave', () => {
       if (this.currentBuilding) {
-        this.renderBuilding(this.currentBuilding, this.currentExpeditionState);
+        this.renderBuilding(this.currentBuilding);
       }
     });
     optionsEl.appendChild(backOption);
@@ -712,6 +801,7 @@ export class BuildingPanel {
     actionId: number,
     state: ExpeditionStateDto | undefined,
     rewardMessage?: string,
+    expeditionLabel?: string,
   ): HTMLElement {
     const section = document.createElement('div');
     section.dataset['expeditionSection'] = String(actionId);
@@ -720,27 +810,109 @@ export class BuildingPanel {
 
     const title = document.createElement('p');
     title.style.cssText = 'margin:0 0 8px;font-size:12px;letter-spacing:0.06em;color:#c9a55c;';
-    title.textContent = 'EXPEDITION';
+    title.textContent = (expeditionLabel || 'EXPEDITION').toUpperCase();
     section.appendChild(title);
 
     if (!state || state.squire_status === 'idle') {
-      if (rewardMessage) {
-        const reward = document.createElement('p');
-        reward.style.cssText = 'margin:0 0 8px;font-family:"Crimson Text",serif;font-size:12px;color:#b8e870;';
-        reward.textContent = rewardMessage;
-        section.appendChild(reward);
+      // Derive idle squires from the live roster — not from stale state.available_squires
+      const roster = this.currentSquireRoster;
+      const allSquires = roster?.squires ?? state?.available_squires ?? [];
+      const slotsTotal = roster?.slots_total ?? 5;
+      const slotsUnlocked = roster?.slots_unlocked ?? 2;
+
+      // A squire is idle if its status is 'idle' in the roster
+      const idleSquires = allSquires.filter((s) => s.status === 'idle');
+      const idleIds = new Set(idleSquires.map((s) => s.id));
+
+      let selectedSquireId: number | null = idleSquires.length > 0 ? idleSquires[0]!.id : null;
+
+      const slotsRow = document.createElement('div');
+      slotsRow.style.cssText = 'display:flex;gap:4px;margin-bottom:8px;justify-content:center;';
+
+      // Tooltip element (shared, repositioned on hover)
+      const tooltip = document.createElement('div');
+      tooltip.style.cssText = 'display:none;position:absolute;z-index:50;background:#1a1610;border:1px solid #5a4a2a;border-radius:4px;padding:6px 8px;pointer-events:none;white-space:nowrap;font-family:"Crimson Text",serif;font-size:11px;color:#e0d8c8;';
+      section.style.position = 'relative';
+      section.appendChild(tooltip);
+
+      const slotEls: HTMLElement[] = [];
+
+      const updateSelection = (): void => {
+        slotEls.forEach((el) => {
+          const sid = parseInt(el.dataset['squireId'] ?? '0', 10);
+          const isSelected = sid === selectedSquireId;
+          el.style.borderColor = isSelected ? '#f0c060' : '#3a3020';
+          el.style.boxShadow = isSelected ? '0 0 6px rgba(240,192,96,0.4)' : 'none';
+        });
+      };
+
+      for (let i = 0; i < slotsTotal; i++) {
+        const slotEl = document.createElement('div');
+        slotEl.style.cssText = 'width:84px;height:84px;border-radius:4px;border:2px solid #3a3020;display:flex;align-items:center;justify-content:center;transition:border-color 0.15s,box-shadow 0.15s;';
+
+        if (i < allSquires.length) {
+          const sq = allSquires[i]!;
+          const isIdle = idleIds.has(sq.id);
+          slotEl.dataset['squireId'] = String(sq.id);
+
+          if (sq.icon_url) {
+            slotEl.innerHTML = `<img src="${sq.icon_url}" style="width:80px;height:80px;border-radius:2px;image-rendering:pixelated;${isIdle ? '' : 'opacity:0.35;filter:grayscale(0.7);'}" />`;
+          } else {
+            slotEl.innerHTML = `<span style="font-size:20px;${isIdle ? 'color:#c9a55c;' : 'color:#3a3020;'}">⚔</span>`;
+          }
+
+          if (isIdle) {
+            slotEl.style.cursor = 'pointer';
+            slotEl.addEventListener('click', () => {
+              selectedSquireId = sq.id;
+              updateSelection();
+            });
+          } else {
+            slotEl.style.opacity = '0.5';
+            slotEl.style.cursor = 'not-allowed';
+          }
+
+          // Hover tooltip
+          slotEl.addEventListener('mouseenter', (e) => {
+            const statusLabel = isIdle ? 'Idle' : 'On Expedition';
+            tooltip.innerHTML = `<strong style="color:#f0c060;">${sq.name}</strong><br>${sq.rank} · Power: ${sq.power_level}<br><span style="color:${isIdle ? '#5a8a3a' : '#d4a84b'};">${statusLabel}</span>`;
+            tooltip.style.display = 'block';
+            const rect = slotEl.getBoundingClientRect();
+            const parentRect = section.getBoundingClientRect();
+            tooltip.style.left = `${rect.left - parentRect.left}px`;
+            tooltip.style.top = `${rect.bottom - parentRect.top + 4}px`;
+          });
+          slotEl.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+
+          slotEls.push(slotEl);
+        } else if (i < slotsUnlocked) {
+          slotEl.style.borderStyle = 'dashed';
+          slotEl.style.borderColor = '#2a2418';
+          slotEl.innerHTML = '<span style="color:#2a2418;font-size:10px;">—</span>';
+        } else {
+          slotEl.style.background = 'rgba(20,16,8,0.5)';
+          slotEl.style.borderColor = '#1a1610';
+          slotEl.innerHTML = '<span style="font-size:12px;">🔒</span>';
+        }
+
+        slotsRow.appendChild(slotEl);
       }
 
-      const squireLabel = document.createElement('p');
-      squireLabel.style.cssText = 'margin:0 0 10px;font-family:"Crimson Text",serif;font-size:13px;color:#a89060;';
-      squireLabel.textContent = state ? `${state.squire_name} is ready to depart.` : 'Your squire awaits.';
-      section.appendChild(squireLabel);
+      section.appendChild(slotsRow);
+      updateSelection();
 
-      if (state?.duration_options) {
+      if (idleSquires.length === 0) {
+        const noSquires = document.createElement('p');
+        noSquires.style.cssText = 'margin:0 0 6px;font-family:"Crimson Text",serif;font-size:11px;color:#5a4a2a;text-align:center;';
+        noSquires.textContent = 'No idle squires available.';
+        section.appendChild(noSquires);
+      } else {
+        // Duration buttons — always show 1h/3h/6h when idle squires exist
+        const durations: (1 | 3 | 6)[] = [1, 3, 6];
         const btnRow = document.createElement('div');
         btnRow.style.cssText = 'display:flex;gap:6px;';
 
-        for (const opt of state.duration_options) {
+        for (const hours of durations) {
           const btn = document.createElement('button');
           btn.style.cssText = [
             'flex:1',
@@ -752,10 +924,12 @@ export class BuildingPanel {
             'font-size:12px',
             'cursor:pointer',
           ].join(';');
-          btn.textContent = `${opt.duration_hours}h`;
+          btn.textContent = `${hours}h`;
           btn.addEventListener('click', () => {
-            btn.disabled = true;
-            this.onExpeditionDispatch?.(buildingId, actionId, opt.duration_hours);
+            if (selectedSquireId) {
+              btn.disabled = true;
+              this.onExpeditionDispatch?.(buildingId, actionId, hours, selectedSquireId);
+            }
           });
           btnRow.appendChild(btn);
         }
@@ -763,10 +937,26 @@ export class BuildingPanel {
         section.appendChild(btnRow);
       }
     } else if (state.squire_status === 'exploring') {
-      const info = document.createElement('p');
-      info.style.cssText = 'margin:0 0 10px;font-family:"Crimson Text",serif;font-size:13px;color:#a89060;';
-      info.textContent = `${state.squire_name} is on expedition.`;
-      section.appendChild(info);
+      const sq = state.active_squire;
+      const exploringRow = document.createElement('div');
+      exploringRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;';
+
+      if (sq?.icon_url) {
+        exploringRow.innerHTML += `<img src="${sq.icon_url}" style="width:40px;height:40px;border-radius:3px;image-rendering:pixelated;flex-shrink:0;" />`;
+      }
+
+      const infoCol = document.createElement('div');
+      infoCol.style.cssText = 'flex:1;min-width:0;';
+      const nameEl = document.createElement('div');
+      nameEl.style.cssText = 'font-weight:bold;color:#f0c060;font-size:13px;font-family:"Crimson Text",serif;';
+      nameEl.textContent = sq?.name ?? state.squire_name;
+      infoCol.appendChild(nameEl);
+      const statusEl = document.createElement('div');
+      statusEl.style.cssText = 'font-size:11px;color:#d4a84b;';
+      statusEl.textContent = sq ? `${sq.rank} · Power ${sq.power_level} · On expedition` : 'On expedition';
+      infoCol.appendChild(statusEl);
+      exploringRow.appendChild(infoCol);
+      section.appendChild(exploringRow);
 
       if (state.started_at && state.completes_at) {
         const startMs = new Date(state.started_at).getTime();
@@ -812,7 +1002,7 @@ export class BuildingPanel {
       // ready
       const info = document.createElement('p');
       info.style.cssText = 'margin:0 0 8px;font-family:"Crimson Text",serif;font-size:13px;color:#a89060;';
-      info.textContent = `${state.squire_name} has returned with rewards!`;
+      info.textContent = `${state.active_squire?.name ?? state.squire_name} has returned with rewards!`;
       section.appendChild(info);
 
       if (state.collectable_rewards) {
@@ -850,58 +1040,228 @@ export class BuildingPanel {
     return section;
   }
 
-  showExpeditionDispatched(payload: ExpeditionDispatchedPayload): void {
-    const completesAt = new Date(payload.completes_at).toLocaleTimeString();
-    this.appendFeedback(
-      `${payload.squire_name} departed for ${payload.building_name} (${payload.duration_hours}h). Returns at ${completesAt}.`,
-      '#b8e870',
-    );
+  showExpeditionDispatched(payload: ExpeditionDispatchedPayload & { started_at?: string; action_id?: number }): void {
+    const actionId = payload.action_id ?? 0;
+    const newState: ExpeditionStateDto = {
+      action_id: actionId,
+      squire_name: payload.squire_name,
+      squire_status: 'exploring',
+      expedition_id: payload.expedition_id,
+      started_at: payload.started_at ?? new Date().toISOString(),
+      completes_at: payload.completes_at,
+      active_squire: (payload as any).squire ?? undefined,
+    };
+    this.expeditionStates.set(actionId, newState);
+    // Refresh ALL sections — dispatched squire should appear greyed out in other expeditions
+    this.refreshAllExpeditionSections();
   }
 
   handleExpeditionCompleted(payload: ExpeditionCompletedPayload): void {
-    if (!this.currentExpeditionState) return;
-    this.currentExpeditionState = {
-      ...this.currentExpeditionState,
-      squire_status: 'ready',
-      expedition_id: payload.expedition_id,
-      started_at: undefined,
-      completes_at: undefined,
-    };
-    this.refreshExpeditionSection();
-  }
-
-  showExpeditionCollectResult(payload: ExpeditionCollectResultPayload): void {
-    const r = payload.rewards;
-    const itemSummary = r.items.length > 0
-      ? ` + ${r.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}`
-      : '';
-    const skipped = payload.items_skipped ? ' (some items skipped — inventory full)' : '';
-    const rewardMsg = `${payload.squire_name} returned: ${r.gold}g / ${r.exp}xp${itemSummary}${skipped}`;
-
-    if (this.currentExpeditionState) {
-      this.currentExpeditionState = {
-        ...this.currentExpeditionState,
-        squire_status: 'idle',
-        expedition_id: undefined,
-        collectable_rewards: undefined,
-        started_at: undefined,
-        completes_at: undefined,
-      };
-      this.refreshExpeditionSection(rewardMsg);
-    } else {
-      this.appendFeedback(rewardMsg, '#b8e870');
+    // Find which action this expedition belongs to
+    for (const [actionId, state] of this.expeditionStates) {
+      if (state.expedition_id === payload.expedition_id) {
+        this.expeditionStates.set(actionId, {
+          ...state,
+          squire_status: 'ready',
+          expedition_id: payload.expedition_id,
+          started_at: undefined,
+          completes_at: undefined,
+        });
+        break;
+      }
     }
+    // Refresh all — the completed squire might now be collectable
+    this.refreshAllExpeditionSections();
   }
 
-  private refreshExpeditionSection(rewardMessage?: string): void {
-    const section = this.bodyEl.querySelector<HTMLElement>('[data-expedition-section]');
+  showExpeditionCollectResult(payload: ExpeditionCollectResultPayload & { expedition_id?: number }): void {
+    const r = payload.rewards;
+
+    // Reset the collected expedition's state to idle — match by expedition_id first
+    for (const [actionId, state] of this.expeditionStates) {
+      if (payload.expedition_id != null ? state.expedition_id === payload.expedition_id : state.squire_status === 'ready') {
+        this.expeditionStates.set(actionId, {
+          ...state,
+          squire_status: 'idle',
+          expedition_id: undefined,
+          collectable_rewards: undefined,
+          started_at: undefined,
+          completes_at: undefined,
+          active_squire: undefined,
+        });
+        break;
+      }
+    }
+
+    // Refresh ALL expedition sections — the roster update will also trigger this,
+    // but do it now so the UI updates immediately before the modal shows
+    this.refreshAllExpeditionSections();
+
+    // Show reward modal
+    this.showExpeditionRewardModal(payload.squire_name, r, payload.items_skipped);
+  }
+
+  private showExpeditionRewardModal(
+    squireName: string,
+    rewards: { gold: number; exp: number; items: { item_def_id: number; name: string; quantity: number; icon_url?: string | null }[] },
+    itemsSkipped: boolean,
+  ): void {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = [
+      'position:fixed', 'inset:0', 'z-index:300',
+      'display:flex', 'align-items:center', 'justify-content:center',
+      'background:rgba(0,0,0,0.7)',
+      'font-family:Cinzel,serif', 'color:#c9a55c',
+    ].join(';');
+
+    const modal = document.createElement('div');
+    modal.style.cssText = [
+      'width:380px', 'max-width:90vw',
+      'background:#0d0b08',
+      'border:1px solid #5a4a2a',
+      'border-radius:6px',
+      'box-shadow:0 8px 40px rgba(0,0,0,0.9)',
+      'display:flex', 'flex-direction:column',
+      'overflow:hidden',
+    ].join(';');
+
+    // Header
+    const header = document.createElement('div');
+    header.style.cssText = 'padding:18px 16px 12px;text-align:center;background:#111008;border-bottom:1px solid #3a2e1a;';
+
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size:1.4rem;font-weight:700;color:#f0c060;text-shadow:0 2px 8px rgba(0,0,0,0.8);letter-spacing:0.06em;';
+    title.textContent = 'Expedition Complete!';
+    header.appendChild(title);
+
+    const subtitle = document.createElement('div');
+    subtitle.style.cssText = 'font-size:0.8rem;color:#8a7a5a;font-family:"Crimson Text",serif;margin-top:6px;';
+    subtitle.textContent = `${squireName} returned with rewards`;
+    header.appendChild(subtitle);
+
+    modal.appendChild(header);
+
+    // Body — loot grid
+    const body = document.createElement('div');
+    body.style.cssText = 'padding:14px 16px;display:flex;flex-direction:column;gap:10px;';
+
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;';
+
+    if (rewards.gold > 0) {
+      grid.appendChild(this.buildRewardTile(getCrownsIconUrl(), '♛', '#f0c060', rewards.gold, `+${rewards.gold} Gold`));
+    }
+    if (rewards.exp > 0) {
+      grid.appendChild(this.buildRewardTile(getXpIconUrl(), '✦', '#a78bfa', rewards.exp, `+${rewards.exp} XP`));
+    }
+    for (const item of rewards.items) {
+      grid.appendChild(this.buildRewardTile(item.icon_url ?? null, '◆', '#c9a55c', item.quantity, item.name));
+    }
+
+    body.appendChild(grid);
+
+    if (itemsSkipped) {
+      const warn = document.createElement('div');
+      warn.style.cssText = 'text-align:center;font-size:0.75rem;color:#c06050;font-family:"Crimson Text",serif;';
+      warn.textContent = 'Some items could not be added — inventory full.';
+      body.appendChild(warn);
+    }
+
+    modal.appendChild(body);
+
+    // Footer
+    const footer = document.createElement('div');
+    footer.style.cssText = 'padding:12px 16px 16px;display:flex;justify-content:center;border-top:1px solid #2a2010;background:#0a0806;';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Continue';
+    closeBtn.style.cssText = [
+      'padding:8px 36px', 'font-family:Cinzel,serif',
+      'font-size:0.9rem', 'font-weight:600', 'color:#1a1510',
+      'background:#d4a84b', 'border:1px solid #b8922e', 'cursor:pointer',
+      'border-radius:3px', 'letter-spacing:0.05em',
+      'transition:background 0.15s',
+    ].join(';');
+    closeBtn.addEventListener('mouseenter', () => { closeBtn.style.background = '#e8c060'; });
+    closeBtn.addEventListener('mouseleave', () => { closeBtn.style.background = '#d4a84b'; });
+    closeBtn.addEventListener('click', () => { overlay.remove(); });
+    footer.appendChild(closeBtn);
+    modal.appendChild(footer);
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  }
+
+  private buildRewardTile(
+    iconUrl: string | null,
+    fallbackSymbol: string,
+    color: string,
+    quantity: number,
+    tooltipText: string,
+  ): HTMLElement {
+    const tile = document.createElement('div');
+    tile.style.cssText = [
+      'position:relative',
+      'width:48px', 'height:48px',
+      'background:#1a1510', 'border:1px solid #3a2e1a', 'border-radius:4px',
+      'display:flex', 'align-items:center', 'justify-content:center',
+      'overflow:visible', 'cursor:default', 'flex-shrink:0',
+    ].join(';');
+    tile.title = tooltipText;
+
+    if (iconUrl) {
+      const img = document.createElement('img');
+      img.src = iconUrl;
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain;image-rendering:pixelated;';
+      tile.appendChild(img);
+    } else {
+      tile.textContent = fallbackSymbol;
+      tile.style.color = color;
+      tile.style.fontSize = '1.4rem';
+    }
+
+    const badge = document.createElement('div');
+    badge.style.cssText = [
+      'position:absolute', 'bottom:-2px', 'right:-2px',
+      'min-width:16px', 'height:16px', 'padding:0 3px',
+      'background:#0d0b08', 'border:1px solid #5a4a2a', 'border-radius:3px',
+      'font-size:0.6rem', 'font-family:Rajdhani,sans-serif', 'font-weight:700',
+      'color:#e8c870', 'text-align:center', 'line-height:16px',
+    ].join(';');
+    badge.textContent = quantity > 1 ? String(quantity) : '+1';
+    tile.appendChild(badge);
+
+    return tile;
+  }
+
+  private refreshExpeditionSection(actionId: number): void {
+    const section = this.bodyEl.querySelector<HTMLElement>(`[data-expedition-section="${actionId}"]`);
     if (!section || !this.currentBuilding) return;
-    const actionId = parseInt(section.dataset['expeditionSection'] ?? '0', 10);
     this.clearProgressIntervals();
+    const actionDto = this.currentBuilding.actions.find((a) => a.id === actionId);
+    const label = actionDto?.label;
+    const state = this.expeditionStates.get(actionId);
     const newSection = this.renderExpeditionSection(
-      this.currentBuilding.id, actionId, this.currentExpeditionState, rewardMessage,
+      this.currentBuilding.id, actionId, state, undefined, label,
     );
     section.replaceWith(newSection);
+  }
+
+  /** Re-render ALL expedition sections — call after roster changes or collect */
+  private refreshAllExpeditionSections(): void {
+    if (!this.currentBuilding) return;
+    this.clearProgressIntervals();
+    for (const action of this.currentBuilding.actions) {
+      if (action.action_type === 'expedition') {
+        const section = this.bodyEl.querySelector<HTMLElement>(`[data-expedition-section="${action.id}"]`);
+        if (!section) continue;
+        const state = this.expeditionStates.get(action.id);
+        const newSection = this.renderExpeditionSection(
+          this.currentBuilding.id, action.id, state, undefined, action.label,
+        );
+        section.replaceWith(newSection);
+      }
+    }
   }
 
   showExpeditionRejection(reason: string): void {

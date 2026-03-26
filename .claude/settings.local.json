@@ -75,7 +75,16 @@
       "Bash(sed -i 's/- \\\\[ \\\\] T029/- [x] T029/' specs/021-quest-system/tasks.md)",
       "Bash(sed -i 's/- \\\\[ \\\\] T033/- [x] T033/' specs/021-quest-system/tasks.md)",
       "Bash(sed -i 's/- \\\\[ \\\\] T035/- [x] T035/' specs/021-quest-system/tasks.md)",
-      "Bash(sed -i 's/- \\\\[ \\\\] T036/- [x] T036/' specs/021-quest-system/tasks.md)"
+      "Bash(sed -i 's/- \\\\[ \\\\] T036/- [x] T036/' specs/021-quest-system/tasks.md)",
+      "Bash(sed -i 's/- \\\\[ \\\\] T023/- [x] T023/' specs/022-squire-overhaul/tasks.md)",
+      "Bash(sed -i 's/- \\\\[ \\\\] T024/- [x] T024/' specs/022-squire-overhaul/tasks.md)",
+      "Bash(sed -i 's/- \\\\[ \\\\] T030/- [x] T030/' specs/022-squire-overhaul/tasks.md)",
+      "Bash(sed -i 's/- \\\\[ \\\\] T031/- [x] T031/' specs/022-squire-overhaul/tasks.md)",
+      "Bash(sed -i 's/- \\\\[ \\\\] T032/- [x] T032/' specs/022-squire-overhaul/tasks.md)",
+      "Bash(sed -i 's/- \\\\[ \\\\] T028/- [x] T028/' specs/022-squire-overhaul/tasks.md)",
+      "Bash(sed -i 's/- \\\\[ \\\\] T029/- [x] T029/' specs/022-squire-overhaul/tasks.md)",
+      "Bash(sed -i 's/- \\\\[ \\\\] T033/- [x] T033/' specs/022-squire-overhaul/tasks.md)",
+      "Bash(sed -i 's/- \\\\[ \\\\] T034/- [x] T034/' specs/022-squire-overhaul/tasks.md)"
     ]
   }
 }

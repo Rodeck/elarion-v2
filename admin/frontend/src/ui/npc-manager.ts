@@ -5,6 +5,7 @@ import {
   deleteNpc,
   uploadNpcIcon,
   toggleNpcCrafter,
+  toggleNpcDismisser,
   type NpcResponse,
 } from '../editor/api';
 import { ImageGenDialog } from './image-gen-dialog';
@@ -131,16 +132,21 @@ export class NpcManager {
     card.dataset['id'] = String(n.id);
 
     const isCrafter = (n as NpcResponse & { is_crafter?: boolean }).is_crafter ?? false;
+    const isDismisser = (n as NpcResponse & { is_squire_dismisser?: boolean }).is_squire_dismisser ?? false;
     card.innerHTML = `
       <div class="npc-card-icon">
         <img src="${n.icon_url}" alt="${this.esc(n.name)}" />
       </div>
       <div class="npc-card-name">${this.esc(n.name)}</div>
       <div class="npc-card-desc">${this.esc(n.description)}</div>
-      <div style="margin:6px 0;display:flex;align-items:center;gap:6px;">
+      <div style="margin:6px 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
         <label style="font-size:0.75rem;color:#9ba8d0;display:flex;align-items:center;gap:4px;cursor:pointer;">
           <input type="checkbox" class="npc-crafter-toggle" data-id="${n.id}" ${isCrafter ? 'checked' : ''} />
           Crafting NPC
+        </label>
+        <label style="font-size:0.75rem;color:#9ba8d0;display:flex;align-items:center;gap:4px;cursor:pointer;">
+          <input type="checkbox" class="npc-dismisser-toggle" data-id="${n.id}" ${isDismisser ? 'checked' : ''} />
+          Squire Dismisser
         </label>
       </div>
       <div class="monster-card-actions">
@@ -157,6 +163,17 @@ export class NpcManager {
       } catch (err) {
         checkbox.checked = !checkbox.checked;
         alert(`Failed to toggle crafter: ${(err as Error).message}`);
+      }
+    });
+
+    card.querySelector<HTMLInputElement>('.npc-dismisser-toggle')!.addEventListener('change', async (e) => {
+      const checkbox = e.target as HTMLInputElement;
+      try {
+        await toggleNpcDismisser(n.id, checkbox.checked);
+        (n as NpcResponse & { is_squire_dismisser?: boolean }).is_squire_dismisser = checkbox.checked;
+      } catch (err) {
+        checkbox.checked = !checkbox.checked;
+        alert(`Failed to toggle dismisser: ${(err as Error).message}`);
       }
     });
 

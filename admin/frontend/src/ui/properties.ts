@@ -264,7 +264,8 @@ export class PropertiesPanel {
       labelEl.textContent = `Travel → Zone ${cfg.target_zone_id} Node ${cfg.target_node_id}`;
     } else if (action.action_type === 'expedition') {
       const cfg = action.config as ExpeditionActionConfig;
-      labelEl.textContent = `Expedition (gold:${cfg.base_gold} exp:${cfg.base_exp} items:${cfg.items.length})`;
+      const expName = (cfg as any).name || 'Expedition';
+      labelEl.textContent = `${expName} (gold:${cfg.base_gold} exp:${cfg.base_exp} items:${cfg.items.length})`;
     } else if (action.action_type === 'gather') {
       const cfg = action.config as Record<string, unknown>;
       const evts = Array.isArray(cfg['events']) ? cfg['events'].length : 0;
@@ -482,6 +483,15 @@ export class PropertiesPanel {
     const cfg = action.config as ExpeditionActionConfig;
     container.style.cssText = 'border:1px solid #1e2232;border-radius:6px;padding:8px;margin-top:4px;margin-bottom:4px;background:#0c0e14;';
 
+    container.appendChild(this.label('Expedition Name', `edit-exp-name-${action.id}`));
+    const nameInput = document.createElement('input');
+    nameInput.id = `edit-exp-name-${action.id}`;
+    nameInput.type = 'text';
+    nameInput.maxLength = 64;
+    nameInput.placeholder = 'e.g. Forest Patrol';
+    nameInput.value = (cfg as any).name ?? '';
+    container.appendChild(nameInput);
+
     container.appendChild(this.label('Base Gold (1h)', `edit-base-gold-${action.id}`));
     const baseGoldInput = document.createElement('input');
     baseGoldInput.id = `edit-base-gold-${action.id}`;
@@ -634,10 +644,11 @@ export class PropertiesPanel {
       }
       try {
         const updated = await updateBuildingAction(mapId, buildingId, action.id, {
-          config: { base_gold: baseGold, base_exp: baseExp, items: expeditionItems } as ExpeditionActionConfig,
+          config: { name: nameInput.value.trim() || undefined, base_gold: baseGold, base_exp: baseExp, items: expeditionItems } as ExpeditionActionConfig,
         });
         action.config = updated.config;
-        labelEl.textContent = `Expedition (gold:${baseGold} exp:${baseExp} items:${expeditionItems.length})`;
+        const expName = nameInput.value.trim();
+        labelEl.textContent = `${expName || 'Expedition'} (gold:${baseGold} exp:${baseExp} items:${expeditionItems.length})`;
         onClose();
       } catch (err) {
         alert(`Failed to save: ${(err as Error).message}`);

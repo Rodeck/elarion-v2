@@ -35,6 +35,10 @@ Run via Bash: `node scripts/game-entities.js <command> '<json-data>'`
 | `create-quest` | Create a quest with objectives, prereqs, rewards, NPC givers | POST `/api/quests` |
 | `update-quest` | Update an existing quest (pass id + fields to change) | PUT `/api/quests/:id` |
 | `delete-quest` | Delete a quest by id | DELETE `/api/quests/:id` |
+| `create-squire` | Create a squire definition | POST `/api/squire-definitions` |
+| `upload-squire-icon` | Upload PNG icon for a squire definition | POST `/api/squire-definitions/:id/icon` |
+| `create-monster-squire-loot` | Add squire loot entry to a monster | POST `/api/monsters/:id/squire-loot` |
+| `set-npc-dismisser` | Set/unset NPC squire dismisser flag | PUT `/api/npcs/:id/squire-dismisser` |
 
 ## Data Format Reference
 
@@ -268,6 +272,59 @@ Returns `{ "icon_filename": "uuid.png" }` — use this in create-npc.
 ```json
 {
   "id": 1                                     // required, quest to delete (cascades to objectives/prereqs/rewards/NPC assignments)
+}
+```
+
+### create-squire
+```json
+{
+  "name": "Brand",                            // required, unique name
+  "power_level": 50                           // required, integer 0-100 (expedition bonus %)
+}
+```
+
+### upload-squire-icon
+```json
+{
+  "squire_def_id": 1,                         // required, squire definition id
+  "file_path": "/abs/path/to/icon.png"        // required, absolute path to PNG file
+}
+```
+
+### create-monster-squire-loot
+```json
+{
+  "monster_id": 1,                            // required, monster id
+  "squire_def_id": 1,                         // required, squire definition id
+  "drop_chance": 10,                          // required, 1-100 percentage
+  "squire_level": 5                           // optional, 1-20 (default 1)
+}
+```
+
+### set-npc-dismisser
+```json
+{
+  "npc_id": 1,                                // required, NPC id
+  "is_squire_dismisser": true                 // required, boolean
+}
+```
+
+### Squire reward type (in create-quest rewards array)
+```json
+{
+  "reward_type": "squire",                    // squire reward type
+  "target_id": 1,                             // squire_definitions.id
+  "quantity": 5                               // squire level 1-20
+}
+```
+
+### Squire gather event type (in create-building-action gather events)
+```json
+{
+  "type": "squire",                           // squire event type
+  "weight": 2,                                // weighted probability
+  "squire_def_id": 1,                         // squire_definitions.id
+  "squire_level": 3                           // level 1-20
 }
 ```
 

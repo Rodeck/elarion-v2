@@ -68,10 +68,11 @@ function toProtocolBuilding(
         };
       }
       if ((a.action_type as string) === 'expedition') {
+        const expCfg = a.config as unknown as { name?: string };
         const dto: ExpeditionBuildingActionDto = {
           id: a.id,
           action_type: 'expedition',
-          label: 'Expedition',
+          label: expCfg.name || 'Expedition',
         };
         return dto;
       }
@@ -112,6 +113,7 @@ function toProtocolBuilding(
     icon_url: `${config.adminBaseUrl}/npc-icons/${n.icon_filename}`,
     is_crafter: n.is_crafter ?? false,
     is_quest_giver: n.is_quest_giver ?? false,
+    is_squire_dismisser: n.is_squire_dismisser ?? false,
   }));
 
   const result: CityMapBuilding = {

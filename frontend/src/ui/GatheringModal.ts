@@ -2,6 +2,7 @@ import type {
   GatheringTickPayload,
   GatheringEndedPayload,
 } from '@elarion/protocol';
+import { getXpIconUrl, getCrownsIconUrl } from './ui-icons';
 
 export interface GatheringCombatLoot {
   outcome: 'win' | 'loss';
@@ -161,10 +162,10 @@ export class GatheringModal {
         this.lootTileIndex = 0;
 
         if (loot.xp_gained > 0) {
-          grid.appendChild(this.buildLootTile(null, '✦', '#a78bfa', loot.xp_gained, `+${loot.xp_gained} XP`));
+          grid.appendChild(this.buildLootTile(getXpIconUrl(), '✦', '#a78bfa', loot.xp_gained, `+${loot.xp_gained} XP`));
         }
         if (loot.crowns_gained > 0) {
-          grid.appendChild(this.buildLootTile(null, '♛', '#f0c060', loot.crowns_gained, `+${loot.crowns_gained} Crowns`));
+          grid.appendChild(this.buildLootTile(getCrownsIconUrl(), '♛', '#f0c060', loot.crowns_gained, `+${loot.crowns_gained} Crowns`));
         }
         for (const item of loot.items_dropped) {
           grid.appendChild(this.buildLootTile(item.icon_url ?? null, '◆', '#c9a55c', item.quantity, item.name));
@@ -250,7 +251,7 @@ export class GatheringModal {
         grid.appendChild(this.buildLootTile(null, '◆', '#8a9a6a', r.quantity, `+${r.quantity} ${r.item_name}`));
       }
       if (s.crowns_gained > 0) {
-        grid.appendChild(this.buildLootTile(null, '♛', '#f0c060', s.crowns_gained, `+${s.crowns_gained} crowns`));
+        grid.appendChild(this.buildLootTile(getCrownsIconUrl(), '♛', '#f0c060', s.crowns_gained, `+${s.crowns_gained} crowns`));
       }
       group.appendChild(grid);
     }
@@ -426,7 +427,7 @@ export class GatheringModal {
         const group = this.createEventGroup('#2a2a10', 'g-anim-gold');
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;gap:10px;';
-        row.appendChild(this.buildSymbolIcon('♛', '#f0c060', 32));
+        row.appendChild(getCrownsIconUrl() ? this.buildIcon(getCrownsIconUrl(), '#f0c060', 32) : this.buildSymbolIcon('♛', '#f0c060', 32));
         const label = document.createElement('span');
         label.style.cssText = 'font-size:0.85rem;font-family:"Crimson Text",serif;color:#d4a84b;font-weight:600;';
         label.textContent = `+${event.crowns ?? 0} crowns`;
@@ -444,6 +445,19 @@ export class GatheringModal {
         const label = document.createElement('span');
         label.style.cssText = 'font-size:0.85rem;font-family:"Crimson Text",serif;color:#c06050;font-weight:600;';
         label.textContent = `${msg}${dmg}`;
+        row.appendChild(label);
+        group.appendChild(row);
+        break;
+      }
+      case 'squire': {
+        const group = this.createEventGroup('#2a2010', 'g-anim-pop');
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:10px;';
+        const ev = event as any;
+        row.appendChild(this.buildIcon(ev.squire_icon_url ?? null, '#d4a84b', 32));
+        const label = document.createElement('span');
+        label.style.cssText = 'font-size:0.85rem;font-family:"Crimson Text",serif;color:#d4a84b;font-weight:600;';
+        label.textContent = `Squire found: ${ev.squire_name ?? 'Unknown'} (${ev.squire_rank ?? ''})`;
         row.appendChild(label);
         group.appendChild(row);
         break;

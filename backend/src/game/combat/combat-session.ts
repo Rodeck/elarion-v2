@@ -15,7 +15,9 @@ import { grantItemToCharacter } from '../inventory/inventory-grant-service';
 import { awardCrowns, rollCrownDrop } from '../currency/crown-service';
 import { getLootByMonsterId } from '../../db/queries/monster-loot';
 import { getAbilityLootByMonsterId } from '../../db/queries/abilities';
+import { getSquireLootByMonsterId } from '../../db/queries/monster-squire-loot';
 import { grantAbilityToCharacter, setCharacterInCombat } from '../../db/queries/loadouts';
+import { grantSquireToCharacter } from '../squire/squire-grant-service';
 import {
   computePlayerAttack,
   computeAutoAbilities,
@@ -39,7 +41,9 @@ import type {
   LoadoutSlotDto,
   ItemDroppedDto,
   AbilityDroppedDto,
+  SquireDroppedDto,
 } from '../../../../shared/protocol/index';
+import { getSquireRank } from '../../../../shared/protocol/index';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -342,6 +346,7 @@ export class CombatSession {
     let crownsGained = 0;
     const itemsDropped: ItemDroppedDto[] = [];
     const abilityDrops: AbilityDroppedDto[] = [];
+    const squiresDropped: SquireDroppedDto[] = [];
 
     if (outcome === 'win') {
       try {
@@ -385,6 +390,38 @@ export class CombatSession {
             });
           }
         }
+
+        // Roll squire loot
+        const squireLoot = await getSquireLootByMonsterId(this.monster.id);
+        for (const entry of squireLoot) {
+          if (Math.random() * 100 < entry.drop_chance) {
+            const granted = await grantSquireToCharacter(
+              this.wsSession,
+              this.characterId,
+              entry.squire_def_id,
+              entry.squire_level,
+              'combat',
+            );
+            squiresDropped.push({
+              squire_def_id: entry.squire_def_id,
+              name:          entry.squire_name,
+              level:         entry.squire_level,
+              rank:          getSquireRank(entry.squire_level),
+              icon_url:      entry.icon_filename
+                ? `${config.adminBaseUrl}/squire-icons/${entry.icon_filename}`
+                : null,
+            });
+            log('info', 'combat', 'squire_loot_rolled', {
+              combatId:     this.combatId,
+              characterId:  this.characterId,
+              squireDefId:  entry.squire_def_id,
+              squireName:   entry.squire_name,
+              squireLevel:  entry.squire_level,
+              granted,
+            });
+          }
+        }
+
         // Quest tracking: monster killed
         try {
           const questProgress = await QuestTracker.onMonsterKilled(this.characterId, this.monster.id);
@@ -424,6 +461,7 @@ export class CombatSession {
       crownsGained,
       itemsDropped: itemsDropped.length,
       abilityDrops: abilityDrops.length,
+      squiresDropped: squiresDropped.length,
     });
 
     const endPayload: CombatEndPayload = {
@@ -435,6 +473,7 @@ export class CombatSession {
       crowns_gained:  crownsGained,
       items_dropped:  itemsDropped,
       ability_drops:  abilityDrops,
+      squires_dropped: squiresDropped.length > 0 ? squiresDropped : undefined,
     };
     sendToSession(this.wsSession, 'combat:end', endPayload);
 

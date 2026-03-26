@@ -43,6 +43,7 @@ const schemas: Record<string, Schema> = {
     building_id: { type: 'number', required: true },
     action_id: { type: 'number', required: true },
     duration_hours: { type: 'number', required: true },
+    squire_id: { type: 'number', required: true },
   },
   'expedition.collect': {
     expedition_id: { type: 'number', required: true },
@@ -103,6 +104,13 @@ const schemas: Record<string, Schema> = {
     npc_id: { type: 'number', required: true },
     character_quest_id: { type: 'number', required: true },
     objective_id: { type: 'number', required: true },
+  },
+  'squire.roster': {},
+  'squire.dismiss_list': {
+    npc_id: { type: 'number', required: true },
+  },
+  'squire.dismiss_confirm': {
+    squire_id: { type: 'number', required: true },
   },
 };
 

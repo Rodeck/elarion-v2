@@ -156,14 +156,9 @@ export class AdminTools {
 
     const commands = [
       {
-        syntax: '/level_up <player>',
-        description: 'Increases the named player\'s level by 1.',
-        examples: ['/level_up Roddeck'],
-      },
-      {
-        syntax: '/level_up <player> <count>',
-        description: 'Increases the named player\'s level by the specified count. Stats (HP, attack, defence) scale accordingly.',
-        examples: ['/level_up Roddeck 5', '/level_up Roddeck 10'],
+        syntax: '/level_up <player> [count]',
+        description: 'Increases the named player\'s level by 1 (or by count if specified). Stats (HP, attack, defence) scale accordingly.',
+        examples: ['/level_up Roddeck', '/level_up Roddeck 5'],
       },
       {
         syntax: '/item <player> <item_id> <quantity>',
@@ -174,6 +169,46 @@ export class AdminTools {
         syntax: '/clear_inventory <player>',
         description: 'Removes all items from the named player\'s inventory, including equipped items. If the player is online their inventory panel refreshes immediately.',
         examples: ['/clear_inventory Roddeck'],
+      },
+      {
+        syntax: '/day',
+        description: 'Forces the day/night cycle to daytime immediately.',
+        examples: ['/day'],
+      },
+      {
+        syntax: '/night',
+        description: 'Forces the day/night cycle to nighttime immediately.',
+        examples: ['/night'],
+      },
+      {
+        syntax: '/crown <player> <amount>',
+        description: 'Grants the specified amount of crowns to the named player.',
+        examples: ['/crown Roddeck 100'],
+      },
+      {
+        syntax: '/skill_all <player>',
+        description: 'Grants all available combat abilities to the named player.',
+        examples: ['/skill_all Roddeck'],
+      },
+      {
+        syntax: '/crafting_finish <player>',
+        description: 'Instantly completes all active crafting sessions for the named player.',
+        examples: ['/crafting_finish Roddeck'],
+      },
+      {
+        syntax: '/heal <player> [hp]',
+        description: 'Restores the named player\'s HP to full, or by the specified amount if provided.',
+        examples: ['/heal Roddeck', '/heal Roddeck 50'],
+      },
+      {
+        syntax: '/squire <player> <squire_def_id> [level]',
+        description: 'Grants a squire to the named player by squire definition ID. Level defaults to 1 (range 1-20). Player must be online and have a free squire slot.',
+        examples: ['/squire Roddeck 1', '/squire Roddeck 2 10'],
+      },
+      {
+        syntax: '/expedition_finish <player>',
+        description: 'Instantly completes all active expeditions for the named player. If the player is online they receive completion notifications.',
+        examples: ['/expedition_finish Roddeck'],
       },
     ];
 

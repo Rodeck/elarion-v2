@@ -126,6 +126,8 @@ export interface ExpeditionStateDto {
   completes_at?: string;           // ISO 8601 — present when exploring
   collectable_rewards?: CollectableRewards; // present when ready
   duration_options?: ExpeditionDurationOption[]; // present when idle
+  available_squires?: CharacterSquireDto[];     // present when no active expedition
+  active_squire?: CharacterSquireDto;           // present when expedition in progress
 }
 
 export interface NpcDto {
@@ -135,6 +137,7 @@ export interface NpcDto {
   icon_url: string;
   is_crafter: boolean;
   is_quest_giver: boolean;
+  is_squire_dismisser: boolean;
 }
 
 export interface CityMapBuilding {
@@ -255,6 +258,7 @@ export interface ExpeditionDispatchPayload {
   building_id: number;
   action_id: number;
   duration_hours: 1 | 3 | 6;
+  squire_id: number;
 }
 
 export interface ExpeditionCollectPayload {
@@ -483,7 +487,13 @@ export type AnyServerMessage =
   | GatheringCombatPauseMessage
   | GatheringCombatResumeMessage
   | GatheringEndedMessage
-  | GatheringRejectedMessage;
+  | GatheringRejectedMessage
+  | SquireRosterUpdateMessage
+  | SquireAcquiredMessage
+  | SquireAcquisitionFailedMessage
+  | SquireDismissListResultMessage
+  | SquireDismissedMessage
+  | SquireDismissRejectedMessage;
 
 export type AnyClientMessage =
   | AuthRegisterMessage
@@ -506,7 +516,9 @@ export type AnyClientMessage =
   | CraftingCancelMessage
   | CraftingCollectMessage
   | GatheringStartMessage
-  | GatheringCancelMessage;
+  | GatheringCancelMessage
+  | SquireDismissListMessage
+  | SquireDismissConfirmMessage;
 
 // ---------------------------------------------------------------------------
 // Inventory: shared sub-types
@@ -610,7 +622,9 @@ export interface ExpeditionDispatchRejectedPayload {
     | 'NOT_AT_BUILDING'
     | 'NO_EXPEDITION_CONFIG'
     | 'IN_COMBAT'
-    | 'NOT_CITY_MAP';
+    | 'NOT_CITY_MAP'
+    | 'SQUIRE_NOT_IDLE'
+    | 'SQUIRE_NOT_FOUND';
 }
 
 export interface ExpeditionCompletedPayload {
@@ -901,6 +915,7 @@ export interface CombatEndPayload {
   crowns_gained: number;
   items_dropped: ItemDroppedDto[];
   ability_drops: AbilityDroppedDto[];
+  squires_dropped?: SquireDroppedDto[];
 }
 
 export interface LoadoutSlotDto {
@@ -972,7 +987,7 @@ export interface GatheringStartedPayload {
 }
 
 export interface GatheringTickEvent {
-  type: 'resource' | 'gold' | 'monster' | 'accident' | 'nothing';
+  type: 'resource' | 'gold' | 'monster' | 'accident' | 'nothing' | 'squire';
   message?: string;
   item_name?: string;
   item_icon_url?: string;
@@ -981,6 +996,9 @@ export interface GatheringTickEvent {
   hp_damage?: number;
   monster_name?: string;
   monster_icon_url?: string;
+  squire_name?: string;         // for 'squire' type
+  squire_icon_url?: string;     // for 'squire' type
+  squire_rank?: string;         // for 'squire' type
 }
 
 export interface GatheringTickPayload {
@@ -1192,7 +1210,90 @@ export type ObjectiveType =
   | 'visit_location'
   | 'talk_to_npc';
 export type PrereqType = 'min_level' | 'has_item' | 'completed_quest' | 'class_required';
-export type RewardType = 'item' | 'xp' | 'crowns';
+export type RewardType = 'item' | 'xp' | 'crowns' | 'squire';
+
+// ---------------------------------------------------------------------------
+// Squire System: constants
+// ---------------------------------------------------------------------------
+
+export const SQUIRE_RANKS: readonly string[] = [
+  'Peasant',        // Level 1
+  'Commoner',       // Level 2
+  'Servant',        // Level 3
+  'Page',           // Level 4
+  'Yeoman',         // Level 5
+  'Footman',        // Level 6
+  'Squire',         // Level 7
+  'Sergeant',       // Level 8
+  'Man-at-Arms',    // Level 9
+  'Knight-Errant',  // Level 10
+  'Knight',         // Level 11
+  'Knight-Captain', // Level 12
+  'Baron',          // Level 13
+  'Viscount',       // Level 14
+  'Count',          // Level 15
+  'Earl',           // Level 16
+  'Marquess',       // Level 17
+  'Duke',           // Level 18
+  'Prince',         // Level 19
+  'Sovereign',      // Level 20
+] as const;
+
+export const MAX_SQUIRE_SLOTS = 5;
+export const DEFAULT_UNLOCKED_SLOTS = 2;
+export const MAX_SQUIRE_LEVEL = 20;
+export const MAX_POWER_LEVEL = 100;
+
+export function getSquireRank(level: number): string {
+  return SQUIRE_RANKS[Math.max(0, Math.min(level - 1, SQUIRE_RANKS.length - 1))] ?? 'Peasant';
+}
+
+// ---------------------------------------------------------------------------
+// Squire System: shared sub-types
+// ---------------------------------------------------------------------------
+
+/** Squire definition as seen by admin/client. */
+export interface SquireDefinitionDto {
+  id: number;
+  name: string;
+  icon_url: string | null;
+  power_level: number;       // 0–100
+  is_active: boolean;
+}
+
+/** Player-owned squire instance. */
+export interface CharacterSquireDto {
+  id: number;                 // character_squires.id
+  squire_def_id: number;
+  name: string;               // from squire_definitions.name
+  icon_url: string | null;
+  level: number;              // 1–20
+  rank: string;               // resolved from SQUIRE_RANKS[level-1]
+  power_level: number;        // from squire_definitions.power_level
+  status: 'idle' | 'on_expedition';
+  /** Present only when status === 'on_expedition' */
+  expedition?: {
+    building_name: string;
+    started_at: string;       // ISO 8601
+    completes_at: string;     // ISO 8601
+  };
+}
+
+/** Squire roster (full list for a character). */
+export interface SquireRosterDto {
+  squires: CharacterSquireDto[];
+  slots_unlocked: number;     // currently unlocked (e.g. 2)
+  slots_total: number;        // max possible (5)
+}
+
+/** Squire dropped from combat or gathering. */
+export interface SquireDroppedDto {
+  squire_def_id: number;
+  name: string;
+  level: number;
+  rank: string;
+  icon_url: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Quest System: shared sub-types
@@ -1377,3 +1478,57 @@ export type QuestNpcDialogsMessage          = WsMessage<QuestNpcDialogsPayload>;
 export type QuestTalkCompleteMessage        = WsMessage<QuestTalkCompletePayload>;
 export type QuestNpcDialogsResponseMessage  = WsMessage<QuestNpcDialogsResponsePayload>;
 export type QuestTalkCompletedMessage       = WsMessage<QuestTalkCompletedPayload>;
+
+// ---------------------------------------------------------------------------
+// Squire System: Client → Server payloads
+// ---------------------------------------------------------------------------
+
+export interface SquireDismissListPayload {
+  npc_id: number;
+}
+
+export interface SquireDismissConfirmPayload {
+  squire_id: number;
+}
+
+// ---------------------------------------------------------------------------
+// Squire System: Server → Client payloads
+// ---------------------------------------------------------------------------
+
+export interface SquireAcquiredPayload {
+  squire: CharacterSquireDto;
+  source: 'combat' | 'quest' | 'gathering' | 'exploration';
+  updated_roster: SquireRosterDto;
+}
+
+export interface SquireAcquisitionFailedPayload {
+  reason: 'ROSTER_FULL';
+  squire_name: string;
+}
+
+export interface SquireDismissListResultPayload {
+  squires: CharacterSquireDto[];
+}
+
+export interface SquireDismissedPayload {
+  squire_id: number;
+  squire_name: string;
+  updated_roster: SquireRosterDto;
+}
+
+export interface SquireDismissRejectedPayload {
+  reason: 'NOT_FOUND' | 'ON_EXPEDITION' | 'NOT_AT_NPC' | 'NPC_NOT_DISMISSER';
+}
+
+// ---------------------------------------------------------------------------
+// Squire System: message type aliases
+// ---------------------------------------------------------------------------
+
+export type SquireDismissListMessage          = WsMessage<SquireDismissListPayload>;
+export type SquireDismissConfirmMessage       = WsMessage<SquireDismissConfirmPayload>;
+export type SquireRosterUpdateMessage         = WsMessage<SquireRosterDto>;
+export type SquireAcquiredMessage             = WsMessage<SquireAcquiredPayload>;
+export type SquireAcquisitionFailedMessage    = WsMessage<SquireAcquisitionFailedPayload>;
+export type SquireDismissListResultMessage    = WsMessage<SquireDismissListResultPayload>;
+export type SquireDismissedMessage            = WsMessage<SquireDismissedPayload>;
+export type SquireDismissRejectedMessage      = WsMessage<SquireDismissRejectedPayload>;

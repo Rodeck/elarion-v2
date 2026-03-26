@@ -9,6 +9,7 @@ import { NpcManager } from './ui/npc-manager';
 import { AbilityManager } from './ui/ability-manager';
 import { RecipeManager } from './ui/recipe-manager';
 import { QuestManager } from './ui/quest-manager';
+import { SquireDefinitionManager } from './ui/squire-definition-manager';
 import { Toolbar } from './ui/toolbar';
 import { MapCanvas } from './editor/canvas';
 import { EditorModeManager } from './editor/modes';
@@ -45,6 +46,7 @@ let npcManager: NpcManager | null = null;
 let abilityManager: AbilityManager | null = null;
 let recipeManager: RecipeManager | null = null;
 let questManager: QuestManager | null = null;
+let squireDefManager: SquireDefinitionManager | null = null;
 let toolbar: Toolbar | null = null;
 let canvas: MapCanvas | null = null;
 let modeManager: EditorModeManager | null = null;
@@ -137,6 +139,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     <button class="btn ${activeTab === 'abilities' ? 'btn--active' : ''}" id="tab-abilities">Abilities</button>
     <button class="btn ${activeTab === 'recipes' ? 'btn--active' : ''}" id="tab-recipes">Recipes</button>
     <button class="btn ${activeTab === 'quests' ? 'btn--active' : ''}" id="tab-quests">Quests</button>
+    <button class="btn ${activeTab === 'squires' ? 'btn--active' : ''}" id="tab-squires">Squires</button>
     <div style="flex:1"></div>
     <span style="font-size:0.75rem;color:#2d3347;align-self:center;padding-right:0.5rem;letter-spacing:0.05em;font-weight:600;">ELARION ADMIN</span>
   `;
@@ -193,7 +196,12 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
   questManagerPanel.style.display = activeTab === 'quests' ? '' : 'none';
   app.appendChild(questManagerPanel);
 
-  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' | 'quests'): void {
+  const squireDefPanel = document.createElement('div');
+  squireDefPanel.id = 'squire-def-manager';
+  squireDefPanel.style.display = activeTab === 'squires' ? '' : 'none';
+  app.appendChild(squireDefPanel);
+
+  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' | 'quests' | 'squires'): void {
     mapEditorPanel.style.display = tab === 'maps' ? '' : 'none';
     itemManagerPanel.style.display = tab === 'items' ? '' : 'none';
     monsterManagerPanel.style.display = tab === 'monsters' ? '' : 'none';
@@ -204,6 +212,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     abilityManagerPanel.style.display = tab === 'abilities' ? '' : 'none';
     recipeManagerPanel.style.display = tab === 'recipes' ? '' : 'none';
     questManagerPanel.style.display = tab === 'quests' ? '' : 'none';
+    squireDefPanel.style.display = tab === 'squires' ? '' : 'none';
     tabBar.querySelector('#tab-maps')!.classList.toggle('btn--active', tab === 'maps');
     tabBar.querySelector('#tab-items')!.classList.toggle('btn--active', tab === 'items');
     tabBar.querySelector('#tab-monsters')!.classList.toggle('btn--active', tab === 'monsters');
@@ -214,6 +223,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     tabBar.querySelector('#tab-abilities')!.classList.toggle('btn--active', tab === 'abilities');
     tabBar.querySelector('#tab-recipes')!.classList.toggle('btn--active', tab === 'recipes');
     tabBar.querySelector('#tab-quests')!.classList.toggle('btn--active', tab === 'quests');
+    tabBar.querySelector('#tab-squires')!.classList.toggle('btn--active', tab === 'squires');
   }
 
   tabBar.querySelector('#tab-maps')!.addEventListener('click', () => setActiveTab('maps'));
@@ -296,6 +306,15 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
       questManager = new QuestManager();
       questManager.init(questManagerPanel);
       await questManager.load();
+    }
+  });
+
+  tabBar.querySelector('#tab-squires')!.addEventListener('click', async () => {
+    setActiveTab('squires');
+    if (!squireDefManager) {
+      squireDefManager = new SquireDefinitionManager();
+      squireDefManager.init(squireDefPanel);
+      await squireDefManager.load();
     }
   });
 

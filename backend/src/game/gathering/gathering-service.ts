@@ -23,6 +23,8 @@ import { setCharacterInCombat } from '../../db/queries/loadouts';
 import { CombatSession } from '../combat/combat-session';
 import type { Monster } from '../../db/queries/monsters';
 import { QuestTracker } from '../quest/quest-tracker';
+import { grantSquireToCharacter } from '../squire/squire-grant-service';
+import { getSquireRank } from '../../../../shared/protocol/index';
 import type {
   GatheringTickEvent,
   GatheringSummary,
@@ -33,7 +35,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 interface GatherEventConfig {
-  type: 'resource' | 'gold' | 'monster' | 'accident' | 'nothing';
+  type: 'resource' | 'gold' | 'monster' | 'accident' | 'nothing' | 'squire';
   weight: number;
   item_def_id?: number;
   quantity?: number;
@@ -42,6 +44,8 @@ interface GatherEventConfig {
   monster_id?: number;
   hp_damage?: number;
   message?: string;
+  squire_def_id?: number;
+  squire_level?: number;
 }
 
 interface GatherActionConfig {
@@ -377,6 +381,45 @@ class GatheringSessionManagerImpl {
           tool_durability: Math.max(0, (await this.getTotalToolDurability(session)) - session.config.durability_per_second * session.currentTick),
         });
         return; // Don't process further — combat takes over
+      }
+
+      case 'squire': {
+        if (eventConfig.squire_def_id != null && eventConfig.squire_level != null) {
+          // Look up squire definition for name and icon
+          const defResult = await query<{ name: string; icon_filename: string | null }>(
+            'SELECT name, icon_filename FROM squire_definitions WHERE id = $1',
+            [eventConfig.squire_def_id],
+          );
+          const squireDef = defResult.rows[0];
+          const squireName = squireDef?.name ?? 'Unknown Squire';
+          const squireIconUrl = squireDef?.icon_filename
+            ? `${config.adminBaseUrl}/squire-icons/${squireDef.icon_filename}`
+            : undefined;
+          const squireRank = getSquireRank(eventConfig.squire_level);
+
+          // Grant squire immediately (not accumulated like resources)
+          await grantSquireToCharacter(
+            session.wsSession,
+            characterId,
+            eventConfig.squire_def_id,
+            eventConfig.squire_level,
+            'gathering',
+          );
+
+          tickEvent.squire_name = squireName;
+          tickEvent.squire_icon_url = squireIconUrl;
+          tickEvent.squire_rank = squireRank;
+          tickEvent.message = eventConfig.message ?? `You found a squire: ${squireName}!`;
+          eventResult.message = tickEvent.message;
+
+          log('info', 'gathering', 'squire_event_rolled', {
+            characterId,
+            squireDefId: eventConfig.squire_def_id,
+            squireName,
+            squireLevel: eventConfig.squire_level,
+          });
+        }
+        break;
       }
     }
 

@@ -11,6 +11,7 @@ import { CombatScreen } from '../ui/CombatScreen';
 import { QuestPanel } from '../ui/QuestPanel';
 import { QuestLog } from '../ui/QuestLog';
 import { QuestTracker } from '../ui/QuestTracker';
+import { setUiIcons } from '../ui/ui-icons';
 import { SessionStore } from '../auth/SessionStore';
 import { AnimatedSprite } from '../entities/AnimatedSprite';
 import { getSprite } from '../entities/SpriteRegistry';
@@ -81,6 +82,12 @@ import type {
   QuestLogPayload,
   QuestNpcDialogsResponsePayload,
   QuestTalkCompletedPayload,
+  SquireRosterDto,
+  SquireAcquiredPayload,
+  SquireAcquisitionFailedPayload,
+  SquireDismissListResultPayload,
+  SquireDismissedPayload,
+  SquireDismissRejectedPayload,
 } from '@elarion/protocol';
 
 const TILE_SIZE = 32;
@@ -102,6 +109,7 @@ export class GameScene extends Phaser.Scene {
   private questPanel!: QuestPanel;
   private questLog!: QuestLog;
   private questTracker!: QuestTracker;
+  // squire roster is now in leftPanel tab — no separate field needed
 
   // Remote players: characterId → sprite
   private remotePlayers = new Map<string, Phaser.GameObjects.Container>();
@@ -184,8 +192,8 @@ export class GameScene extends Phaser.Scene {
       }
       this.client.send('city.building_action', payload);
     });
-    this.buildingPanel.setOnExpeditionDispatch((buildingId, actionId, durationHours) => {
-      this.client.send('expedition.dispatch', { building_id: buildingId, action_id: actionId, duration_hours: durationHours });
+    this.buildingPanel.setOnExpeditionDispatch((buildingId, actionId, durationHours, squireId) => {
+      this.client.send('expedition.dispatch', { building_id: buildingId, action_id: actionId, duration_hours: durationHours, squire_id: squireId });
     });
     this.buildingPanel.setOnExpeditionCollect((expeditionId) => {
       this.client.send('expedition.collect', { expedition_id: expeditionId });
@@ -207,6 +215,12 @@ export class GameScene extends Phaser.Scene {
     });
     this.buildingPanel.setOnQuestTalkComplete((npcId, charQuestId, objectiveId) => {
       this.client.send('quest.talk_complete', { npc_id: npcId, character_quest_id: charQuestId, objective_id: objectiveId });
+    });
+    this.buildingPanel.setOnSquireDismissList((npcId) => {
+      this.client.send('squire.dismiss_list', { npc_id: npcId });
+    });
+    this.buildingPanel.setOnSquireDismissConfirm((squireId) => {
+      this.client.send('squire.dismiss_confirm', { squire_id: squireId });
     });
     this.questLog = new QuestLog(document.getElementById('game')!);
     this.questLog.setSendFn((type, payload) => {
@@ -255,6 +269,12 @@ export class GameScene extends Phaser.Scene {
       const isTravelArrival = this.awaitingTravelWorldState;
       this.awaitingTravelWorldState = false;
       this.awaitingWorldState = false;
+
+      // Load UI icons from world state
+      const uiIcons = (payload as any).ui_icons;
+      if (uiIcons) {
+        setUiIcons(uiIcons.xp_icon_url ?? null, uiIcons.crowns_icon_url ?? null);
+      }
 
       this.myCharacter = payload.my_character;
 
@@ -473,12 +493,17 @@ export class GameScene extends Phaser.Scene {
 
     this.client.on<CityBuildingArrivedPayload>('city.building_arrived', (payload) => {
       this.pendingBuildingId = null;
-      if (payload.expedition_state) {
-        this.expeditionStateByBuilding.set(payload.building_id, payload.expedition_state);
+      // Store all expedition states
+      const allStates: ExpeditionStateDto[] = (payload as any).expedition_states ?? [];
+      if (allStates.length === 0 && payload.expedition_state) {
+        allStates.push(payload.expedition_state);
+      }
+      if (allStates.length > 0) {
+        this.expeditionStateByBuilding.set(payload.building_id, allStates[0]!);
       }
       const building = this.cityMapData?.buildings.find((b) => b.id === payload.building_id);
       if (building) {
-        this.buildingPanel.show(building, payload.expedition_state);
+        this.buildingPanel.showWithStates(building, allStates);
       }
     });
 
@@ -579,6 +604,51 @@ export class GameScene extends Phaser.Scene {
         ALREADY_COLLECTED: 'Rewards already collected.',
       };
       this.chatBox.addSystemMessage(messages[payload.reason] ?? 'Could not collect expedition rewards.');
+    });
+
+    // Squire roster handlers
+    this.client.on<SquireRosterDto>('squire.roster_update', (payload) => {
+      this.leftPanel.updateSquireRoster(payload);
+      this.buildingPanel.updateSquireRoster(payload);
+    });
+
+    this.client.on<SquireAcquiredPayload>('squire.acquired', (payload) => {
+      this.chatBox.addSystemMessage(
+        `You obtained a new squire: ${payload.squire.name} (${payload.squire.rank})!`,
+      );
+      this.leftPanel.updateSquireRoster(payload.updated_roster);
+      this.buildingPanel.updateSquireRoster(payload.updated_roster);
+    });
+
+    this.client.on<SquireAcquisitionFailedPayload>('squire.acquisition_failed', (payload) => {
+      this.chatBox.addSystemMessage(
+        `Could not obtain squire ${payload.squire_name} — your squire roster is full.`,
+      );
+    });
+
+    this.client.on<SquireDismissListResultPayload>('squire.dismiss_list_result', (payload) => {
+      this.buildingPanel.showSquireDismissList(payload.squires);
+    });
+
+    this.client.on<SquireDismissedPayload>('squire.dismissed', (payload) => {
+      this.chatBox.addSystemMessage(`Squire ${payload.squire_name} has been dismissed.`);
+      this.leftPanel.updateSquireRoster(payload.updated_roster);
+      this.buildingPanel.updateSquireRoster(payload.updated_roster);
+      if (this.buildingPanel && this.buildingPanel['currentBuilding']) {
+        this.buildingPanel['renderBuilding'](
+          this.buildingPanel['currentBuilding'],
+        );
+      }
+    });
+
+    this.client.on<SquireDismissRejectedPayload>('squire.dismiss_rejected', (payload) => {
+      const messages: Record<string, string> = {
+        NOT_FOUND: 'Squire not found.',
+        ON_EXPEDITION: 'Cannot dismiss a squire that is on expedition.',
+        NOT_AT_NPC: 'You must be at a dismisser NPC.',
+        NPC_NOT_DISMISSER: 'This NPC does not handle squire dismissal.',
+      };
+      this.chatBox.addSystemMessage(messages[payload.reason] ?? 'Cannot dismiss squire.');
     });
 
     // Crafting handlers

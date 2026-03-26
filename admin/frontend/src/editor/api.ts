@@ -989,6 +989,13 @@ export async function toggleNpcCrafter(npcId: number, isCrafter: boolean): Promi
   });
 }
 
+export async function toggleNpcDismisser(npcId: number, isDismisser: boolean): Promise<void> {
+  return request<void>(`${NPCS_BASE}/${npcId}/squire-dismisser`, {
+    method: 'PUT',
+    body: JSON.stringify({ is_squire_dismisser: isDismisser }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Quests
 // ---------------------------------------------------------------------------
@@ -1091,4 +1098,93 @@ export async function deleteQuest(id: number): Promise<void> {
 
 export async function getQuestCatalog(): Promise<unknown> {
   return request<unknown>(`${QUESTS_BASE}/catalog`, {});
+}
+
+// ---------------------------------------------------------------------------
+// Squire Definitions
+// ---------------------------------------------------------------------------
+
+const SQUIRE_DEFS_BASE = '/api/squire-definitions';
+
+export interface SquireDefinitionResponse {
+  id: number;
+  name: string;
+  icon_filename: string | null;
+  icon_url: string | null;
+  power_level: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export async function listSquireDefinitions(): Promise<SquireDefinitionResponse[]> {
+  return request<SquireDefinitionResponse[]>(SQUIRE_DEFS_BASE);
+}
+
+export async function createSquireDefinition(data: {
+  name: string;
+  power_level: number;
+}): Promise<SquireDefinitionResponse> {
+  return request<SquireDefinitionResponse>(SQUIRE_DEFS_BASE, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateSquireDefinition(
+  id: number,
+  data: { name?: string; power_level?: number },
+): Promise<SquireDefinitionResponse> {
+  return request<SquireDefinitionResponse>(`${SQUIRE_DEFS_BASE}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deactivateSquireDefinition(id: number): Promise<SquireDefinitionResponse> {
+  return request<SquireDefinitionResponse>(`${SQUIRE_DEFS_BASE}/${id}/deactivate`, {
+    method: 'PUT',
+  });
+}
+
+// ─── Monster squire loot ─────────────────────────────────────────────────────
+
+export interface MonsterSquireLootEntry {
+  id: number;
+  squire_def_id: number;
+  squire_name: string;
+  icon_filename: string | null;
+  drop_chance: number;
+  squire_level: number;
+}
+
+export async function getMonsterSquireLoot(monsterId: number): Promise<MonsterSquireLootEntry[]> {
+  return request<MonsterSquireLootEntry[]>(`/api/monsters/${monsterId}/squire-loot`);
+}
+
+export async function addMonsterSquireLoot(monsterId: number, data: {
+  squire_def_id: number;
+  drop_chance: number;
+  squire_level: number;
+}): Promise<MonsterSquireLootEntry> {
+  return request<MonsterSquireLootEntry>(`/api/monsters/${monsterId}/squire-loot`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteMonsterSquireLoot(monsterId: number, lootId: number): Promise<void> {
+  return request<void>(`/api/monsters/${monsterId}/squire-loot/${lootId}`, { method: 'DELETE' });
+}
+
+export async function uploadSquireIcon(id: number, file: File): Promise<SquireDefinitionResponse> {
+  const form = new FormData();
+  form.append('icon', file);
+  const token = localStorage.getItem('admin_token');
+  const res = await fetch(`${SQUIRE_DEFS_BASE}/${id}/icon`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
 }

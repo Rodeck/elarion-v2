@@ -19,6 +19,13 @@ export class AdminConfigManager {
       if (config['image_gen_model']) {
         select.value = config['image_gen_model'];
       }
+      // Load icon previews
+      if (config['xp_icon_filename']) {
+        this.showIconPreview('xp', `/ui-icons/${config['xp_icon_filename']}`);
+      }
+      if (config['crowns_icon_filename']) {
+        this.showIconPreview('crowns', `/ui-icons/${config['crowns_icon_filename']}`);
+      }
     } catch (err) {
       this.showStatus(`Failed to load config: ${(err as Error).message}`, true);
     }
@@ -48,6 +55,31 @@ export class AdminConfigManager {
             </div>
           </form>
         </div>
+
+        <div class="item-form-card" style="margin-top:1.5rem;">
+          <h3>UI Icons</h3>
+          <p style="font-size:0.75rem;color:#5a6280;margin-bottom:1rem;">Upload PNG icons for XP and Crowns. These replace the default symbols in game UI.</p>
+
+          <div style="display:flex;gap:2rem;">
+            <div style="flex:1;">
+              <label>XP Icon</label>
+              <div id="xp-icon-preview" style="margin:6px 0;">
+                <span style="font-size:2rem;color:#a78bfa;">✦</span>
+              </div>
+              <button type="button" class="btn btn--secondary" id="xp-icon-upload-btn" style="width:100%;">Upload XP Icon</button>
+              <input type="file" id="xp-icon-input" accept="image/png" style="display:none;" />
+            </div>
+
+            <div style="flex:1;">
+              <label>Crowns Icon</label>
+              <div id="crowns-icon-preview" style="margin:6px 0;">
+                <span style="font-size:2rem;color:#f0c060;">♛</span>
+              </div>
+              <button type="button" class="btn btn--secondary" id="crowns-icon-upload-btn" style="width:100%;">Upload Crowns Icon</button>
+              <input type="file" id="crowns-icon-input" accept="image/png" style="display:none;" />
+            </div>
+          </div>
+        </div>
       </div>
     `;
 
@@ -56,6 +88,53 @@ export class AdminConfigManager {
         e.preventDefault();
         await this.handleSave();
       });
+
+    // XP icon upload
+    this.container.querySelector('#xp-icon-upload-btn')!.addEventListener('click', () => {
+      (this.container.querySelector('#xp-icon-input') as HTMLInputElement).click();
+    });
+    this.container.querySelector('#xp-icon-input')!.addEventListener('change', () => {
+      void this.handleIconUpload('xp');
+    });
+
+    // Crowns icon upload
+    this.container.querySelector('#crowns-icon-upload-btn')!.addEventListener('click', () => {
+      (this.container.querySelector('#crowns-icon-input') as HTMLInputElement).click();
+    });
+    this.container.querySelector('#crowns-icon-input')!.addEventListener('change', () => {
+      void this.handleIconUpload('crowns');
+    });
+  }
+
+  private async handleIconUpload(type: 'xp' | 'crowns'): Promise<void> {
+    const input = this.container.querySelector<HTMLInputElement>(`#${type}-icon-input`)!;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    try {
+      const token = localStorage.getItem('admin_token');
+      const form = new FormData();
+      form.append('icon', file);
+      const res = await fetch(`/api/admin-config/icon/${type}`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      this.showIconPreview(type, data.icon_url);
+      this.showStatus(`${type === 'xp' ? 'XP' : 'Crowns'} icon uploaded.`, false);
+    } catch (err) {
+      this.showStatus(`Failed to upload: ${(err as Error).message}`, true);
+    }
+    input.value = '';
+  }
+
+  private showIconPreview(type: 'xp' | 'crowns', url: string): void {
+    const preview = this.container.querySelector<HTMLElement>(`#${type}-icon-preview`);
+    if (preview) {
+      preview.innerHTML = `<img src="${url}" style="width:48px;height:48px;image-rendering:pixelated;border-radius:4px;border:1px solid #1e2232;" />`;
+    }
   }
 
   private async handleSave(): Promise<void> {

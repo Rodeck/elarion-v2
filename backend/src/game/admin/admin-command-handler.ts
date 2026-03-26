@@ -9,6 +9,10 @@ import { awardCrowns } from '../currency/crown-service';
 import { getAllAbilities } from '../../db/queries/abilities';
 import { grantAbilityToCharacter, getOwnedAbilities, getCharacterLoadout } from '../../db/queries/loadouts';
 import { completeAllSessionsForCharacter } from '../../db/queries/crafting';
+import { getSquireDefinitionById } from '../../db/queries/squire-definitions';
+import { grantSquireToCharacter, buildSquireRosterDto } from '../squire/squire-grant-service';
+import { getActiveExpeditionsForCharacter } from '../../db/queries/squires';
+import { query } from '../../db/connection';
 import { log } from '../../logger';
 
 // ---------------------------------------------------------------------------
@@ -41,8 +45,10 @@ export async function handleAdminCommand(session: AuthenticatedSession, rawMessa
     case '/skill_all':       return handleSkillAll(session, args, reply);
     case '/crafting_finish': return handleCraftingFinish(session, args, reply);
     case '/heal':            return handleHeal(session, args, reply);
+    case '/squire':          return handleGiveSquire(session, args, reply);
+    case '/expedition_finish': return handleExpeditionFinish(session, args, reply);
     default:
-      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown, /skill_all, /crafting_finish, /heal`);
+      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown, /skill_all, /crafting_finish, /heal, /squire, /expedition_finish`);
   }
 }
 
@@ -434,4 +440,137 @@ async function handleHeal(session: AuthenticatedSession, args: string[], reply: 
   });
 
   reply(true, `Healed ${playerName} to full HP (${character.current_hp} → ${character.max_hp}).`);
+}
+
+// ---------------------------------------------------------------------------
+// /squire <player> <squire_def_id> [level]
+// ---------------------------------------------------------------------------
+
+async function handleGiveSquire(session: AuthenticatedSession, args: string[], reply: ReplyFn): Promise<void> {
+  const playerName = args[0];
+  if (!playerName) {
+    reply(false, 'Usage: /squire <player> <squire_def_id> [level]');
+    return;
+  }
+
+  const squireDefId = parseInt(args[1] ?? '', 10);
+  if (!Number.isInteger(squireDefId) || squireDefId < 1) {
+    reply(false, 'squire_def_id must be a positive number.');
+    return;
+  }
+
+  const level = parseInt(args[2] ?? '1', 10);
+  if (!Number.isInteger(level) || level < 1 || level > 20) {
+    reply(false, 'Level must be between 1 and 20.');
+    return;
+  }
+
+  const character = await findByName(playerName);
+  if (!character) {
+    reply(false, `Player '${playerName}' not found.`);
+    return;
+  }
+
+  const squireDef = await getSquireDefinitionById(squireDefId);
+  if (!squireDef) {
+    reply(false, `Squire definition with ID ${squireDefId} does not exist.`);
+    return;
+  }
+
+  const targetSession = getSessionByCharacterId(character.id);
+  if (!targetSession) {
+    reply(false, `Player '${playerName}' is not currently online.`);
+    return;
+  }
+
+  const granted = await grantSquireToCharacter(targetSession, character.id, squireDefId, level, 'exploration');
+
+  log('info', 'admin', 'admin_command', {
+    event: 'admin_command',
+    admin_account_id: session.accountId,
+    admin_character_id: session.characterId,
+    command: '/squire',
+    target_player: playerName,
+    target_character_id: character.id,
+    args: { squire_def_id: squireDefId, level },
+    granted,
+    success: true,
+  });
+
+  if (granted) {
+    reply(true, `Granted squire "${squireDef.name}" (level ${level}) to ${playerName}.`);
+  } else {
+    reply(false, `${playerName}'s squire roster is full.`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// /expedition_finish <player>
+// ---------------------------------------------------------------------------
+
+async function handleExpeditionFinish(session: AuthenticatedSession, args: string[], reply: ReplyFn): Promise<void> {
+  const playerName = args[0];
+  if (!playerName) {
+    reply(false, 'Usage: /expedition_finish <player>');
+    return;
+  }
+
+  const character = await findByName(playerName);
+  if (!character) {
+    reply(false, `Player '${playerName}' not found.`);
+    return;
+  }
+
+  const expeditions = await getActiveExpeditionsForCharacter(character.id);
+  if (expeditions.length === 0) {
+    reply(true, `${playerName} has no active expeditions.`);
+    return;
+  }
+
+  // Set completes_at to now for all active expeditions
+  for (const exp of expeditions) {
+    await query(
+      `UPDATE squire_expeditions SET completes_at = now() WHERE id = $1`,
+      [exp.id],
+    );
+  }
+
+  // Notify the target player if online
+  const targetSession = getSessionByCharacterId(character.id);
+  if (targetSession) {
+    for (const exp of expeditions) {
+      const squireRow = await query<{ name: string }>(
+        `SELECT sd.name FROM character_squires cs
+         JOIN squire_definitions sd ON sd.id = cs.squire_def_id
+         WHERE cs.id = $1`,
+        [exp.squire_id],
+      );
+      const bldgRow = await query<{ name: string }>(
+        `SELECT name FROM buildings WHERE id = $1`,
+        [exp.building_id],
+      );
+      sendToSession(targetSession, 'expedition.completed', {
+        expedition_id: exp.id,
+        squire_name: squireRow.rows[0]?.name ?? 'Unknown',
+        building_name: bldgRow.rows[0]?.name ?? 'Unknown',
+      });
+    }
+
+    // Send updated roster
+    const roster = await buildSquireRosterDto(character.id);
+    sendToSession(targetSession, 'squire.roster_update', roster);
+  }
+
+  log('info', 'admin', 'admin_command', {
+    event: 'admin_command',
+    admin_account_id: session.accountId,
+    admin_character_id: session.characterId,
+    command: '/expedition_finish',
+    target_player: playerName,
+    target_character_id: character.id,
+    expeditions_finished: expeditions.length,
+    success: true,
+  });
+
+  reply(true, `Finished ${expeditions.length} expedition${expeditions.length !== 1 ? 's' : ''} for ${playerName}.`);
 }

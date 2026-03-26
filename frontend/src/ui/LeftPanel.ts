@@ -1,6 +1,7 @@
 import { InventoryPanel } from './InventoryPanel';
 import { EquipmentPanel } from './EquipmentPanel';
 import { LoadoutPanel } from './LoadoutPanel';
+import { SquireRosterPanel } from './SquireRosterPanel';
 import type {
   InventorySlotDto,
   InventoryStatePayload,
@@ -13,6 +14,7 @@ import type {
   EquipSlot,
   LoadoutStatePayload,
   LoadoutUpdateRejectedPayload,
+  SquireRosterDto,
 } from '../../../shared/protocol/index';
 
 const EQUIPPABLE_CATEGORIES = ['weapon', 'shield', 'boots', 'greaves', 'bracer', 'helmet', 'chestplate'];
@@ -28,11 +30,13 @@ export class LeftPanel {
   private equipmentContentEl!: HTMLElement;
   private inventoryContentEl!: HTMLElement;
   private loadoutContentEl!: HTMLElement;
+  private squiresContentEl!: HTMLElement;
 
   private inventoryPanel: InventoryPanel;
   private equipmentPanel: EquipmentPanel | null = null;
   private loadoutPanel: LoadoutPanel | null = null;
-  private activeTab: 'equipment' | 'inventory' | 'loadout' = 'inventory';
+  private squirePanel: SquireRosterPanel | null = null;
+  private activeTab: 'equipment' | 'inventory' | 'loadout' | 'squires' = 'inventory';
 
   private inventorySlots: InventorySlotDto[] = [];
 
@@ -67,10 +71,11 @@ export class LeftPanel {
     this.tabsEl = document.createElement('div');
     this.tabsEl.className = 'left-panel__tabs';
 
-    const tabs: { id: 'equipment' | 'inventory' | 'loadout'; label: string }[] = [
+    const tabs: { id: 'equipment' | 'inventory' | 'loadout' | 'squires'; label: string }[] = [
       { id: 'inventory', label: '🎒 Inventory' },
       { id: 'equipment', label: '⚔ Equipment' },
       { id: 'loadout',   label: '🗡 Loadout' },
+      { id: 'squires',   label: '🛡 Squires' },
     ];
 
     for (const tab of tabs) {
@@ -78,7 +83,7 @@ export class LeftPanel {
       btn.className = 'left-panel__tab' + (tab.id === this.activeTab ? ' is-active' : '');
       btn.dataset['tab'] = tab.id;
       btn.textContent = tab.label;
-      btn.addEventListener('click', () => this.showTab(tab.id as 'equipment' | 'inventory' | 'loadout'));
+      btn.addEventListener('click', () => this.showTab(tab.id as typeof this.activeTab));
       this.tabsEl.appendChild(btn);
     }
 
@@ -92,10 +97,14 @@ export class LeftPanel {
     this.loadoutContentEl = document.createElement('div');
     this.loadoutContentEl.style.cssText = 'flex:1;display:none;overflow:hidden;flex-direction:column;';
 
+    this.squiresContentEl = document.createElement('div');
+    this.squiresContentEl.style.cssText = 'flex:1;display:none;overflow:hidden;flex-direction:column;';
+
     this.container.appendChild(this.tabsEl);
     this.container.appendChild(this.equipmentContentEl);
     this.container.appendChild(this.inventoryContentEl);
     this.container.appendChild(this.loadoutContentEl);
+    this.container.appendChild(this.squiresContentEl);
 
     // Show default tab
     this.updateTabVisibility();
@@ -130,11 +139,19 @@ export class LeftPanel {
     return this.loadoutPanel;
   }
 
+  private ensureSquirePanel(): SquireRosterPanel {
+    if (!this.squirePanel) {
+      this.squirePanel = new SquireRosterPanel(this.squiresContentEl);
+      this.updateTabVisibility();
+    }
+    return this.squirePanel;
+  }
+
   // ---------------------------------------------------------------------------
   // Tab navigation
   // ---------------------------------------------------------------------------
 
-  showTab(tab: 'equipment' | 'inventory' | 'loadout'): void {
+  showTab(tab: 'equipment' | 'inventory' | 'loadout' | 'squires'): void {
     this.activeTab = tab;
     this.updateTabVisibility();
 
@@ -154,6 +171,11 @@ export class LeftPanel {
     if (tab === 'loadout') {
       this.ensureLoadoutPanel();
     }
+
+    // If switching to squires, ensure panel exists
+    if (tab === 'squires') {
+      this.ensureSquirePanel();
+    }
   }
 
   private updateTabVisibility(): void {
@@ -161,6 +183,7 @@ export class LeftPanel {
     this.equipmentContentEl.style.display = tab === 'equipment' ? 'flex' : 'none';
     this.inventoryContentEl.style.display  = tab === 'inventory' ? 'flex' : 'none';
     this.loadoutContentEl.style.display    = tab === 'loadout'   ? 'flex' : 'none';
+    this.squiresContentEl.style.display    = tab === 'squires'   ? 'flex' : 'none';
   }
 
   // ---------------------------------------------------------------------------
@@ -281,5 +304,14 @@ export class LeftPanel {
   handleLoadoutUpdateRejected(payload: LoadoutUpdateRejectedPayload): void {
     const lp = this.ensureLoadoutPanel();
     lp.handleUpdateRejected(payload);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Squires pass-through
+  // ---------------------------------------------------------------------------
+
+  updateSquireRoster(roster: SquireRosterDto): void {
+    const sp = this.ensureSquirePanel();
+    sp.update(roster);
   }
 }

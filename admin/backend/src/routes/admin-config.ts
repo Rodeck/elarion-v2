@@ -1,10 +1,26 @@
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { randomUUID } from 'crypto';
 import {
   getAllConfig,
   upsertConfigValue,
+  getConfigValue,
   isKnownKey,
   VALID_IMAGE_GEN_MODELS,
 } from '../../../../backend/src/db/queries/admin-config';
+
+const UI_ICONS_DIR = path.resolve(__dirname, '../../../../backend/assets/ui-icons');
+if (!fs.existsSync(UI_ICONS_DIR)) fs.mkdirSync(UI_ICONS_DIR, { recursive: true });
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter(_req, file, cb) {
+    cb(null, file.mimetype === 'image/png');
+  },
+});
 
 export const adminConfigRouter = Router();
 
@@ -48,6 +64,58 @@ adminConfigRouter.put('/', async (req: Request, res: Response) => {
     return res.json(updated);
   } catch (err) {
     log('error', 'admin_config_update_failed', { admin: req.username, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/admin-config/icon/:type  (type = 'xp' | 'crowns')
+adminConfigRouter.post('/icon/:type', upload.single('icon'), async (req: Request, res: Response) => {
+  const iconType = req.params['type'];
+  if (iconType !== 'xp' && iconType !== 'crowns') {
+    return res.status(400).json({ error: 'Icon type must be "xp" or "crowns".' });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'No icon file uploaded.' });
+  }
+
+  const configKey = iconType === 'xp' ? 'xp_icon_filename' : 'crowns_icon_filename';
+
+  try {
+    // Remove old icon if exists
+    const oldFilename = await getConfigValue(configKey);
+    if (oldFilename) {
+      const oldPath = path.join(UI_ICONS_DIR, oldFilename);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+
+    // Save new icon
+    const filename = `${iconType}_${randomUUID()}.png`;
+    fs.writeFileSync(path.join(UI_ICONS_DIR, filename), req.file.buffer);
+
+    await upsertConfigValue(configKey, filename);
+
+    log('info', 'ui_icon_uploaded', { admin: req.username, type: iconType, filename });
+    return res.json({
+      filename,
+      icon_url: `/ui-icons/${filename}`,
+    });
+  } catch (err) {
+    log('error', 'ui_icon_upload_failed', { admin: req.username, type: iconType, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/admin-config/ui-icons — public endpoint for game frontend to fetch icon URLs
+adminConfigRouter.get('/ui-icons', async (_req: Request, res: Response) => {
+  try {
+    const xpFilename = await getConfigValue('xp_icon_filename');
+    const crownsFilename = await getConfigValue('crowns_icon_filename');
+    return res.json({
+      xp_icon_url: xpFilename ? `/ui-icons/${xpFilename}` : null,
+      crowns_icon_url: crownsFilename ? `/ui-icons/${crownsFilename}` : null,
+    });
+  } catch (err) {
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

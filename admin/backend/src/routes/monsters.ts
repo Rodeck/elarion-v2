@@ -17,6 +17,11 @@ import {
   updateLootEntry,
   deleteLootEntry,
 } from '../../../../backend/src/db/queries/monster-loot';
+import {
+  getSquireLootByMonsterId,
+  addSquireLootEntry,
+  deleteSquireLootEntry,
+} from '../../../../backend/src/db/queries/monster-squire-loot';
 import { query } from '../../../../backend/src/db/connection';
 
 export const monstersRouter = Router();
@@ -514,6 +519,92 @@ monstersRouter.delete('/:id/loot/:lootId', async (req: Request, res: Response) =
     return res.status(204).send();
   } catch (err) {
     log('error', 'Failed to delete loot entry', { lootId, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /api/monsters/:id/squire-loot ────────────────────────────────────
+
+monstersRouter.get('/:id/squire-loot', async (req: Request, res: Response) => {
+  const monsterId = parseInt(req.params.id!, 10);
+  if (isNaN(monsterId)) return res.status(400).json({ error: 'Invalid monster id' });
+
+  try {
+    const loot = await getSquireLootByMonsterId(monsterId);
+    return res.json(loot.map((l) => ({
+      id: l.id,
+      squire_def_id: l.squire_def_id,
+      squire_name: l.squire_name,
+      drop_chance: l.drop_chance,
+      squire_level: l.squire_level,
+      icon_url: l.icon_filename ? `/squire-icons/${l.icon_filename}` : null,
+    })));
+  } catch (err) {
+    log('error', 'Failed to get monster squire loot', { monsterId, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── POST /api/monsters/:id/squire-loot ───────────────────────────────────
+
+monstersRouter.post('/:id/squire-loot', async (req: Request, res: Response) => {
+  const monsterId = parseInt(req.params.id!, 10);
+  if (isNaN(monsterId)) return res.status(400).json({ error: 'Invalid monster id' });
+
+  const { squire_def_id, drop_chance, squire_level } = req.body as Record<string, unknown>;
+
+  if (!Number.isInteger(squire_def_id) || (squire_def_id as number) <= 0) {
+    return res.status(400).json({ error: 'squire_def_id must be a positive integer' });
+  }
+  const dropChance = Number(drop_chance);
+  if (!Number.isInteger(dropChance) || dropChance < 1 || dropChance > 100) {
+    return res.status(400).json({ error: 'drop_chance must be an integer between 1 and 100' });
+  }
+  const level = Number(squire_level ?? 1);
+  if (!Number.isInteger(level) || level < 1 || level > 20) {
+    return res.status(400).json({ error: 'squire_level must be an integer between 1 and 20' });
+  }
+
+  // Validate squire_def_id exists
+  const squireRow = await query<{ id: number }>('SELECT id FROM squire_definitions WHERE id = $1', [squire_def_id]);
+  if (squireRow.rows.length === 0) {
+    return res.status(400).json({ error: 'squire_def_id references a non-existent squire definition' });
+  }
+
+  try {
+    const entry = await addSquireLootEntry({
+      monster_id: monsterId,
+      squire_def_id: squire_def_id as number,
+      drop_chance: dropChance,
+      squire_level: level,
+    });
+    log('info', 'Added squire loot entry', { monsterId, squire_def_id, admin: req.username });
+    return res.status(201).json({
+      id: entry.id,
+      squire_def_id: entry.squire_def_id,
+      squire_name: entry.squire_name,
+      drop_chance: entry.drop_chance,
+      squire_level: entry.squire_level,
+      icon_url: entry.icon_filename ? `/squire-icons/${entry.icon_filename}` : null,
+    });
+  } catch (err) {
+    log('error', 'Failed to add squire loot entry', { monsterId, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── DELETE /api/monsters/:id/squire-loot/:lootId ─────────────────────────
+
+monstersRouter.delete('/:id/squire-loot/:lootId', async (req: Request, res: Response) => {
+  const lootId = parseInt(req.params.lootId!, 10);
+  if (isNaN(lootId)) return res.status(400).json({ error: 'Invalid squire loot id' });
+
+  try {
+    await deleteSquireLootEntry(lootId);
+    log('info', 'Deleted squire loot entry', { lootId, admin: req.username });
+    return res.status(204).send();
+  } catch (err) {
+    log('error', 'Failed to delete squire loot entry', { lootId, error: String(err) });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

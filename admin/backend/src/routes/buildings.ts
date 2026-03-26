@@ -346,7 +346,7 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
       if (!Array.isArray(events) || events.length === 0) {
         return res.status(400).json({ error: 'events must be a non-empty array' });
       }
-      const validEventTypes = ['resource', 'gold', 'monster', 'accident', 'nothing'];
+      const validEventTypes = ['resource', 'gold', 'monster', 'accident', 'nothing', 'squire'];
       for (const ev of events) {
         const e = ev as Record<string, unknown>;
         if (!validEventTypes.includes(String(e['type']))) {
@@ -368,6 +368,11 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
         }
         if (e['type'] === 'accident') {
           if (!Number.isInteger(e['hp_damage']) || (e['hp_damage'] as number) < 1) return res.status(400).json({ error: 'accident event requires positive integer hp_damage' });
+        }
+        if (e['type'] === 'squire') {
+          if (!Number.isInteger(e['squire_def_id']) || (e['squire_def_id'] as number) < 1) return res.status(400).json({ error: 'squire event requires positive integer squire_def_id' });
+          const sqLevel = Number(e['squire_level'] ?? 1);
+          if (!Number.isInteger(sqLevel) || sqLevel < 1 || sqLevel > 20) return res.status(400).json({ error: 'squire event squire_level must be 1–20' });
         }
       }
       const gatherConfig = {
