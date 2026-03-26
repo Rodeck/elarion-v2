@@ -10,6 +10,10 @@ export async function query<T extends QueryResultRow = QueryResultRow>(
   return pool.query<T>(text, params);
 }
 
+export async function getClient() {
+  return pool.connect();
+}
+
 export async function closePool(): Promise<void> {
   await pool.end();
 }

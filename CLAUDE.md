@@ -41,6 +41,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - PostgreSQL 16 — 7 new tables + 1 ALTER via migration `022_quest_system.sql` (021-quest-system)
 - TypeScript 5.x (all packages: frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client), `jose` (JWT) (022-squire-overhaul)
 - PostgreSQL 16 — migration `023_squire_overhaul.sql` (new tables + ALTER); filesystem for squire icon PNGs under `backend/assets/squires/icons/` (022-squire-overhaul)
+- TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT) (023-player-marketplace)
+- PostgreSQL 16 — migration `025_marketplace.sql` (2 new tables, 1 CHECK constraint extension) (023-player-marketplace)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -66,9 +68,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 023-player-marketplace: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 022-squire-overhaul: Added TypeScript 5.x (all packages: frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 021-quest-system: Added TypeScript 5.x (all packages: frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (game backend), Phaser 3.60 + Vite 5 (game frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
-- 020-tool-gathering: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client)
 
 
 

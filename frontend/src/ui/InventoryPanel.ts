@@ -21,6 +21,7 @@ export class InventoryPanel {
   private gridEl!: HTMLElement;
   private filterBarEl!: HTMLElement;
   private detailEl!: HTMLElement;
+  private dragEnabled = false;
 
   private readonly CATEGORIES = [
     { value: 'all',        label: 'All'      },
@@ -236,6 +237,25 @@ export class InventoryPanel {
     cell.appendChild(badge);
 
     cell.addEventListener('click', () => this.showDetailPanel(slot));
+
+    // Drag-and-drop support (enabled when marketplace modal is open)
+    if (this.dragEnabled) {
+      cell.draggable = true;
+      cell.addEventListener('dragstart', (e) => {
+        if (e.dataTransfer) {
+          e.dataTransfer.setData('text/plain', JSON.stringify({
+            slot_id: slot.slot_id,
+            item_def_id: slot.definition.id,
+          }));
+          e.dataTransfer.effectAllowed = 'copy';
+        }
+        cell.style.opacity = '0.5';
+      });
+      cell.addEventListener('dragend', () => {
+        cell.style.opacity = '1';
+      });
+    }
+
     return cell;
   }
 
@@ -341,5 +361,14 @@ export class InventoryPanel {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  setDragEnabled(enabled: boolean): void {
+    this.dragEnabled = enabled;
+    this.renderInventory(this.slots, this.capacity);
+  }
+
+  getSlots(): InventorySlotDto[] {
+    return this.slots;
   }
 }

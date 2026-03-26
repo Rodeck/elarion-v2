@@ -83,6 +83,15 @@ export async function handleBuildingAction(
 
   // ── Branch on action type ────────────────────────────────────────────────
 
+  if (action.action_type === 'marketplace') {
+    sendToSession(session, 'marketplace.open', {
+      building_id,
+      config: action.config,
+    });
+    log('debug', 'building-action', 'marketplace_opened', { characterId, building_id, action_id });
+    return;
+  }
+
   if (action.action_type === 'explore') {
     const exploreConfig = action.config as ExploreActionConfig;
 

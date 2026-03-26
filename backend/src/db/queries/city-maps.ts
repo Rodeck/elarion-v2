@@ -64,7 +64,7 @@ export type BuildingActionConfig = TravelActionConfig | ExploreActionConfig | Re
 export interface BuildingAction {
   id: number;
   building_id: number;
-  action_type: 'travel' | 'explore' | 'expedition' | 'gather';
+  action_type: 'travel' | 'explore' | 'expedition' | 'gather' | 'marketplace';
   sort_order: number;
   config: BuildingActionConfig;
   created_at: string;

@@ -20,6 +20,7 @@ import { handleEquipmentEquip, handleEquipmentUnequip } from './game/equipment/e
 import { handleCombatTriggerActive, handleLoadoutRequest, handleLoadoutUpdate } from './game/combat/combat-handlers';
 import { registerCraftingHandlers } from './game/crafting/crafting-handler';
 import { registerQuestHandlers } from './game/quest/quest-handler';
+import { registerMarketplaceHandlers } from './game/marketplace/marketplace-handler';
 import { handleGatheringStart, handleGatheringCancel } from './game/gathering/gathering-handler';
 import { handleSquireRoster } from './game/squire/squire-grant-service';
 import { handleSquireDismissList, handleSquireDismissConfirm } from './game/squire/squire-dismiss-handler';
@@ -77,6 +78,7 @@ async function bootstrap(): Promise<void> {
   registerHandler('loadout:update', handleLoadoutUpdate);
   registerCraftingHandlers();
   registerQuestHandlers();
+  registerMarketplaceHandlers();
   registerHandler('gathering.start', handleGatheringStart);
   registerHandler('gathering.cancel', handleGatheringCancel);
   registerHandler('squire.roster', handleSquireRoster);

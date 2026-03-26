@@ -262,8 +262,8 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
     config: Record<string, unknown>;
   };
 
-  if (action_type !== 'travel' && action_type !== 'explore' && action_type !== 'expedition' && action_type !== 'gather') {
-    return res.status(400).json({ error: 'action_type must be "travel", "explore", "expedition", or "gather"' });
+  if (action_type !== 'travel' && action_type !== 'explore' && action_type !== 'expedition' && action_type !== 'gather' && action_type !== 'marketplace') {
+    return res.status(400).json({ error: 'action_type must be "travel", "explore", "expedition", "gather", or "marketplace"' });
   }
 
   try {
@@ -384,6 +384,32 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
       };
       const action = await createBuildingAction(buildingId, 'gather' as 'travel', gatherConfig as unknown as TravelActionConfig, sort_order ?? 0);
       log('info', 'Created gather action', { building_id: buildingId, action_id: action.id, admin: req.username });
+      return res.status(201).json({ action });
+    } else if (action_type === 'marketplace') {
+      const cfg = config as {
+        listing_fee?: unknown;
+        max_listings?: unknown;
+        listing_duration_days?: unknown;
+      };
+      const listingFee = Number(cfg.listing_fee ?? 10);
+      if (!Number.isInteger(listingFee) || listingFee < 0) {
+        return res.status(400).json({ error: 'listing_fee must be a non-negative integer' });
+      }
+      const maxListings = Number(cfg.max_listings ?? 10);
+      if (!Number.isInteger(maxListings) || maxListings < 1) {
+        return res.status(400).json({ error: 'max_listings must be a positive integer' });
+      }
+      const durationDays = Number(cfg.listing_duration_days ?? 5);
+      if (!Number.isInteger(durationDays) || durationDays < 1) {
+        return res.status(400).json({ error: 'listing_duration_days must be a positive integer' });
+      }
+      const marketplaceConfig = {
+        listing_fee: listingFee,
+        max_listings: maxListings,
+        listing_duration_days: durationDays,
+      };
+      const action = await createBuildingAction(buildingId, 'marketplace' as 'travel', marketplaceConfig as unknown as TravelActionConfig, sort_order ?? 0);
+      log('info', 'Created marketplace action', { building_id: buildingId, action_id: action.id, admin: req.username });
       return res.status(201).json({ action });
     } else {
       // expedition

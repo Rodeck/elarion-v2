@@ -96,7 +96,20 @@ export interface GatherBuildingActionDto {
   };
 }
 
-export type BuildingActionDto = TravelBuildingActionDto | ExploreBuildingActionDto | ExpeditionBuildingActionDto | GatherBuildingActionDto;
+export interface MarketplaceBuildingActionDto {
+  id: number;
+  action_type: 'marketplace';
+  label: string;
+  config: MarketplaceActionConfig;
+}
+
+export interface MarketplaceActionConfig {
+  listing_fee: number;
+  max_listings: number;
+  listing_duration_days: number;
+}
+
+export type BuildingActionDto = TravelBuildingActionDto | ExploreBuildingActionDto | ExpeditionBuildingActionDto | GatherBuildingActionDto | MarketplaceBuildingActionDto;
 
 // ---------------------------------------------------------------------------
 // Expedition sub-types
@@ -239,7 +252,7 @@ export interface CityMovePayload {
 export interface CityBuildingActionPayload {
   building_id: number;
   action_id: number;
-  action_type: 'travel' | 'explore' | 'gather';
+  action_type: 'travel' | 'explore' | 'gather' | 'marketplace';
 }
 
 // ---------------------------------------------------------------------------
@@ -493,7 +506,16 @@ export type AnyServerMessage =
   | SquireAcquisitionFailedMessage
   | SquireDismissListResultMessage
   | SquireDismissedMessage
-  | SquireDismissRejectedMessage;
+  | SquireDismissRejectedMessage
+  | MarketplaceBrowseResultMessage
+  | MarketplaceItemListingsResultMessage
+  | MarketplaceBuyResultMessage
+  | MarketplaceListItemResultMessage
+  | MarketplaceCancelResultMessage
+  | MarketplaceMyListingsResultMessage
+  | MarketplaceCollectCrownsResultMessage
+  | MarketplaceCollectItemsResultMessage
+  | MarketplaceRejectedMessage;
 
 export type AnyClientMessage =
   | AuthRegisterMessage
@@ -518,7 +540,15 @@ export type AnyClientMessage =
   | GatheringStartMessage
   | GatheringCancelMessage
   | SquireDismissListMessage
-  | SquireDismissConfirmMessage;
+  | SquireDismissConfirmMessage
+  | MarketplaceBrowseMessage
+  | MarketplaceItemListingsMessage
+  | MarketplaceBuyMessage
+  | MarketplaceListItemMessage
+  | MarketplaceCancelListingMessage
+  | MarketplaceMyListingsMessage
+  | MarketplaceCollectCrownsMessage
+  | MarketplaceCollectItemsMessage;
 
 // ---------------------------------------------------------------------------
 // Inventory: shared sub-types
@@ -1532,3 +1562,170 @@ export type SquireAcquisitionFailedMessage    = WsMessage<SquireAcquisitionFaile
 export type SquireDismissListResultMessage    = WsMessage<SquireDismissListResultPayload>;
 export type SquireDismissedMessage            = WsMessage<SquireDismissedPayload>;
 export type SquireDismissRejectedMessage      = WsMessage<SquireDismissRejectedPayload>;
+
+// ---------------------------------------------------------------------------
+// Marketplace: Client → Server payloads
+// ---------------------------------------------------------------------------
+
+export interface MarketplaceBrowsePayload {
+  building_id: number;
+  page: number;
+  category?: string;
+  search?: string;
+}
+
+export interface MarketplaceItemListingsPayload {
+  building_id: number;
+  item_def_id: number;
+}
+
+export interface MarketplaceBuyPayload {
+  listing_id: number;
+}
+
+export interface MarketplaceListItemPayload {
+  building_id: number;
+  slot_id: number;
+  quantity: number;
+  price_per_item: number;
+}
+
+export interface MarketplaceCancelListingPayload {
+  listing_id: number;
+}
+
+export interface MarketplaceMyListingsPayload {
+  building_id: number;
+}
+
+export interface MarketplaceCollectCrownsPayload {
+  building_id: number;
+}
+
+export interface MarketplaceCollectItemsPayload {
+  listing_id: number;
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace: Server → Client payloads
+// ---------------------------------------------------------------------------
+
+export interface MarketplaceItemSummary {
+  item_def_id: number;
+  name: string;
+  category: string;
+  icon_url: string;
+  total_quantity: number;
+  listing_count: number;
+  min_price_per_item: number;
+  max_price_per_item: number;
+}
+
+export interface MarketplaceBrowseResultPayload {
+  building_id: number;
+  items: MarketplaceItemSummary[];
+  page: number;
+  total_pages: number;
+  total_items: number;
+}
+
+export interface MarketplaceListingDto {
+  listing_id: number;
+  seller_name: string;
+  quantity: number;
+  price_per_item: number;
+  total_price: number;
+  current_durability?: number | null;
+  max_durability?: number | null;
+  created_at: string;
+}
+
+export interface MarketplaceItemListingsResultPayload {
+  item_def_id: number;
+  listings: MarketplaceListingDto[];
+}
+
+export interface MarketplaceBuyResultPayload {
+  success: boolean;
+  listing_id: number;
+  new_crowns?: number;
+  item?: InventorySlotDto;
+  reason?: string;
+}
+
+export interface MarketplaceListItemResultPayload {
+  success: boolean;
+  new_crowns?: number;
+  listing_id?: number;
+  listings_used?: number;
+  listings_max?: number;
+  reason?: string;
+}
+
+export interface MarketplaceCancelResultPayload {
+  success: boolean;
+  listing_id: number;
+  returned_item?: InventorySlotDto;
+  reason?: string;
+}
+
+export interface MyListingDto {
+  listing_id: number;
+  item_def_id: number;
+  item_name: string;
+  icon_url: string;
+  quantity: number;
+  price_per_item: number;
+  status: 'active' | 'sold' | 'expired';
+  created_at: string;
+  expires_at: string;
+  current_durability?: number | null;
+}
+
+export interface MarketplaceMyListingsResultPayload {
+  building_id: number;
+  listings: MyListingDto[];
+  pending_crowns: number;
+  listings_used: number;
+  listings_max: number;
+}
+
+export interface MarketplaceCollectCrownsResultPayload {
+  success: boolean;
+  crowns_collected: number;
+  new_crowns: number;
+}
+
+export interface MarketplaceCollectItemsResultPayload {
+  success: boolean;
+  listing_id: number;
+  returned_item?: InventorySlotDto;
+  reason?: string;
+}
+
+export interface MarketplaceRejectedPayload {
+  action: string;
+  reason: string;
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace: message type aliases
+// ---------------------------------------------------------------------------
+
+export type MarketplaceBrowseMessage           = WsMessage<MarketplaceBrowsePayload>;
+export type MarketplaceItemListingsMessage      = WsMessage<MarketplaceItemListingsPayload>;
+export type MarketplaceBuyMessage              = WsMessage<MarketplaceBuyPayload>;
+export type MarketplaceListItemMessage         = WsMessage<MarketplaceListItemPayload>;
+export type MarketplaceCancelListingMessage    = WsMessage<MarketplaceCancelListingPayload>;
+export type MarketplaceMyListingsMessage       = WsMessage<MarketplaceMyListingsPayload>;
+export type MarketplaceCollectCrownsMessage    = WsMessage<MarketplaceCollectCrownsPayload>;
+export type MarketplaceCollectItemsMessage     = WsMessage<MarketplaceCollectItemsPayload>;
+export type MarketplaceBrowseResultMessage     = WsMessage<MarketplaceBrowseResultPayload>;
+export type MarketplaceItemListingsResultMessage = WsMessage<MarketplaceItemListingsResultPayload>;
+export type MarketplaceBuyResultMessage        = WsMessage<MarketplaceBuyResultPayload>;
+export type MarketplaceListItemResultMessage   = WsMessage<MarketplaceListItemResultPayload>;
+export type MarketplaceCancelResultMessage     = WsMessage<MarketplaceCancelResultPayload>;
+export type MarketplaceMyListingsResultMessage = WsMessage<MarketplaceMyListingsResultPayload>;
+export type MarketplaceCollectCrownsResultMessage = WsMessage<MarketplaceCollectCrownsResultPayload>;
+export type MarketplaceCollectItemsResultMessage = WsMessage<MarketplaceCollectItemsResultPayload>;
+export type MarketplaceRejectedMessage         = WsMessage<MarketplaceRejectedPayload>;

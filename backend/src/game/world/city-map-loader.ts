@@ -91,6 +91,19 @@ function toProtocolBuilding(
         };
         return dto;
       }
+      if ((a.action_type as string) === 'marketplace') {
+        const cfg = a.config as Record<string, unknown>;
+        return {
+          id: a.id,
+          action_type: 'marketplace',
+          label: 'Browse Marketplace',
+          config: {
+            listing_fee: Number(cfg['listing_fee'] ?? 10),
+            max_listings: Number(cfg['max_listings'] ?? 10),
+            listing_duration_days: Number(cfg['listing_duration_days'] ?? 5),
+          },
+        } as unknown as BuildingActionDto;
+      }
       // travel
       const cfg = a.config as TravelActionConfig;
       const targetZoneName = zoneNameMap.get(cfg.target_zone_id) ?? `Zone ${cfg.target_zone_id}`;

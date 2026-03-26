@@ -19,6 +19,8 @@ import { CombatModal } from './CombatModal';
 import { getXpIconUrl, getCrownsIconUrl } from './ui-icons';
 import { CraftingModal } from './CraftingModal';
 import { GatheringModal } from './GatheringModal';
+import { MarketplaceModal } from './MarketplaceModal';
+import type { MarketplaceBuildingActionDto } from '@elarion/protocol';
 import type { GatheringCombatLoot } from './GatheringModal';
 
 type ActionCallback = (payload: CityBuildingActionPayload) => void;
@@ -68,12 +70,14 @@ export class BuildingPanel {
   private currentSquireRoster: SquireRosterDto | null = null;
   private gatheringActive = false;
   private gatheringModal: GatheringModal;
+  private marketplaceModal: MarketplaceModal;
 
   constructor(parent: HTMLElement, onAction: ActionCallback) {
     this.onAction = onAction;
     this.combatModal = new CombatModal(document.body);
     this.craftingModal = new CraftingModal(document.body);
     this.gatheringModal = new GatheringModal();
+    this.marketplaceModal = new MarketplaceModal(document.body);
 
     this.panel = document.createElement('div');
     this.panel.id = 'building-panel';
@@ -421,6 +425,29 @@ export class BuildingPanel {
           continue;
         }
 
+        if (action.action_type === 'marketplace') {
+          const mAction = action as MarketplaceBuildingActionDto;
+          const mBtn = document.createElement('button');
+          mBtn.textContent = 'Browse Marketplace';
+          mBtn.style.cssText = [
+            'width:100%',
+            'padding:8px',
+            'margin:4px 0',
+            'background:rgba(90,74,42,0.3)',
+            'border:1px solid #5a4a2a',
+            'border-radius:4px',
+            'color:#e8c870',
+            'font-family:Cinzel,serif',
+            'font-size:13px',
+            'cursor:pointer',
+          ].join(';');
+          mBtn.addEventListener('click', () => {
+            this.marketplaceModal.open(building.id, mAction.config);
+          });
+          actionsSection.appendChild(mBtn);
+          continue;
+        }
+
         const btn = document.createElement('button');
         btn.dataset['actionId'] = String(action.id);
         btn.dataset['actionType'] = action.action_type;
@@ -600,6 +627,10 @@ export class BuildingPanel {
 
   getGatheringModal(): GatheringModal {
     return this.gatheringModal;
+  }
+
+  getMarketplaceModal(): MarketplaceModal {
+    return this.marketplaceModal;
   }
 
   handleGatheringStarted(payload: GatheringStartedPayload): void {
@@ -1332,6 +1363,7 @@ export class BuildingPanel {
   destroy(): void {
     this.clearProgressIntervals();
     this.gatheringModal.close();
+    this.marketplaceModal.close();
     this.panel.remove();
     this.combatModal.close();
     this.craftingModal.close();

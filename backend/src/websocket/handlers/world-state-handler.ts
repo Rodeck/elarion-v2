@@ -39,6 +39,11 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
     return;
   }
 
+  // Ensure session has characterId set (may be null after reconnect with old JWT)
+  if (!session.characterId) {
+    session.characterId = character.id;
+  }
+
   // If the DB says in_combat but there is no live session (server restarted),
   // clear the flag so the player is not permanently locked.
   if (character.in_combat && !CombatSessionManager.has(character.id)) {

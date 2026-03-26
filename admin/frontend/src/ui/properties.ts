@@ -270,6 +270,9 @@ export class PropertiesPanel {
       const cfg = action.config as Record<string, unknown>;
       const evts = Array.isArray(cfg['events']) ? cfg['events'].length : 0;
       labelEl.textContent = `Gather (${cfg['required_tool_type']}, ${cfg['min_seconds']}–${cfg['max_seconds']}s, ${evts} event${evts !== 1 ? 's' : ''})`;
+    } else if (action.action_type === 'marketplace') {
+      const cfg = action.config as Record<string, unknown>;
+      labelEl.textContent = `Marketplace (fee:${cfg['listing_fee']}, max:${cfg['max_listings']}, ${cfg['listing_duration_days']}d)`;
     } else {
       const cfg = action.config as ExploreActionConfig;
       labelEl.textContent = `Explore (${cfg.encounter_chance}% chance, ${cfg.monsters.length} monster${cfg.monsters.length !== 1 ? 's' : ''})`;
@@ -694,7 +697,7 @@ export class PropertiesPanel {
 
     const typeSelect = document.createElement('select');
     typeSelect.id = 'action-type-select';
-    const actionTypes: [string, string][] = [['travel', 'Travel'], ['explore', 'Explore'], ['expedition', 'Expedition'], ['gather', 'Gather']];
+    const actionTypes: [string, string][] = [['travel', 'Travel'], ['explore', 'Explore'], ['expedition', 'Expedition'], ['gather', 'Gather'], ['marketplace', 'Marketplace']];
     for (const [val, text] of actionTypes) {
       const opt = document.createElement('option');
       opt.value = val;
@@ -1275,12 +1278,50 @@ export class PropertiesPanel {
     gatherFields.appendChild(addEventBtn);
     container.appendChild(gatherFields);
 
+    // ── Marketplace fields ───────────────────────────────────────────
+    const marketplaceFields = document.createElement('div');
+    marketplaceFields.id = 'marketplace-fields';
+    marketplaceFields.style.display = 'none';
+
+    const feeLabel = this.label('Listing Fee (crowns)', 'mkt-fee');
+    marketplaceFields.appendChild(feeLabel);
+    const feeInput = document.createElement('input');
+    feeInput.id = 'mkt-fee';
+    feeInput.type = 'number';
+    feeInput.min = '0';
+    feeInput.value = '10';
+    feeInput.style.width = '80px';
+    marketplaceFields.appendChild(feeInput);
+
+    const maxListLabel = this.label('Max Listings per Player', 'mkt-max-listings');
+    marketplaceFields.appendChild(maxListLabel);
+    const maxListInput = document.createElement('input');
+    maxListInput.id = 'mkt-max-listings';
+    maxListInput.type = 'number';
+    maxListInput.min = '1';
+    maxListInput.value = '10';
+    maxListInput.style.width = '80px';
+    marketplaceFields.appendChild(maxListInput);
+
+    const durLabel = this.label('Listing Duration (days)', 'mkt-duration');
+    marketplaceFields.appendChild(durLabel);
+    const durInput = document.createElement('input');
+    durInput.id = 'mkt-duration';
+    durInput.type = 'number';
+    durInput.min = '1';
+    durInput.value = '5';
+    durInput.style.width = '80px';
+    marketplaceFields.appendChild(durInput);
+
+    container.appendChild(marketplaceFields);
+
     // ── Show/hide on type change ─────────────────────────────────────
     typeSelect.addEventListener('change', () => {
       travelFields.style.display = typeSelect.value === 'travel' ? '' : 'none';
       exploreFields.style.display = typeSelect.value === 'explore' ? '' : 'none';
       expeditionFields.style.display = typeSelect.value === 'expedition' ? '' : 'none';
       gatherFields.style.display = typeSelect.value === 'gather' ? '' : 'none';
+      marketplaceFields.style.display = typeSelect.value === 'marketplace' ? '' : 'none';
     });
 
     // ── Buttons ──────────────────────────────────────────────────────
@@ -1347,6 +1388,17 @@ export class PropertiesPanel {
               max_seconds: maxSec,
               events: gatherEvents,
             },
+          });
+        } else if (typeSelect.value === 'marketplace') {
+          const listingFee = parseInt(feeInput.value, 10);
+          const maxListings = parseInt(maxListInput.value, 10);
+          const durationDays = parseInt(durInput.value, 10);
+          if (isNaN(listingFee) || listingFee < 0) { alert('Listing fee must be a non-negative integer.'); saveBtn.disabled = false; return; }
+          if (isNaN(maxListings) || maxListings < 1) { alert('Max listings must be a positive integer.'); saveBtn.disabled = false; return; }
+          if (isNaN(durationDays) || durationDays < 1) { alert('Duration must be a positive integer.'); saveBtn.disabled = false; return; }
+          await createBuildingAction(mapId, buildingId, {
+            action_type: 'marketplace',
+            config: { listing_fee: listingFee, max_listings: maxListings, listing_duration_days: durationDays },
           });
         } else {
           const baseGold = parseInt(baseGoldInput.value, 10);

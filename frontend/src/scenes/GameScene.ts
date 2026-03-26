@@ -88,6 +88,15 @@ import type {
   SquireDismissListResultPayload,
   SquireDismissedPayload,
   SquireDismissRejectedPayload,
+  MarketplaceBrowseResultPayload,
+  MarketplaceItemListingsResultPayload,
+  MarketplaceBuyResultPayload,
+  MarketplaceListItemResultPayload,
+  MarketplaceCancelResultPayload,
+  MarketplaceMyListingsResultPayload,
+  MarketplaceCollectCrownsResultPayload,
+  MarketplaceCollectItemsResultPayload,
+  MarketplaceRejectedPayload,
 } from '@elarion/protocol';
 
 const TILE_SIZE = 32;
@@ -229,6 +238,22 @@ export class GameScene extends Phaser.Scene {
     this.questTracker = new QuestTracker(document.getElementById('game')!);
     this.buildingPanel.getCraftingModal().setSendFn((type, payload) => {
       this.client.send(type, payload);
+    });
+    this.buildingPanel.getMarketplaceModal().setSendFn((type, payload) => {
+      this.client.send(type, payload);
+    });
+    this.buildingPanel.getMarketplaceModal().setInventorySlotsGetter(() => this.leftPanel.getInventorySlots());
+    this.buildingPanel.getMarketplaceModal().setOnOpen(() => {
+      // Raise inventory panel above the overlay so drag-and-drop works
+      inventoryEl.style.zIndex = '260';
+      inventoryEl.style.position = 'relative';
+      this.leftPanel.showTab('inventory');
+      this.leftPanel.setDragEnabled(true);
+    });
+    this.buildingPanel.getMarketplaceModal().setOnClose(() => {
+      inventoryEl.style.zIndex = '';
+      inventoryEl.style.position = '';
+      this.leftPanel.setDragEnabled(false);
     });
     this.buildingPanel.setInventorySlotsGetter(() => this.leftPanel.getInventorySlots());
     this.buildingPanel.setOnGatheringStart((payload) => {
@@ -681,6 +706,48 @@ export class GameScene extends Phaser.Scene {
       if (modal.isOpen()) {
         this.client.send('crafting.open', { npc_id: modal.getNpcId() });
       }
+    });
+
+    // Marketplace handlers
+    const mktModal = this.buildingPanel.getMarketplaceModal();
+    this.client.on<MarketplaceBrowseResultPayload>('marketplace.browse_result', (payload) => {
+      mktModal.handleBrowseResult(payload);
+    });
+    this.client.on<MarketplaceItemListingsResultPayload>('marketplace.item_listings_result', (payload) => {
+      mktModal.handleItemListingsResult(payload);
+    });
+    this.client.on<MarketplaceBuyResultPayload>('marketplace.buy_result', (payload) => {
+      mktModal.handleBuyResult(payload);
+      if (payload.success && payload.new_crowns !== undefined) {
+        if (this.myCharacter) this.myCharacter.crowns = payload.new_crowns;
+        this.statsBar?.setCrowns(payload.new_crowns);
+      }
+    });
+    this.client.on<MarketplaceListItemResultPayload>('marketplace.list_item_result', (payload) => {
+      mktModal.handleListItemResult(payload);
+      if (payload.success && payload.new_crowns !== undefined) {
+        if (this.myCharacter) this.myCharacter.crowns = payload.new_crowns;
+        this.statsBar?.setCrowns(payload.new_crowns);
+      }
+    });
+    this.client.on<MarketplaceCancelResultPayload>('marketplace.cancel_result', (payload) => {
+      mktModal.handleCancelResult(payload);
+    });
+    this.client.on<MarketplaceMyListingsResultPayload>('marketplace.my_listings_result', (payload) => {
+      mktModal.handleMyListingsResult(payload);
+    });
+    this.client.on<MarketplaceCollectCrownsResultPayload>('marketplace.collect_crowns_result', (payload) => {
+      mktModal.handleCollectCrownsResult(payload);
+      if (payload.success) {
+        if (this.myCharacter) this.myCharacter.crowns = payload.new_crowns;
+        this.statsBar?.setCrowns(payload.new_crowns);
+      }
+    });
+    this.client.on<MarketplaceCollectItemsResultPayload>('marketplace.collect_items_result', (payload) => {
+      mktModal.handleCollectItemsResult(payload);
+    });
+    this.client.on<MarketplaceRejectedPayload>('marketplace.rejected', (payload) => {
+      mktModal.handleRejected(payload);
     });
 
     // Quest handlers

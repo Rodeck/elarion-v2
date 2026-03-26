@@ -314,4 +314,8 @@ export class LeftPanel {
     const sp = this.ensureSquirePanel();
     sp.update(roster);
   }
+
+  setDragEnabled(enabled: boolean): void {
+    this.inventoryPanel.setDragEnabled(enabled);
+  }
 }
