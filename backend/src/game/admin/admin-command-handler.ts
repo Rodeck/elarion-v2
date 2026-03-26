@@ -12,6 +12,7 @@ import { completeAllSessionsForCharacter } from '../../db/queries/crafting';
 import { getSquireDefinitionById } from '../../db/queries/squire-definitions';
 import { grantSquireToCharacter, buildSquireRosterDto } from '../squire/squire-grant-service';
 import { getActiveExpeditionsForCharacter } from '../../db/queries/squires';
+import { getMapsByType } from '../../db/queries/city-maps';
 import { query } from '../../db/connection';
 import { log } from '../../logger';
 
@@ -47,8 +48,9 @@ export async function handleAdminCommand(session: AuthenticatedSession, rawMessa
     case '/heal':            return handleHeal(session, args, reply);
     case '/squire':          return handleGiveSquire(session, args, reply);
     case '/expedition_finish': return handleExpeditionFinish(session, args, reply);
+    case '/reset_player':      return handleResetPlayer(session, args, reply);
     default:
-      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown, /skill_all, /crafting_finish, /heal, /squire, /expedition_finish`);
+      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown, /skill_all, /crafting_finish, /heal, /squire, /expedition_finish, /reset_player`);
   }
 }
 
@@ -573,4 +575,84 @@ async function handleExpeditionFinish(session: AuthenticatedSession, args: strin
   });
 
   reply(true, `Finished ${expeditions.length} expedition${expeditions.length !== 1 ? 's' : ''} for ${playerName}.`);
+}
+
+// ---------------------------------------------------------------------------
+// /reset_player <player>
+// ---------------------------------------------------------------------------
+
+async function handleResetPlayer(session: AuthenticatedSession, args: string[], reply: ReplyFn): Promise<void> {
+  const playerName = args[0];
+  if (!playerName) {
+    reply(false, 'Usage: /reset_player <player>');
+    return;
+  }
+
+  const character = await findByName(playerName);
+  if (!character) {
+    reply(false, `Player '${playerName}' not found.`);
+    return;
+  }
+
+  const cls = await findClassById(character.class_id);
+  if (!cls) {
+    reply(false, `Could not load class data for '${playerName}'.`);
+    return;
+  }
+
+  // Find starter zone (first city map)
+  const cityMaps = await getMapsByType('city');
+  const starterZoneId = cityMaps.length > 0 ? cityMaps[0]!.id : character.zone_id;
+
+  // Delete all dependent data (order matters for FK constraints without CASCADE)
+  await query(`DELETE FROM crafting_sessions WHERE character_id = $1`, [character.id]);
+  await query(`DELETE FROM character_quests WHERE character_id = $1`, [character.id]);
+  await query(`DELETE FROM character_squires WHERE character_id = $1`, [character.id]);
+  await query(`DELETE FROM character_owned_abilities WHERE character_id = $1`, [character.id]);
+  await query(`DELETE FROM character_loadouts WHERE character_id = $1`, [character.id]);
+  await query(`DELETE FROM inventory_items WHERE character_id = $1`, [character.id]);
+
+  // Reset character stats to level 1 defaults
+  await query(
+    `UPDATE characters
+     SET level = 1,
+         experience = 0,
+         max_hp = $2,
+         current_hp = $2,
+         attack_power = $3,
+         defence = $4,
+         zone_id = $5,
+         pos_x = 0,
+         pos_y = 0,
+         current_node_id = NULL,
+         in_combat = false,
+         in_gathering = false,
+         crowns = 0,
+         squire_slots_unlocked = 2,
+         updated_at = now()
+     WHERE id = $1`,
+    [character.id, cls.base_hp, cls.base_attack, cls.base_defence, starterZoneId],
+  );
+
+  // Notify the target player if online — they should re-login to get fresh state
+  const targetSession = getSessionByCharacterId(character.id);
+  if (targetSession) {
+    sendToSession(targetSession, 'server.error', {
+      code: 'CHARACTER_RESET',
+      message: 'Your character has been reset by an admin. Please re-login.',
+    });
+  }
+
+  log('info', 'admin', 'admin_command', {
+    event: 'admin_command',
+    admin_account_id: session.accountId,
+    admin_character_id: session.characterId,
+    command: '/reset_player',
+    target_player: playerName,
+    target_character_id: character.id,
+    args: {},
+    success: true,
+  });
+
+  reply(true, `Reset ${playerName} to initial state (level 1, empty inventory, no squires/quests/abilities).`);
 }
