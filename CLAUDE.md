@@ -43,6 +43,7 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - PostgreSQL 16 — migration `023_squire_overhaul.sql` (new tables + ALTER); filesystem for squire icon PNGs under `backend/assets/squires/icons/` (022-squire-overhaul)
 - TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT) (023-player-marketplace)
 - PostgreSQL 16 — migration `025_marketplace.sql` (2 new tables, 1 CHECK constraint extension) (023-player-marketplace)
+- PostgreSQL 16 — migration `026_fishing_system.sql` (new tables + ALTER constraints) (024-fishing-system)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -68,11 +69,96 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 024-fishing-system: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 023-player-marketplace: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 022-squire-overhaul: Added TypeScript 5.x (all packages: frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
-- 021-quest-system: Added TypeScript 5.x (all packages: frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (game backend), Phaser 3.60 + Vite 5 (game frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 
 
 
 <!-- MANUAL ADDITIONS START -->
+
+## Adding a New Building Action Type
+
+When introducing a new `action_type` (e.g., `'fishing'`, `'crafting_station'`), you must update **all 7 locations** listed below. Missing any one of them causes silent failures — the action either won't save, won't render, or will display as a broken travel action.
+
+### Checklist
+
+1. **DB CHECK constraint** — Migration file extending `building_actions.action_type`:
+   ```sql
+   ALTER TABLE building_actions DROP CONSTRAINT building_actions_action_type_check;
+   ALTER TABLE building_actions ADD CONSTRAINT building_actions_action_type_check
+     CHECK (action_type IN ('travel', 'explore', 'expedition', 'gather', 'marketplace', '<NEW_TYPE>'));
+   ```
+
+2. **Shared protocol types** — `shared/protocol/index.ts`:
+   - Create a `<NewType>BuildingActionDto` interface
+   - Add it to the `BuildingActionDto` union type
+   - Add `'<new_type>'` to `CityBuildingActionPayload.action_type` union
+
+3. **Game backend city-map-loader** — `backend/src/game/world/city-map-loader.ts`:
+   - Add an `if (a.action_type === '<new_type>')` branch in the `.map()` callback that builds `BuildingActionDto` objects
+   - **Without this, the action renders as "Travel to Zone undefined"**
+
+4. **Game backend building-action-handler** — `backend/src/game/world/building-action-handler.ts`:
+   - Add an `if (action.action_type === '<new_type>')` branch in the action dispatch logic
+
+5. **Admin backend buildings route** — `admin/backend/src/routes/buildings.ts`:
+   - Add `'<new_type>'` to the action_type validation check (~line 265)
+   - Add an `else if (action_type === '<new_type>')` branch in the config processing logic for the create endpoint
+   - **Without the config branch, the action falls through to expedition validation and fails with "base_gold must be a non-negative integer"**
+
+6. **Admin frontend API types** — `admin/frontend/src/editor/api.ts`:
+   - Add `'<new_type>'` to `BuildingAction.action_type` union
+   - Add `'<new_type>'` to `createBuildingAction` parameter's `action_type` union
+
+7. **Admin frontend properties panel** — `admin/frontend/src/ui/properties.ts`:
+   - Add `['<new_type>', 'Label']` to the `actionTypes` array (dropdown options)
+   - Add a fields `<div>` for the new type's config (if any)
+   - Add show/hide logic in the `typeSelect` change handler
+   - Add a save handler branch in the save button click handler
+   - Add a display label branch in the action list renderer
+
+### Also consider
+
+- **Game frontend BuildingPanel** — `frontend/src/ui/BuildingPanel.ts`: Add rendering for the new action type button/UI
+- **Game frontend GameScene** — `frontend/src/scenes/GameScene.ts`: Add message handlers if the action type uses custom WebSocket messages
+- **game-entities skill** — `.claude/commands/game-entities.md`: Document the new action type's config format
+- **game-entities script** — `scripts/game-entities.js`: Update `VALID_ACTION_TYPES` array
+
+## Adding a New Equipment Slot
+
+When adding a new equipment slot (e.g., `'ring'`, `'amulet'`), update these locations:
+
+1. **DB migration** — Extend `inventory_items.equipped_slot` CHECK constraint and `item_definitions.category` CHECK constraint
+2. **Shared protocol** — `shared/protocol/index.ts`: Add to `ItemCategory`, `EquipSlot`, and `EquipmentSlotsDto`
+3. **Equipment handler** — `backend/src/game/equipment/equipment-handler.ts`: Add to `VALID_SLOTS` array
+4. **Equipment queries** — `backend/src/db/queries/equipment.ts`: Add to `SLOT_CATEGORY_MAP` and the `slots` object initializer in `getEquipmentState()`
+5. **Frontend equipment UI** — `frontend/src/ui/EquipmentPanel.ts`: Add slot to grid layout and `SLOT_CONFIGS`
+6. **Frontend left panel** — `frontend/src/ui/LeftPanel.ts`: Add category to `EQUIPPABLE_CATEGORIES`
+7. **Admin frontend** — `admin/frontend/src/editor/api.ts`: Update `VALID_CATEGORIES` if the script validates categories
+
+Combat stats (`computeCombatStats` in `combat-stats-service.ts`) and effective stats queries aggregate ALL equipped items generically — no changes needed there.
+
+## Adding a New Item Category
+
+Update these locations:
+
+1. **DB migration** — Extend `item_definitions.category` CHECK constraint
+2. **Shared protocol** — `shared/protocol/index.ts`: Add to `ItemCategory` type
+3. **game-entities script** — `scripts/game-entities.js`: Add to `VALID_CATEGORIES` array
+4. **game-entities skill** — `.claude/commands/game-entities.md`: Update `create-item` docs
+5. **Admin frontend** — If category is stackable, check `STACKABLE_CATEGORIES` in the script
+
+## Adding a New Quest Reward Type
+
+Update these locations:
+
+1. **Shared protocol** — `shared/protocol/index.ts`: Add to `RewardType` type
+2. **Quest service** — `backend/src/game/quest/quest-service.ts`: Add case in `grantQuestRewards()` switch
+3. **Admin backend quest routes** — `admin/backend/src/routes/quests.ts`: Add to `VALID_REWARD_TYPES` array
+4. **Admin frontend quest manager** — `admin/frontend/src/ui/quest-manager.ts`: Add to `REWARD_TYPES` array and add fields case in `buildRewardSpecificFields()`
+5. **game-entities script** — `scripts/game-entities.js`: Add to `VALID_REWARD_TYPES` array
+6. **game-entities skill** — `.claude/commands/game-entities.md`: Document the new reward type in `create-quest` rewards docs
+
+The `resolveRewardTarget()` function returns `{ name: null, icon_url: null }` for unknown types — this is fine for currency-like rewards (xp, crowns, points).
 <!-- MANUAL ADDITIONS END -->

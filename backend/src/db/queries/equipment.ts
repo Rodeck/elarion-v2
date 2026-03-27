@@ -21,6 +21,8 @@ const SLOT_CATEGORY_MAP: Record<string, string[]> = {
   greaves:    ['greaves'],
   bracer:     ['bracer'],
   boots:      ['boots'],
+  ring:       ['ring'],
+  amulet:     ['amulet'],
 };
 
 const TWO_HANDED_SUBTYPES = ['two_handed', 'staff'];
@@ -123,6 +125,8 @@ export async function getEquipmentState(characterId: string): Promise<EquipmentS
     greaves:    null,
     bracer:     null,
     boots:      null,
+    ring:       null,
+    amulet:     null,
   };
 
   for (const row of result.rows) {

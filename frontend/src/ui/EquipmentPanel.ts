@@ -16,9 +16,11 @@ const SLOT_CATEGORY_MAP: Record<EquipSlot, string[]> = {
   greaves:    ['greaves'],
   bracer:     ['bracer'],
   boots:      ['boots'],
+  ring:       ['ring'],
+  amulet:     ['amulet'],
 };
 
-const ARMOR_CATEGORIES = ['shield', 'boots', 'greaves', 'bracer', 'helmet', 'chestplate'];
+const ARMOR_CATEGORIES = ['shield', 'boots', 'greaves', 'bracer', 'helmet', 'chestplate', 'ring', 'amulet'];
 const TWO_HANDED_SUBTYPES = ['two_handed', 'staff'];
 
 // ---------------------------------------------------------------------------
@@ -39,6 +41,8 @@ const SLOT_CONFIGS: SlotConfig[] = [
   { name: 'greaves',    label: 'Greaves',    gridArea: 'greaves'    },
   { name: 'bracer',     label: 'Bracer',     gridArea: 'bracer'     },
   { name: 'boots',      label: 'Boots',      gridArea: 'boots'      },
+  { name: 'ring',       label: 'Ring',        gridArea: 'ring'       },
+  { name: 'amulet',     label: 'Amulet',     gridArea: 'amulet'     },
 ];
 
 export class EquipmentPanel {
@@ -87,9 +91,9 @@ export class EquipmentPanel {
     const slotGrid = document.createElement('div');
     slotGrid.style.cssText = [
       'display:grid;',
-      "grid-template-areas:'  .      helmet    .    ' 'leftarm  chest  rightarm' '  .      greaves   .    ' 'bracer    .      boots   ';",
+      "grid-template-areas:'  .      helmet    .    ' 'leftarm  chest  rightarm' '  .      greaves   .    ' 'bracer    .      boots   ' 'ring      .      amulet  ';",
       'grid-template-columns: 1fr 1fr 1fr;',
-      'grid-template-rows: auto auto auto auto;',
+      'grid-template-rows: auto auto auto auto auto;',
       'gap:6px;',
     ].join('');
 

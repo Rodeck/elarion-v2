@@ -182,7 +182,7 @@ export class CombatSession {
     }
 
     // Fire the active ability
-    const result = computeActiveAbility(activeSlot, this.playerStats, this.engineState);
+    const result = computeActiveAbility(activeSlot, this.playerStats, this.monster.defense, this.engineState);
     this.engineState = result.newState;
 
     log('info', 'combat', 'combat_ability_fired', {
@@ -212,7 +212,7 @@ export class CombatSession {
     allEvents.push(...regenResult.events);
 
     // 2. Player auto-attack (enemy has no dodge chance)
-    const attackResult = computePlayerAttack(this.playerStats, 0, this.engineState);
+    const attackResult = computePlayerAttack(this.playerStats, 0, this.monster.defense, this.engineState);
     this.engineState = attackResult.newState;
     allEvents.push(...attackResult.events);
 
@@ -229,7 +229,7 @@ export class CombatSession {
       .map((s) => ({ slot_name: s, ability: this.loadout[s]! }));
 
     if (autoSlots.length > 0) {
-      const autoResult = computeAutoAbilities(autoSlots, this.playerStats, this.engineState);
+      const autoResult = computeAutoAbilities(autoSlots, this.playerStats, this.monster.defense, this.engineState);
       this.engineState = autoResult.newState;
       allEvents.push(...autoResult.events);
 
@@ -467,6 +467,7 @@ export class CombatSession {
     const endPayload: CombatEndPayload = {
       combat_id:      this.combatId,
       outcome,
+      current_hp:     this.engineState.playerHp,
       monster_name:     this.monster.name,
       monster_icon_url: this.buildMonsterIconUrl(this.monster.icon_filename),
       xp_gained:      xpGained,

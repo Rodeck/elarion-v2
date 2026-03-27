@@ -262,8 +262,8 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
     config: Record<string, unknown>;
   };
 
-  if (action_type !== 'travel' && action_type !== 'explore' && action_type !== 'expedition' && action_type !== 'gather' && action_type !== 'marketplace') {
-    return res.status(400).json({ error: 'action_type must be "travel", "explore", "expedition", "gather", or "marketplace"' });
+  if (action_type !== 'travel' && action_type !== 'explore' && action_type !== 'expedition' && action_type !== 'gather' && action_type !== 'marketplace' && action_type !== 'fishing') {
+    return res.status(400).json({ error: 'action_type must be "travel", "explore", "expedition", "gather", "marketplace", or "fishing"' });
   }
 
   try {
@@ -327,8 +327,8 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
         events?: unknown[];
       };
       const toolType = String(cfg.required_tool_type ?? '');
-      if (!['pickaxe', 'axe'].includes(toolType)) {
-        return res.status(400).json({ error: 'required_tool_type must be "pickaxe" or "axe"' });
+      if (!['pickaxe', 'axe', 'fishing_rod'].includes(toolType)) {
+        return res.status(400).json({ error: 'required_tool_type must be "pickaxe", "axe", or "fishing_rod"' });
       }
       const durPerSec = Number(cfg.durability_per_second);
       if (!Number.isInteger(durPerSec) || durPerSec < 1) {
@@ -410,6 +410,11 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
       };
       const action = await createBuildingAction(buildingId, 'marketplace' as 'travel', marketplaceConfig as unknown as TravelActionConfig, sort_order ?? 0);
       log('info', 'Created marketplace action', { building_id: buildingId, action_id: action.id, admin: req.username });
+      return res.status(201).json({ action });
+    } else if (action_type === 'fishing') {
+      const fishingConfig = config ?? {};
+      const action = await createBuildingAction(buildingId, 'fishing' as 'travel', fishingConfig as unknown as TravelActionConfig, sort_order ?? 0);
+      log('info', 'Created fishing action', { building_id: buildingId, action_id: action.id, admin: req.username });
       return res.status(201).json({ action });
     } else {
       // expedition

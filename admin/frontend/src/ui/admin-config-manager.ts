@@ -26,6 +26,9 @@ export class AdminConfigManager {
       if (config['crowns_icon_filename']) {
         this.showIconPreview('crowns', `/ui-icons/${config['crowns_icon_filename']}`);
       }
+      if (config['rod_upgrade_points_icon_filename']) {
+        this.showIconPreview('rod_upgrade_points', `/ui-icons/${config['rod_upgrade_points_icon_filename']}`);
+      }
     } catch (err) {
       this.showStatus(`Failed to load config: ${(err as Error).message}`, true);
     }
@@ -78,6 +81,15 @@ export class AdminConfigManager {
               <button type="button" class="btn btn--secondary" id="crowns-icon-upload-btn" style="width:100%;">Upload Crowns Icon</button>
               <input type="file" id="crowns-icon-input" accept="image/png" style="display:none;" />
             </div>
+
+            <div style="flex:1;">
+              <label>Rod Upgrade Points Icon</label>
+              <div id="rod_upgrade_points-icon-preview" style="margin:6px 0;">
+                <span style="font-size:2rem;color:#4ba8d4;">🎣</span>
+              </div>
+              <button type="button" class="btn btn--secondary" id="rod_upgrade_points-icon-upload-btn" style="width:100%;">Upload Rod Pts Icon</button>
+              <input type="file" id="rod_upgrade_points-icon-input" accept="image/png" style="display:none;" />
+            </div>
           </div>
         </div>
       </div>
@@ -104,9 +116,17 @@ export class AdminConfigManager {
     this.container.querySelector('#crowns-icon-input')!.addEventListener('change', () => {
       void this.handleIconUpload('crowns');
     });
+
+    // Rod Upgrade Points icon upload
+    this.container.querySelector('#rod_upgrade_points-icon-upload-btn')!.addEventListener('click', () => {
+      (this.container.querySelector('#rod_upgrade_points-icon-input') as HTMLInputElement).click();
+    });
+    this.container.querySelector('#rod_upgrade_points-icon-input')!.addEventListener('change', () => {
+      void this.handleIconUpload('rod_upgrade_points');
+    });
   }
 
-  private async handleIconUpload(type: 'xp' | 'crowns'): Promise<void> {
+  private async handleIconUpload(type: 'xp' | 'crowns' | 'rod_upgrade_points'): Promise<void> {
     const input = this.container.querySelector<HTMLInputElement>(`#${type}-icon-input`)!;
     const file = input.files?.[0];
     if (!file) return;
@@ -123,14 +143,15 @@ export class AdminConfigManager {
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       this.showIconPreview(type, data.icon_url);
-      this.showStatus(`${type === 'xp' ? 'XP' : 'Crowns'} icon uploaded.`, false);
+      const typeLabels: Record<string, string> = { xp: 'XP', crowns: 'Crowns', rod_upgrade_points: 'Rod Upgrade Points' };
+      this.showStatus(`${typeLabels[type]} icon uploaded.`, false);
     } catch (err) {
       this.showStatus(`Failed to upload: ${(err as Error).message}`, true);
     }
     input.value = '';
   }
 
-  private showIconPreview(type: 'xp' | 'crowns', url: string): void {
+  private showIconPreview(type: 'xp' | 'crowns' | 'rod_upgrade_points', url: string): void {
     const preview = this.container.querySelector<HTMLElement>(`#${type}-icon-preview`);
     if (preview) {
       preview.innerHTML = `<img src="${url}" style="width:48px;height:48px;image-rendering:pixelated;border-radius:4px;border:1px solid #1e2232;" />`;

@@ -10,7 +10,7 @@ import type {
   EquipSlot,
 } from '../../../../shared/protocol/index';
 
-const VALID_SLOTS: EquipSlot[] = ['helmet', 'chestplate', 'left_arm', 'right_arm', 'greaves', 'bracer', 'boots'];
+const VALID_SLOTS: EquipSlot[] = ['helmet', 'chestplate', 'left_arm', 'right_arm', 'greaves', 'bracer', 'boots', 'ring', 'amulet'];
 
 function isValidSlot(value: unknown): value is EquipSlot {
   return typeof value === 'string' && VALID_SLOTS.includes(value as EquipSlot);

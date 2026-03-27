@@ -17,7 +17,7 @@ import type {
   SquireRosterDto,
 } from '../../../shared/protocol/index';
 
-const EQUIPPABLE_CATEGORIES = ['weapon', 'shield', 'boots', 'greaves', 'bracer', 'helmet', 'chestplate'];
+const EQUIPPABLE_CATEGORIES = ['weapon', 'shield', 'boots', 'greaves', 'bracer', 'helmet', 'chestplate', 'ring', 'amulet'];
 
 export class LeftPanel {
   private container: HTMLElement;

@@ -21,6 +21,7 @@ export class MonsterManager {
   private editingMonsterId: number | null = null;
   private expandedMonsterId: number | null = null;
   private acceptedBase64: string | null = null;
+  private nameFilter = '';
 
   init(container: HTMLElement): void {
     this.container = container;
@@ -116,7 +117,8 @@ export class MonsterManager {
         </div>
 
         <div class="monster-list-col">
-          <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center;">
+            <input id="mm-name-filter" type="text" placeholder="Filter by name…" style="flex:1;min-width:0;" />
             <button class="btn btn--secondary" id="mm-sprite-sheet-btn" title="Cut icons from a sprite sheet">&#x2702; Sprite Sheet</button>
             <button class="btn" id="mm-refresh-btn" title="Refresh monster list">&#x21bb; Refresh</button>
           </div>
@@ -168,6 +170,11 @@ export class MonsterManager {
       btn.disabled = false;
       btn.textContent = '↻ Refresh';
     });
+    this.container.querySelector<HTMLInputElement>('#mm-name-filter')!.addEventListener('input', (e) => {
+      this.nameFilter = (e.target as HTMLInputElement).value.toLowerCase();
+      this.renderList();
+    });
+
     const nameInput = this.container.querySelector<HTMLInputElement>('#mm-name')!;
     nameInput.addEventListener('input', () => {
       const aiBtn = this.container.querySelector<HTMLButtonElement>('#mm-ai-gen-btn')!;
@@ -184,10 +191,19 @@ export class MonsterManager {
       return;
     }
 
+    const filtered = this.nameFilter
+      ? this.monsters.filter((m) => m.name.toLowerCase().includes(this.nameFilter))
+      : this.monsters;
+
+    if (filtered.length === 0) {
+      wrap.innerHTML = '<p style="color:#3d4262;font-size:0.875rem;">No monsters match the filter.</p>';
+      return;
+    }
+
     const grid = document.createElement('div');
     grid.className = 'monster-grid';
 
-    for (const m of this.monsters) {
+    for (const m of filtered) {
       grid.appendChild(this.buildMonsterCard(m));
     }
 

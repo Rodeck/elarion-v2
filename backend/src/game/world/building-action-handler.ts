@@ -92,6 +92,18 @@ export async function handleBuildingAction(
     return;
   }
 
+  if (action.action_type === 'fishing') {
+    // Fishing is initiated by the client sending fishing.cast after seeing the action
+    // Just acknowledge the spot is available — the client triggers the cast separately
+    sendToSession(session, 'fishing.spot_available', {
+      building_id,
+      action_id,
+      config: action.config,
+    });
+    log('debug', 'building-action', 'fishing_spot_available', { characterId, building_id, action_id });
+    return;
+  }
+
   if (action.action_type === 'explore') {
     const exploreConfig = action.config as ExploreActionConfig;
 

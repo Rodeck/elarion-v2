@@ -88,7 +88,9 @@
       "Bash(grep:*)",
       "Bash(curl -s -u admin:admin -X DELETE http://localhost:4001/api/maps/2/buildings/13/actions/9)",
       "Bash(curl -s -u admin:admin -X DELETE http://localhost:4001/api/maps/2/buildings/12/actions/18)",
-      "Bash(curl -s -u admin:admin -X DELETE http://localhost:4001/api/maps/2/buildings/16/actions/10)"
+      "Bash(curl -s -u admin:admin -X DELETE http://localhost:4001/api/maps/2/buildings/16/actions/10)",
+      "Bash(find D:projectselarion-v2.claude -type f -name *.md -o -name *.toml -o -name *.yaml -o -name *.yml -o -name *.json)",
+      "Bash(curl -s http://localhost:4001/api/items)"
     ]
   }
 }

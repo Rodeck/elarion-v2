@@ -15,6 +15,7 @@ export const CONFIG_DEFAULTS: Record<string, string> = {
   image_gen_model: 'google/gemini-2.5-flash-image',
   xp_icon_filename: '',
   crowns_icon_filename: '',
+  rod_upgrade_points_icon_filename: '',
 };
 
 const KNOWN_KEYS = new Set(Object.keys(CONFIG_DEFAULTS));

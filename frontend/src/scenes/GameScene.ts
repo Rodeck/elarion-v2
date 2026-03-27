@@ -97,7 +97,13 @@ import type {
   MarketplaceCollectCrownsResultPayload,
   MarketplaceCollectItemsResultPayload,
   MarketplaceRejectedPayload,
+  FishingSessionStartPayload,
+  FishingResultPayload,
+  FishingRejectedPayload,
+  FishingUpgradeResultPayload,
+  FishingRepairResultPayload,
 } from '@elarion/protocol';
+import { FishingMinigame } from '../ui/fishing-minigame';
 
 const TILE_SIZE = 32;
 const XP_THRESHOLDS = [100, 250, 500, 900, 1400];
@@ -146,6 +152,8 @@ export class GameScene extends Phaser.Scene {
   private buildingBeforeCombat: CityMapBuilding | null = null;
   // True while combat is happening during a gathering session
   private gatheringCombatActive = false;
+  // Fishing mini-game overlay
+  private fishingMinigame: FishingMinigame | null = null;
 
   // City map state
   private isCityMap = false;
@@ -262,6 +270,15 @@ export class GameScene extends Phaser.Scene {
     this.buildingPanel.setOnGatheringCancel(() => {
       this.client.send('gathering.cancel', {});
     });
+    this.buildingPanel.setOnFishingCast((buildingId, actionId) => {
+      this.client.send('fishing.cast', { building_id: buildingId, action_id: actionId });
+    });
+    this.buildingPanel.setOnFishingUpgrade((npcId) => {
+      this.client.send('fishing.upgrade_rod', { npc_id: npcId });
+    });
+    this.buildingPanel.setOnFishingRepair((npcId) => {
+      this.client.send('fishing.repair_rod', { npc_id: npcId });
+    });
 
     this.combatScreen = new CombatScreen(() => {
       const combatId = this.combatScreen?.getCombatId();
@@ -298,7 +315,7 @@ export class GameScene extends Phaser.Scene {
       // Load UI icons from world state
       const uiIcons = (payload as any).ui_icons;
       if (uiIcons) {
-        setUiIcons(uiIcons.xp_icon_url ?? null, uiIcons.crowns_icon_url ?? null);
+        setUiIcons(uiIcons.xp_icon_url ?? null, uiIcons.crowns_icon_url ?? null, uiIcons.rod_upgrade_points_icon_url ?? null);
       }
 
       this.myCharacter = payload.my_character;
@@ -826,6 +843,38 @@ export class GameScene extends Phaser.Scene {
       this.buildingPanel.handleGatheringCombatResume();
     });
 
+    // Fishing handlers
+    this.client.on<FishingSessionStartPayload>('fishing.session_start', (payload) => {
+      if (!this.fishingMinigame) {
+        this.fishingMinigame = new FishingMinigame(this.client);
+      }
+      this.fishingMinigame.onSessionStart(payload);
+    });
+    this.client.on<FishingResultPayload>('fishing.result', (payload) => {
+      this.fishingMinigame?.onResult(payload);
+      if (payload.success && payload.fish_name) {
+        this.chatBox.addSystemMessage(`You caught a ${payload.fish_name}!`);
+      }
+    });
+    this.client.on<FishingRejectedPayload>('fishing.rejected', (payload) => {
+      this.fishingMinigame?.onRejected(payload);
+      this.chatBox.addSystemMessage(payload.message);
+    });
+    this.client.on<FishingUpgradeResultPayload>('fishing.upgrade_result', (payload) => {
+      if (payload.success) {
+        this.chatBox.addSystemMessage(`Rod upgraded to tier ${payload.new_tier}! Durability: ${payload.new_durability}/${payload.new_max_durability}. Points remaining: ${payload.points_remaining}.`);
+      } else {
+        this.chatBox.addSystemMessage(`Upgrade failed: ${payload.reason ?? 'Unknown reason'}`);
+      }
+    });
+    this.client.on<FishingRepairResultPayload>('fishing.repair_result', (payload) => {
+      if (payload.success) {
+        this.chatBox.addSystemMessage(`Rod repaired! Durability restored to ${payload.new_durability}. Crowns remaining: ${payload.crowns_remaining}.`);
+      } else {
+        this.chatBox.addSystemMessage(`Repair failed: ${payload.reason ?? 'Unknown reason'}`);
+      }
+    });
+
     // Combat handlers
     this.client.on<CombatStartPayload>('combat:start', (payload) => {
       if (this.gatheringCombatActive) {
@@ -850,6 +899,10 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.client.on<CombatEndPayload>('combat:end', (payload) => {
+      // Update HP in character state and stats bar
+      if (this.myCharacter) this.myCharacter.current_hp = payload.current_hp;
+      this.statsBar?.setHp(payload.current_hp, this.myCharacter?.max_hp ?? 0);
+
       if (this.gatheringCombatActive) {
         // During gathering: auto-close combat (no rewards screen), show loot in gathering log
         this.combatScreen?.close();

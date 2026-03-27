@@ -273,6 +273,10 @@ export class PropertiesPanel {
     } else if (action.action_type === 'marketplace') {
       const cfg = action.config as Record<string, unknown>;
       labelEl.textContent = `Marketplace (fee:${cfg['listing_fee']}, max:${cfg['max_listings']}, ${cfg['listing_duration_days']}d)`;
+    } else if (action.action_type === 'fishing') {
+      const cfg = action.config as Record<string, unknown>;
+      const minTier = cfg['min_rod_tier'] ? `T${cfg['min_rod_tier']}+` : 'any rod';
+      labelEl.textContent = `Fishing (${minTier})`;
     } else {
       const cfg = action.config as ExploreActionConfig;
       labelEl.textContent = `Explore (${cfg.encounter_chance}% chance, ${cfg.monsters.length} monster${cfg.monsters.length !== 1 ? 's' : ''})`;
@@ -697,7 +701,7 @@ export class PropertiesPanel {
 
     const typeSelect = document.createElement('select');
     typeSelect.id = 'action-type-select';
-    const actionTypes: [string, string][] = [['travel', 'Travel'], ['explore', 'Explore'], ['expedition', 'Expedition'], ['gather', 'Gather'], ['marketplace', 'Marketplace']];
+    const actionTypes: [string, string][] = [['travel', 'Travel'], ['explore', 'Explore'], ['expedition', 'Expedition'], ['gather', 'Gather'], ['marketplace', 'Marketplace'], ['fishing', 'Fishing']];
     for (const [val, text] of actionTypes) {
       const opt = document.createElement('option');
       opt.value = val;
@@ -977,7 +981,7 @@ export class PropertiesPanel {
     gatherFields.appendChild(this.label('Required Tool Type', 'gather-tool-type'));
     const toolTypeSelect = document.createElement('select');
     toolTypeSelect.id = 'gather-tool-type';
-    for (const [val, txt] of [['pickaxe', 'Pickaxe'], ['axe', 'Axe']] as const) {
+    for (const [val, txt] of [['pickaxe', 'Pickaxe'], ['axe', 'Axe'], ['fishing_rod', 'Fishing Rod']] as const) {
       const opt = document.createElement('option');
       opt.value = val;
       opt.textContent = txt;
@@ -1315,6 +1319,23 @@ export class PropertiesPanel {
 
     container.appendChild(marketplaceFields);
 
+    // ── Fishing fields ────────────────────────────────────────────────
+    const fishingFields = document.createElement('div');
+    fishingFields.id = 'fishing-fields';
+    fishingFields.style.display = 'none';
+
+    fishingFields.appendChild(this.label('Min Rod Tier (optional)', 'fishing-min-tier'));
+    const fishingTierInput = document.createElement('input');
+    fishingTierInput.id = 'fishing-min-tier';
+    fishingTierInput.type = 'number';
+    fishingTierInput.min = '1';
+    fishingTierInput.max = '5';
+    fishingTierInput.value = '1';
+    fishingTierInput.placeholder = '1 (any rod)';
+    fishingFields.appendChild(fishingTierInput);
+
+    container.appendChild(fishingFields);
+
     // ── Show/hide on type change ─────────────────────────────────────
     typeSelect.addEventListener('change', () => {
       travelFields.style.display = typeSelect.value === 'travel' ? '' : 'none';
@@ -1322,6 +1343,7 @@ export class PropertiesPanel {
       expeditionFields.style.display = typeSelect.value === 'expedition' ? '' : 'none';
       gatherFields.style.display = typeSelect.value === 'gather' ? '' : 'none';
       marketplaceFields.style.display = typeSelect.value === 'marketplace' ? '' : 'none';
+      fishingFields.style.display = typeSelect.value === 'fishing' ? '' : 'none';
     });
 
     // ── Buttons ──────────────────────────────────────────────────────
@@ -1399,6 +1421,16 @@ export class PropertiesPanel {
           await createBuildingAction(mapId, buildingId, {
             action_type: 'marketplace',
             config: { listing_fee: listingFee, max_listings: maxListings, listing_duration_days: durationDays },
+          });
+        } else if (typeSelect.value === 'fishing') {
+          const minTier = parseInt(fishingTierInput.value, 10);
+          const config: Record<string, unknown> = {};
+          if (!isNaN(minTier) && minTier >= 1 && minTier <= 5) {
+            config.min_rod_tier = minTier;
+          }
+          await createBuildingAction(mapId, buildingId, {
+            action_type: 'fishing',
+            config,
           });
         } else {
           const baseGold = parseInt(baseGoldInput.value, 10);

@@ -185,9 +185,11 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
   const { getConfigValue: getAdminConfigValue } = await import('../../db/queries/admin-config');
   const xpIconFilename = await getAdminConfigValue('xp_icon_filename');
   const crownsIconFilename = await getAdminConfigValue('crowns_icon_filename');
+  const rodPtsIconFilename = await getAdminConfigValue('rod_upgrade_points_icon_filename');
   (worldStatePayload as Record<string, unknown>)['ui_icons'] = {
     xp_icon_url: xpIconFilename ? `${config.adminBaseUrl}/ui-icons/${xpIconFilename}` : null,
     crowns_icon_url: crownsIconFilename ? `${config.adminBaseUrl}/ui-icons/${crownsIconFilename}` : null,
+    rod_upgrade_points_icon_url: rodPtsIconFilename ? `${config.adminBaseUrl}/ui-icons/${rodPtsIconFilename}` : null,
   };
 
   sendToSession(session, 'world.state', worldStatePayload);
@@ -210,6 +212,18 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
 
   // Send inventory state immediately after world state
   await sendInventoryState(session);
+
+  // Reconcile collect_item quest progress against current inventory
+  // (catches items granted while offline via admin commands, marketplace, etc.)
+  try {
+    const { QuestTracker } = await import('../../game/quest/quest-tracker');
+    const questProgress = await QuestTracker.onInventoryChanged(character.id);
+    for (const p of questProgress) {
+      sendToSession(session, 'quest.progress', p);
+    }
+  } catch (qErr) {
+    log('warn', 'world-state', 'login_quest_reconcile_error', { characterId: character.id, err: qErr });
+  }
 
   // Send squire roster on connect
   const squireRoster = await buildSquireRosterDto(character.id);

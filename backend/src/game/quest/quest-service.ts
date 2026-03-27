@@ -108,6 +108,19 @@ async function resolveRewardTarget(reward: QuestReward): Promise<ResolvedTarget>
       : null;
     return row ? { name: row.name, icon_url: iconUrl } : { name: null, icon_url: null };
   }
+  // For crowns, xp, rod_upgrade_points — resolve UI icon from admin config
+  const iconConfigMap: Record<string, string> = {
+    crowns: 'crowns_icon_filename',
+    xp: 'xp_icon_filename',
+    rod_upgrade_points: 'rod_upgrade_points_icon_filename',
+  };
+  const configKey = iconConfigMap[reward.reward_type];
+  if (configKey) {
+    const { getConfigValue } = await import('../../db/queries/admin-config');
+    const filename = await getConfigValue(configKey);
+    const iconUrl = filename ? `${config.adminBaseUrl}/ui-icons/${filename}` : null;
+    return { name: null, icon_url: iconUrl };
+  }
   return { name: null, icon_url: null };
 }
 
@@ -340,6 +353,16 @@ export async function grantQuestRewards(
             squireLevel: reward.quantity,
           });
         }
+        break;
+      }
+      case 'rod_upgrade_points': {
+        const { updateRodUpgradePoints } = await import('../../db/queries/fishing');
+        await updateRodUpgradePoints(characterId, reward.quantity);
+        log('info', 'quest-service', 'rod_upgrade_points_awarded', {
+          characterId,
+          questId,
+          amount: reward.quantity,
+        });
         break;
       }
     }

@@ -71,15 +71,20 @@ adminConfigRouter.put('/', async (req: Request, res: Response) => {
 // POST /api/admin-config/icon/:type  (type = 'xp' | 'crowns')
 adminConfigRouter.post('/icon/:type', upload.single('icon'), async (req: Request, res: Response) => {
   const iconType = req.params['type'];
-  if (iconType !== 'xp' && iconType !== 'crowns') {
-    return res.status(400).json({ error: 'Icon type must be "xp" or "crowns".' });
+  if (iconType !== 'xp' && iconType !== 'crowns' && iconType !== 'rod_upgrade_points') {
+    return res.status(400).json({ error: 'Icon type must be "xp", "crowns", or "rod_upgrade_points".' });
   }
 
   if (!req.file) {
     return res.status(400).json({ error: 'No icon file uploaded.' });
   }
 
-  const configKey = iconType === 'xp' ? 'xp_icon_filename' : 'crowns_icon_filename';
+  const configKeyMap: Record<string, string> = {
+    xp: 'xp_icon_filename',
+    crowns: 'crowns_icon_filename',
+    rod_upgrade_points: 'rod_upgrade_points_icon_filename',
+  };
+  const configKey = configKeyMap[iconType]!;
 
   try {
     // Remove old icon if exists
@@ -111,9 +116,11 @@ adminConfigRouter.get('/ui-icons', async (_req: Request, res: Response) => {
   try {
     const xpFilename = await getConfigValue('xp_icon_filename');
     const crownsFilename = await getConfigValue('crowns_icon_filename');
+    const rodPtsFilename = await getConfigValue('rod_upgrade_points_icon_filename');
     return res.json({
       xp_icon_url: xpFilename ? `/ui-icons/${xpFilename}` : null,
       crowns_icon_url: crownsFilename ? `/ui-icons/${crownsFilename}` : null,
+      rod_upgrade_points_icon_url: rodPtsFilename ? `/ui-icons/${rodPtsFilename}` : null,
     });
   } catch (err) {
     return res.status(500).json({ error: 'Internal server error' });

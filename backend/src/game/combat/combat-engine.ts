@@ -126,6 +126,7 @@ function applyDamageToPlayer(
 export function computePlayerAttack(
   playerStats: DerivedCombatStats,
   enemyDodgeChance: number,
+  enemyDefence: number,
   state: EngineState,
 ): TurnResult {
   const events: CombatEventDto[] = [];
@@ -153,7 +154,10 @@ export function computePlayerAttack(
   // Crit
   const isCrit = rollCrit(playerStats.critChance);
   const critMult = isCrit ? (playerStats.critDamage || DEFAULT_CRIT_DAMAGE) / 100 : 1;
-  const damage = Math.max(1, Math.floor(effectiveAttack * critMult));
+
+  // Apply enemy defence reduction (mirrors how player defence reduces enemy damage)
+  const rawDamage = Math.floor(effectiveAttack * critMult);
+  const damage = Math.max(1, rawDamage - enemyDefence);
 
   newState.enemyHp = Math.max(0, newState.enemyHp - damage);
 
@@ -182,6 +186,7 @@ export function computePlayerAttack(
 export function computeAutoAbilities(
   autoSlots: AutoSlotConfig[],
   playerStats: DerivedCombatStats,
+  enemyDefence: number,
   state: EngineState,
 ): TurnResult {
   const events: CombatEventDto[] = [];
@@ -213,7 +218,7 @@ export function computeAutoAbilities(
     }
 
     // Apply effect
-    const effectEvents = applyAbilityEffect(ability, playerStats, newState);
+    const effectEvents = applyAbilityEffect(ability, playerStats, enemyDefence, newState);
     events.push(...effectEvents);
   }
 
@@ -227,6 +232,7 @@ export function computeAutoAbilities(
 export function computeActiveAbility(
   ability: LoadoutSlotSnapshot,
   playerStats: DerivedCombatStats,
+  enemyDefence: number,
   state: EngineState,
 ): TurnResult {
   const events: CombatEventDto[] = [];
@@ -247,7 +253,7 @@ export function computeActiveAbility(
     newState.abilityCooldowns.set(ability.abilityId, ability.cooldownTurns);
   }
 
-  const effectEvents = applyAbilityEffect(ability, playerStats, newState);
+  const effectEvents = applyAbilityEffect(ability, playerStats, enemyDefence, newState);
   events.push(...effectEvents);
 
   return { events, newState };
@@ -366,13 +372,15 @@ export function applyManaRegen(playerStats: DerivedCombatStats, state: EngineSta
 function applyAbilityEffect(
   ability: LoadoutSlotSnapshot,
   playerStats: DerivedCombatStats,
+  enemyDefence: number,
   state: EngineState,
 ): CombatEventDto[] {
   const events: CombatEventDto[] = [];
 
   switch (ability.effectType) {
     case 'damage': {
-      const dmg = Math.max(1, Math.floor(playerStats.attack * (ability.effectValue / 100)));
+      const rawDmg = Math.floor(playerStats.attack * (ability.effectValue / 100));
+      const dmg = Math.max(1, rawDmg - enemyDefence);
       state.enemyHp = Math.max(0, state.enemyHp - dmg);
       events.push({ kind: 'ability_fired', source: 'player', target: 'enemy', value: dmg, ability_name: ability.name });
       break;
@@ -442,7 +450,8 @@ function applyAbilityEffect(
       break;
     }
     case 'drain': {
-      const dmg = Math.max(1, Math.floor(playerStats.attack * (ability.effectValue / 100)));
+      const rawDmg = Math.floor(playerStats.attack * (ability.effectValue / 100));
+      const dmg = Math.max(1, rawDmg - enemyDefence);
       const healAmt = Math.floor(dmg * 0.5);
       state.enemyHp = Math.max(0, state.enemyHp - dmg);
       state.playerHp = Math.min(playerStats.maxHp, state.playerHp + healAmt);

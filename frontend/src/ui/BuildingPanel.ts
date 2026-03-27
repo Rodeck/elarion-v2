@@ -20,7 +20,7 @@ import { getXpIconUrl, getCrownsIconUrl } from './ui-icons';
 import { CraftingModal } from './CraftingModal';
 import { GatheringModal } from './GatheringModal';
 import { MarketplaceModal } from './MarketplaceModal';
-import type { MarketplaceBuildingActionDto } from '@elarion/protocol';
+import type { MarketplaceBuildingActionDto, FishingBuildingActionDto } from '@elarion/protocol';
 import type { GatheringCombatLoot } from './GatheringModal';
 
 type ActionCallback = (payload: CityBuildingActionPayload) => void;
@@ -42,6 +42,9 @@ type SquireDismissListCallback = (npcId: number) => void;
 type SquireDismissConfirmCallback = (squireId: number) => void;
 type GatheringStartCallback = (payload: GatheringStartPayload) => void;
 type GatheringCancelCallback = () => void;
+type FishingCastCallback = (buildingId: number, actionId: number) => void;
+type FishingUpgradeCallback = (npcId: number) => void;
+type FishingRepairCallback = (npcId: number) => void;
 type InventorySlotsGetter = () => import('@elarion/protocol').InventorySlotDto[];
 
 export class BuildingPanel {
@@ -63,6 +66,9 @@ export class BuildingPanel {
   private currentNpcForDialogs: number | null = null;
   private onGatheringStart: GatheringStartCallback | null = null;
   private onGatheringCancel: GatheringCancelCallback | null = null;
+  private onFishingCast: FishingCastCallback | null = null;
+  private onFishingUpgrade: FishingUpgradeCallback | null = null;
+  private onFishingRepair: FishingRepairCallback | null = null;
   private getInventorySlots: InventorySlotsGetter | null = null;
   private progressIntervals: number[] = [];
   private currentBuilding: CityMapBuilding | null = null;
@@ -266,6 +272,18 @@ export class BuildingPanel {
     this.onGatheringCancel = cb;
   }
 
+  setOnFishingCast(cb: FishingCastCallback): void {
+    this.onFishingCast = cb;
+  }
+
+  setOnFishingUpgrade(cb: FishingUpgradeCallback): void {
+    this.onFishingUpgrade = cb;
+  }
+
+  setOnFishingRepair(cb: FishingRepairCallback): void {
+    this.onFishingRepair = cb;
+  }
+
   setInventorySlotsGetter(getter: InventorySlotsGetter): void {
     this.getInventorySlots = getter;
   }
@@ -445,6 +463,36 @@ export class BuildingPanel {
             this.marketplaceModal.open(building.id, mAction.config);
           });
           actionsSection.appendChild(mBtn);
+          continue;
+        }
+
+        if (action.action_type === 'fishing') {
+          const fAction = action as FishingBuildingActionDto;
+          const fBtn = document.createElement('button');
+          fBtn.textContent = `🐟 ${fAction.label}`;
+          fBtn.style.cssText = [
+            'width:100%',
+            'padding:8px',
+            'margin:4px 0',
+            'background:rgba(40,60,80,0.3)',
+            'border:1px solid #3a5a6a',
+            'border-radius:4px',
+            'color:#70b8d0',
+            'font-family:Cinzel,serif',
+            'font-size:13px',
+            'cursor:pointer',
+            'transition:background 0.15s',
+          ].join(';');
+          fBtn.addEventListener('mouseenter', () => {
+            if (!fBtn.disabled) fBtn.style.background = 'rgba(40,60,80,0.6)';
+          });
+          fBtn.addEventListener('mouseleave', () => {
+            if (!fBtn.disabled) fBtn.style.background = 'rgba(40,60,80,0.3)';
+          });
+          fBtn.addEventListener('click', () => {
+            this.onFishingCast?.(building.id, fAction.id);
+          });
+          actionsSection.appendChild(fBtn);
           continue;
         }
 
@@ -778,6 +826,20 @@ export class BuildingPanel {
         this.onSquireDismissList?.(npc.id);
       });
       optionsEl.appendChild(dismissOption);
+    }
+
+    // Fishing rod upgrade/repair options — shown when the building has a fishing action
+    const hasFishingAction = this.currentBuilding?.actions.some((a) => a.action_type === 'fishing');
+    if (hasFishingAction) {
+      const upgradeOption = this.buildDialogOption('Can you upgrade my fishing rod?', () => {
+        this.onFishingUpgrade?.(npc.id);
+      });
+      optionsEl.appendChild(upgradeOption);
+
+      const repairOption = this.buildDialogOption('I need my fishing rod repaired', () => {
+        this.onFishingRepair?.(npc.id);
+      });
+      optionsEl.appendChild(repairOption);
     }
 
     // Placeholder for quest dialog options (talk_to_npc objectives)

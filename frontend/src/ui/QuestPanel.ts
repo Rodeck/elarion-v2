@@ -9,6 +9,7 @@ import type {
   QuestProgressPayload,
   QuestRejectedPayload,
 } from '@elarion/protocol';
+import { getXpIconUrl, getCrownsIconUrl, getRodUpgradePointsIconUrl } from './ui-icons';
 
 type SendFn = (type: string, payload: unknown) => void;
 
@@ -513,21 +514,38 @@ export class QuestPanel {
         'color:#d4a84b',
       ].join(';');
 
-      if (reward.target_icon_url) {
+      // Resolve icon: use target_icon_url for items/squires, UI icons for crowns/xp/rod pts
+      let iconUrl = reward.target_icon_url;
+      let fallbackSymbol = '';
+      let label: string;
+
+      if (reward.reward_type === 'crowns') {
+        iconUrl = iconUrl ?? getCrownsIconUrl();
+        fallbackSymbol = '♛';
+        label = `${reward.quantity} Crowns`;
+      } else if (reward.reward_type === 'xp') {
+        iconUrl = iconUrl ?? getXpIconUrl();
+        fallbackSymbol = '✦';
+        label = `${reward.quantity} XP`;
+      } else if (reward.reward_type === 'rod_upgrade_points') {
+        iconUrl = iconUrl ?? getRodUpgradePointsIconUrl();
+        fallbackSymbol = '🎣';
+        label = `${reward.quantity} Rod Pts`;
+      } else {
+        label = `${reward.quantity}x ${reward.target_name ?? 'item'}`;
+      }
+
+      if (iconUrl) {
         const icon = document.createElement('img');
-        icon.src = reward.target_icon_url;
+        icon.src = iconUrl;
         icon.style.cssText =
           'width:14px;height:14px;object-fit:contain;image-rendering:pixelated;';
         chip.appendChild(icon);
-      }
-
-      let label: string;
-      if (reward.reward_type === 'crowns') {
-        label = `${reward.quantity} Crowns`;
-      } else if (reward.reward_type === 'xp') {
-        label = `${reward.quantity} XP`;
-      } else {
-        label = `${reward.quantity}x ${reward.target_name ?? 'item'}`;
+      } else if (fallbackSymbol) {
+        const sym = document.createElement('span');
+        sym.style.cssText = 'font-size:12px;line-height:1;';
+        sym.textContent = fallbackSymbol;
+        chip.appendChild(sym);
       }
 
       chip.appendChild(document.createTextNode(label));

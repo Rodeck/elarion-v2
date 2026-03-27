@@ -12,14 +12,15 @@ const fs = require('fs');
 const VALID_CATEGORIES = [
   'resource', 'food', 'heal', 'weapon', 'boots', 'shield',
   'greaves', 'bracer', 'tool', 'helmet', 'chestplate',
+  'ring', 'amulet',
 ];
 const VALID_WEAPON_SUBTYPES = ['one_handed', 'two_handed', 'dagger', 'wand', 'staff', 'bow'];
 const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food']);
-const DEFENCE_CATEGORIES = new Set(['boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate']);
+const DEFENCE_CATEGORIES = new Set(['boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate', 'ring', 'amulet']);
 const VALID_EFFECT_TYPES = ['damage', 'heal', 'buff', 'debuff', 'dot', 'reflect', 'drain'];
 const VALID_SLOT_TYPES = ['auto', 'active', 'both'];
-const VALID_ACTION_TYPES = ['travel', 'explore', 'expedition', 'gather'];
-const VALID_TOOL_TYPES = ['pickaxe', 'axe'];
+const VALID_ACTION_TYPES = ['travel', 'explore', 'expedition', 'gather', 'fishing'];
+const VALID_TOOL_TYPES = ['pickaxe', 'axe', 'fishing_rod'];
 const VALID_GATHER_EVENT_TYPES = ['resource', 'gold', 'monster', 'accident', 'nothing', 'squire'];
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -95,6 +96,13 @@ async function apiPost(path, body, token) {
 
 async function apiPut(path, body, token) {
   const res = await httpRequest('PUT', `${BASE_URL}${path}`, body, {
+    Authorization: `Bearer ${token}`,
+  });
+  return res;
+}
+
+async function apiDelete(path, token) {
+  const res = await httpRequest('DELETE', `${BASE_URL}${path}`, null, {
     Authorization: `Bearer ${token}`,
   });
   return res;
@@ -597,7 +605,7 @@ async function setNpcDismisserCmd(data) {
 const VALID_QUEST_TYPES = ['main', 'side', 'daily', 'weekly', 'monthly', 'repeatable'];
 const VALID_OBJECTIVE_TYPES = ['kill_monster', 'collect_item', 'craft_item', 'spend_crowns', 'gather_resource', 'reach_level', 'visit_location', 'talk_to_npc'];
 const VALID_PREREQ_TYPES = ['min_level', 'has_item', 'completed_quest', 'class_required'];
-const VALID_REWARD_TYPES = ['item', 'xp', 'crowns', 'squire'];
+const VALID_REWARD_TYPES = ['item', 'xp', 'crowns', 'squire', 'rod_upgrade_points'];
 
 function validateQuest(data) {
   const errors = [];
@@ -741,6 +749,12 @@ Commands:
   upload-squire-icon      Upload a PNG icon for a squire definition
   create-monster-squire-loot  Add a squire loot entry to a monster
   set-npc-dismisser       Set/unset an NPC's squire dismisser flag
+  create-fishing-loot     Add a fishing loot entry (min_rod_tier, item_def_id, drop_weight)
+  update-fishing-loot     Update a fishing loot entry (id, min_rod_tier, drop_weight)
+  delete-fishing-loot     Delete a fishing loot entry (id)
+  create-rod-tier         Create a fishing rod tier definition
+  update-rod-tier         Update a fishing rod tier (tier, upgrade_points_cost, max_durability, repair_crown_cost)
+  delete-rod-tier         Delete a fishing rod tier (tier)
 
 Environment:
   ADMIN_API_URL    Admin API base URL (default: http://localhost:4001)
@@ -811,6 +825,12 @@ async function main() {
       case 'upload-squire-icon':    await uploadSquireIconCmd(data); break;
       case 'create-monster-squire-loot': await createMonsterSquireLootCmd(data); break;
       case 'set-npc-dismisser':     await setNpcDismisserCmd(data); break;
+      case 'create-fishing-loot':   await createFishingLootCmd(data); break;
+      case 'update-fishing-loot':   await updateFishingLootCmd(data); break;
+      case 'delete-fishing-loot':   await deleteFishingLootCmd(data); break;
+      case 'create-rod-tier':       await createRodTierCmd(data); break;
+      case 'update-rod-tier':       await updateRodTierCmd(data); break;
+      case 'delete-rod-tier':       await deleteRodTierCmd(data); break;
       default:
         console.error(`Unknown command: ${cmd}`);
         console.log(HELP);
@@ -824,6 +844,79 @@ async function main() {
     }
     process.exit(1);
   }
+}
+
+// ─── Fishing Loot Commands ────────────────────────────────────────────────────
+
+async function createFishingLootCmd(data) {
+  const errors = [];
+  if (data.min_rod_tier == null || typeof data.min_rod_tier !== 'number' || data.min_rod_tier < 1 || data.min_rod_tier > 5) errors.push('min_rod_tier required (1-5)');
+  if (data.item_def_id == null || typeof data.item_def_id !== 'number') errors.push('item_def_id required (number)');
+  if (data.drop_weight == null || typeof data.drop_weight !== 'number' || data.drop_weight < 1) errors.push('drop_weight required (number >= 1)');
+  if (errors.length) return output('create-fishing-loot', false, errors);
+
+  const token = await authenticate();
+  const res = await apiPost('/api/fishing-loot', data, token);
+  output('create-fishing-loot', true, res);
+}
+
+async function updateFishingLootCmd(data) {
+  const errors = [];
+  if (data.id == null) errors.push('id required');
+  if (data.min_rod_tier == null || typeof data.min_rod_tier !== 'number') errors.push('min_rod_tier required');
+  if (data.drop_weight == null || typeof data.drop_weight !== 'number') errors.push('drop_weight required');
+  if (errors.length) return output('update-fishing-loot', false, errors);
+
+  const token = await authenticate();
+  const res = await apiPut(`/api/fishing-loot/${data.id}`, { min_rod_tier: data.min_rod_tier, drop_weight: data.drop_weight }, token);
+  output('update-fishing-loot', true, res);
+}
+
+async function deleteFishingLootCmd(data) {
+  if (data.id == null) return output('delete-fishing-loot', false, ['id required']);
+  const token = await authenticate();
+  await apiDelete(`/api/fishing-loot/${data.id}`, token);
+  output('delete-fishing-loot', true, { id: data.id });
+}
+
+// ─── Rod Tier Commands ───────────────────────────────────────────────────────
+
+async function createRodTierCmd(data) {
+  const errors = [];
+  if (data.tier == null || typeof data.tier !== 'number' || data.tier < 1 || data.tier > 5) errors.push('tier required (1-5)');
+  if (data.item_def_id == null || typeof data.item_def_id !== 'number') errors.push('item_def_id required (number)');
+  if (data.upgrade_points_cost == null || typeof data.upgrade_points_cost !== 'number') errors.push('upgrade_points_cost required');
+  if (data.max_durability == null || typeof data.max_durability !== 'number' || data.max_durability < 1) errors.push('max_durability required (> 0)');
+  if (data.repair_crown_cost == null || typeof data.repair_crown_cost !== 'number') errors.push('repair_crown_cost required');
+  if (errors.length) return output('create-rod-tier', false, errors);
+
+  const token = await authenticate();
+  const res = await apiPost('/api/fishing-rod-tiers', data, token);
+  output('create-rod-tier', true, res);
+}
+
+async function updateRodTierCmd(data) {
+  const errors = [];
+  if (data.tier == null) errors.push('tier required');
+  if (data.upgrade_points_cost == null) errors.push('upgrade_points_cost required');
+  if (data.max_durability == null) errors.push('max_durability required');
+  if (data.repair_crown_cost == null) errors.push('repair_crown_cost required');
+  if (errors.length) return output('update-rod-tier', false, errors);
+
+  const token = await authenticate();
+  const res = await apiPut(`/api/fishing-rod-tiers/${data.tier}`, {
+    upgrade_points_cost: data.upgrade_points_cost,
+    max_durability: data.max_durability,
+    repair_crown_cost: data.repair_crown_cost,
+  }, token);
+  output('update-rod-tier', true, res);
+}
+
+async function deleteRodTierCmd(data) {
+  if (data.tier == null) return output('delete-rod-tier', false, ['tier required']);
+  const token = await authenticate();
+  await apiDelete(`/api/fishing-rod-tiers/${data.tier}`, token);
+  output('delete-rod-tier', true, { tier: data.tier });
 }
 
 main();

@@ -109,7 +109,16 @@ export interface MarketplaceActionConfig {
   listing_duration_days: number;
 }
 
-export type BuildingActionDto = TravelBuildingActionDto | ExploreBuildingActionDto | ExpeditionBuildingActionDto | GatherBuildingActionDto | MarketplaceBuildingActionDto;
+export interface FishingBuildingActionDto {
+  id: number;
+  action_type: 'fishing';
+  label: string;
+  config: {
+    min_rod_tier?: number;
+  };
+}
+
+export type BuildingActionDto = TravelBuildingActionDto | ExploreBuildingActionDto | ExpeditionBuildingActionDto | GatherBuildingActionDto | MarketplaceBuildingActionDto | FishingBuildingActionDto;
 
 // ---------------------------------------------------------------------------
 // Expedition sub-types
@@ -252,7 +261,7 @@ export interface CityMovePayload {
 export interface CityBuildingActionPayload {
   building_id: number;
   action_id: number;
-  action_type: 'travel' | 'explore' | 'gather' | 'marketplace';
+  action_type: 'travel' | 'explore' | 'gather' | 'marketplace' | 'fishing';
 }
 
 // ---------------------------------------------------------------------------
@@ -557,7 +566,8 @@ export type AnyClientMessage =
 export type ItemCategory =
   | 'resource' | 'food' | 'heal' | 'weapon'
   | 'boots' | 'shield' | 'greaves' | 'bracer' | 'tool'
-  | 'helmet' | 'chestplate';
+  | 'helmet' | 'chestplate'
+  | 'ring' | 'amulet';
 
 export type WeaponSubtype =
   | 'one_handed' | 'two_handed' | 'dagger' | 'wand' | 'staff' | 'bow';
@@ -710,7 +720,9 @@ export type EquipSlot =
   | 'right_arm'
   | 'greaves'
   | 'bracer'
-  | 'boots';
+  | 'boots'
+  | 'ring'
+  | 'amulet';
 
 export interface EquipmentSlotsDto {
   helmet:     InventorySlotDto | null;
@@ -720,6 +732,8 @@ export interface EquipmentSlotsDto {
   greaves:    InventorySlotDto | null;
   bracer:     InventorySlotDto | null;
   boots:      InventorySlotDto | null;
+  ring:       InventorySlotDto | null;
+  amulet:     InventorySlotDto | null;
 }
 
 // Equipment: Client → Server payloads
@@ -939,6 +953,7 @@ export interface CombatActiveWindowPayload {
 export interface CombatEndPayload {
   combat_id: string;
   outcome: 'win' | 'loss';
+  current_hp: number;
   monster_name: string;
   monster_icon_url: string | null;
   xp_gained: number;
@@ -1240,7 +1255,7 @@ export type ObjectiveType =
   | 'visit_location'
   | 'talk_to_npc';
 export type PrereqType = 'min_level' | 'has_item' | 'completed_quest' | 'class_required';
-export type RewardType = 'item' | 'xp' | 'crowns' | 'squire';
+export type RewardType = 'item' | 'xp' | 'crowns' | 'squire' | 'rod_upgrade_points';
 
 // ---------------------------------------------------------------------------
 // Squire System: constants
@@ -1729,3 +1744,125 @@ export type MarketplaceMyListingsResultMessage = WsMessage<MarketplaceMyListings
 export type MarketplaceCollectCrownsResultMessage = WsMessage<MarketplaceCollectCrownsResultPayload>;
 export type MarketplaceCollectItemsResultMessage = WsMessage<MarketplaceCollectItemsResultPayload>;
 export type MarketplaceRejectedMessage         = WsMessage<MarketplaceRejectedPayload>;
+
+// ---------------------------------------------------------------------------
+// Fishing System
+// ---------------------------------------------------------------------------
+
+// Fishing: Pull pattern types
+export interface PullSegmentDto {
+  duration_ms: number;
+  speed: number;
+  direction: 'up' | 'down';
+  pause_ms: number;
+}
+
+export interface PullPatternDto {
+  type: 'aggressive' | 'erratic' | 'steady';
+  segments: PullSegmentDto[];
+  green_zone_width: number;
+}
+
+export interface CatchWindowDto {
+  window_start_ms: number;
+  window_duration_ms: number;
+}
+
+// Fishing: Client → Server payloads
+export interface FishingCastPayload {
+  building_id: number;
+  action_id: number;
+}
+
+export interface FishingCompletePayload {
+  session_id: string;
+  input_timestamps: number[];
+  reel_timestamp: number;
+}
+
+export interface FishingCancelPayload {
+  session_id: string;
+}
+
+export interface FishingUpgradeRodPayload {
+  npc_id: number;
+}
+
+export interface FishingRepairRodPayload {
+  npc_id: number;
+}
+
+// Fishing: Server → Client payloads
+export interface FishingSessionStartPayload {
+  session_id: string;
+  bite_delay_ms: number;
+  pull_pattern: PullPatternDto;
+  catch_window: CatchWindowDto;
+  fish_silhouette: string;
+}
+
+export interface FishingLootDto {
+  slot_id: number;
+  item_def_id: number;
+  item_name: string;
+  icon_url: string;
+  quantity: number;
+  category: string;
+}
+
+export interface FishingResultPayload {
+  success: boolean;
+  fish_name: string | null;
+  fish_icon_url: string | null;
+  items_received: FishingLootDto[];
+  rod_durability_remaining: number;
+  rod_locked: boolean;
+  snap_check_failed: boolean;
+}
+
+export type FishingRejectionReason =
+  | 'NO_ROD_EQUIPPED'
+  | 'ROD_LOCKED'
+  | 'NOT_AT_FISHING_SPOT'
+  | 'IN_COMBAT'
+  | 'ALREADY_FISHING'
+  | 'ALREADY_GATHERING'
+  | 'INVALID_SESSION'
+  | 'SESSION_EXPIRED'
+  | 'INVENTORY_FULL';
+
+export interface FishingRejectedPayload {
+  action: 'cast' | 'complete' | 'cancel';
+  reason: FishingRejectionReason;
+  message: string;
+}
+
+export interface FishingUpgradeResultPayload {
+  success: boolean;
+  new_tier: number;
+  new_max_durability: number;
+  new_durability: number;
+  points_remaining: number;
+  reason?: string;
+  updated_slots: InventorySlotDto[];
+}
+
+export interface FishingRepairResultPayload {
+  success: boolean;
+  new_durability: number;
+  crowns_remaining: number;
+  reason?: string;
+  updated_slots: InventorySlotDto[];
+}
+
+// Fishing: Message type aliases
+export type FishingCastMessage           = WsMessage<FishingCastPayload>;
+export type FishingCompleteMessage       = WsMessage<FishingCompletePayload>;
+export type FishingCancelMessage         = WsMessage<FishingCancelPayload>;
+export type FishingSessionStartMessage   = WsMessage<FishingSessionStartPayload>;
+export type FishingResultMessage         = WsMessage<FishingResultPayload>;
+export type FishingRejectedMessage       = WsMessage<FishingRejectedPayload>;
+export type FishingUpgradeRodMessage     = WsMessage<FishingUpgradeRodPayload>;
+export type FishingUpgradeResultMessage  = WsMessage<FishingUpgradeResultPayload>;
+export type FishingRepairRodMessage      = WsMessage<FishingRepairRodPayload>;
+export type FishingRepairResultMessage   = WsMessage<FishingRepairResultPayload>;

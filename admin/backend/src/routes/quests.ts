@@ -95,7 +95,7 @@ async function buildQuestResponse(quest: QuestDefinition): Promise<QuestResponse
 const VALID_QUEST_TYPES = ['main', 'side', 'daily', 'weekly', 'monthly', 'repeatable'];
 const VALID_OBJECTIVE_TYPES = ['kill_monster', 'collect_item', 'craft_item', 'spend_crowns', 'gather_resource', 'reach_level', 'visit_location', 'talk_to_npc'];
 const VALID_PREREQ_TYPES = ['min_level', 'has_item', 'completed_quest', 'class_required'];
-const VALID_REWARD_TYPES = ['item', 'xp', 'crowns', 'squire'];
+const VALID_REWARD_TYPES = ['item', 'xp', 'crowns', 'squire', 'rod_upgrade_points'];
 
 // ─── GET /api/quests ──────────────────────────────────────────────────────────
 

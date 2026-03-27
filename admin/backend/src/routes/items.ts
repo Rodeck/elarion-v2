@@ -36,10 +36,10 @@ function isValidPng(buffer: Buffer): boolean {
   return buffer.subarray(0, 8).equals(PNG_MAGIC_BYTES);
 }
 
-const VALID_CATEGORIES = ['resource', 'food', 'heal', 'weapon', 'boots', 'shield', 'greaves', 'bracer', 'tool', 'helmet', 'chestplate'] as const;
+const VALID_CATEGORIES = ['resource', 'food', 'heal', 'weapon', 'boots', 'shield', 'greaves', 'bracer', 'tool', 'helmet', 'chestplate', 'ring', 'amulet'] as const;
 const VALID_WEAPON_SUBTYPES = ['one_handed', 'two_handed', 'dagger', 'wand', 'staff', 'bow'] as const;
 const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food']);
-const DEFENCE_CATEGORIES = new Set(['boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate']);
+const DEFENCE_CATEGORIES = new Set(['boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate', 'ring', 'amulet']);
 
 type ItemCategory = typeof VALID_CATEGORIES[number];
 
@@ -68,7 +68,7 @@ function formatItem(item: ItemDefinition) {
   };
 }
 
-const VALID_TOOL_TYPES = ['pickaxe', 'axe'] as const;
+const VALID_TOOL_TYPES = ['pickaxe', 'axe', 'fishing_rod'] as const;
 
 function validateItemFields(body: Record<string, unknown>, isCreate: boolean): string | null {
   const category = body['category'] as string | undefined;
@@ -97,7 +97,7 @@ function validateItemFields(body: Record<string, unknown>, isCreate: boolean): s
       return 'attack is only allowed for category "weapon"';
     }
     if (body['defence'] !== undefined && body['defence'] !== null && !DEFENCE_CATEGORIES.has(category)) {
-      return 'defence is only allowed for categories: boots, shield, greaves, bracer, helmet, chestplate';
+      return `defence is only allowed for: ${[...DEFENCE_CATEGORIES].join(', ')}`;
     }
     if (body['heal_power'] !== undefined && body['heal_power'] !== null && category !== 'heal') {
       return 'heal_power is only allowed for category "heal"';

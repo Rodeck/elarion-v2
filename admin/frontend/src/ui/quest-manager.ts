@@ -48,6 +48,8 @@ const REWARD_TYPES = [
   { value: 'item', label: 'Item' },
   { value: 'xp', label: 'XP' },
   { value: 'crowns', label: 'Crowns' },
+  { value: 'squire', label: 'Squire' },
+  { value: 'rod_upgrade_points', label: 'Rod Upgrade Points' },
 ] as const;
 
 // ── Row types ───────────────────────────────────────────────────────────────
@@ -628,6 +630,11 @@ export class QuestManager {
         return `<input type="number" class="reward-qty" min="1" value="${row.quantity}" placeholder="XP amount" style="${INPUT_STYLE}width:100px;" />`;
       case 'crowns':
         return `<input type="number" class="reward-qty" min="1" value="${row.quantity}" placeholder="Crowns" style="${INPUT_STYLE}width:100px;" />`;
+      case 'squire':
+        return `<input type="number" class="reward-target" min="1" value="${row.target_id ?? 1}" placeholder="Squire Def ID" style="${INPUT_STYLE}width:100px;" />
+                <input type="number" class="reward-qty" min="1" max="20" value="${row.quantity}" placeholder="Level" style="${INPUT_STYLE}width:70px;" />`;
+      case 'rod_upgrade_points':
+        return `<input type="number" class="reward-qty" min="1" value="${row.quantity}" placeholder="Points" style="${INPUT_STYLE}width:100px;" />`;
       default:
         return '';
     }

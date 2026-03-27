@@ -81,7 +81,7 @@ export type BuildingActionConfig = TravelActionConfig | ExploreActionConfig | Ex
 export interface BuildingAction {
   id: number;
   building_id: number;
-  action_type: 'travel' | 'explore' | 'expedition' | 'gather' | 'marketplace';
+  action_type: 'travel' | 'explore' | 'expedition' | 'gather' | 'marketplace' | 'fishing';
   sort_order: number;
   config: BuildingActionConfig | Record<string, unknown>;
   created_at: string;
@@ -381,7 +381,7 @@ export async function createBuildingAction(
   mapId: number,
   buildingId: number,
   data: {
-    action_type: 'travel' | 'explore' | 'expedition' | 'gather' | 'marketplace';
+    action_type: 'travel' | 'explore' | 'expedition' | 'gather' | 'marketplace' | 'fishing';
     sort_order?: number;
     config: BuildingActionConfig | Record<string, unknown>;
   },
@@ -1187,4 +1187,90 @@ export async function uploadSquireIcon(id: number, file: File): Promise<SquireDe
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Fishing Loot
+// ---------------------------------------------------------------------------
+
+const FISHING_LOOT_BASE = '/api/fishing-loot';
+const FISHING_ROD_TIERS_BASE = '/api/fishing-rod-tiers';
+
+export interface FishingLootEntry {
+  id: number;
+  min_rod_tier: number;
+  item_def_id: number;
+  drop_weight: number;
+  item_name: string;
+  item_category: string;
+  icon_filename: string | null;
+  stack_size: number | null;
+}
+
+export interface FishingRodTierEntry {
+  tier: number;
+  item_def_id: number;
+  upgrade_points_cost: number;
+  max_durability: number;
+  repair_crown_cost: number;
+}
+
+export async function listFishingLoot(): Promise<FishingLootEntry[]> {
+  return request<FishingLootEntry[]>(FISHING_LOOT_BASE);
+}
+
+export async function createFishingLoot(data: {
+  min_rod_tier: number;
+  item_def_id: number;
+  drop_weight: number;
+}): Promise<FishingLootEntry> {
+  return request<FishingLootEntry>(FISHING_LOOT_BASE, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateFishingLoot(
+  id: number,
+  data: { min_rod_tier: number; drop_weight: number },
+): Promise<void> {
+  return request<void>(`${FISHING_LOOT_BASE}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteFishingLoot(id: number): Promise<void> {
+  return request<void>(`${FISHING_LOOT_BASE}/${id}`, { method: 'DELETE' });
+}
+
+export async function listFishingRodTiers(): Promise<FishingRodTierEntry[]> {
+  return request<FishingRodTierEntry[]>(FISHING_ROD_TIERS_BASE);
+}
+
+export async function createFishingRodTier(data: {
+  tier: number;
+  item_def_id: number;
+  upgrade_points_cost: number;
+  max_durability: number;
+  repair_crown_cost: number;
+}): Promise<FishingRodTierEntry> {
+  return request<FishingRodTierEntry>(FISHING_ROD_TIERS_BASE, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateFishingRodTier(
+  tier: number,
+  data: { upgrade_points_cost: number; max_durability: number; repair_crown_cost: number },
+): Promise<void> {
+  return request<void>(`${FISHING_ROD_TIERS_BASE}/${tier}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteFishingRodTier(tier: number): Promise<void> {
+  return request<void>(`${FISHING_ROD_TIERS_BASE}/${tier}`, { method: 'DELETE' });
 }

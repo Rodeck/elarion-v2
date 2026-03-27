@@ -28,6 +28,8 @@ import {
 } from './quest-service';
 import { QuestTracker } from './quest-tracker';
 import { getInventoryWithDefinitions } from '../../db/queries/inventory';
+import { getMinRodTierForItem, getRodTierByItemDefId } from '../../db/queries/fishing';
+import { query } from '../../db/connection';
 import { config } from '../../config';
 import type {
   QuestListAvailablePayload,
@@ -91,6 +93,66 @@ async function buildFullInventorySlots(characterId: string): Promise<InventorySl
 }
 
 // ---------------------------------------------------------------------------
+// Daily fishing quest filtering helpers
+// ---------------------------------------------------------------------------
+
+const MAX_DAILY_FISHING_QUESTS = 2;
+
+/** Get the player's equipped fishing rod tier (0 if no rod equipped). */
+async function getPlayerRodTier(characterId: string): Promise<number> {
+  const result = await query<{ item_def_id: number }>(
+    `SELECT ii.item_def_id
+     FROM inventory_items ii
+     JOIN item_definitions d ON d.id = ii.item_def_id
+     WHERE ii.character_id = $1
+       AND ii.equipped_slot IS NOT NULL
+       AND d.tool_type = 'fishing_rod'
+     LIMIT 1`,
+    [characterId],
+  );
+  const row = result.rows[0];
+  if (!row) return 0;
+  const tier = await getRodTierByItemDefId(row.item_def_id);
+  return tier?.tier ?? 0;
+}
+
+/**
+ * Check whether a daily quest is a fishing quest (has collect_item objectives
+ * referencing items in the fishing_loot table) and whether the player's rod
+ * tier is high enough to catch all required fish.
+ *
+ * Returns true if the quest is NOT a daily fishing quest, or if it IS one and
+ * the player can catch all required fish.
+ */
+async function isDailyFishingQuestCatchable(
+  questDef: { id: number; quest_type: string },
+  playerRodTier: number,
+): Promise<{ isFishingDaily: boolean; catchable: boolean }> {
+  if (questDef.quest_type !== 'daily') return { isFishingDaily: false, catchable: true };
+
+  const objectives = await getObjectivesForQuest(questDef.id);
+  const collectObjectives = objectives.filter(
+    (o) => o.objective_type === 'collect_item' && o.target_id != null,
+  );
+
+  if (collectObjectives.length === 0) return { isFishingDaily: false, catchable: true };
+
+  // Check if ANY collect_item objective references a fish (item in fishing_loot)
+  let hasFishObjective = false;
+  for (const obj of collectObjectives) {
+    const minTier = await getMinRodTierForItem(obj.target_id!);
+    if (minTier != null) {
+      hasFishObjective = true;
+      if (playerRodTier < minTier) {
+        return { isFishingDaily: true, catchable: false };
+      }
+    }
+  }
+
+  return { isFishingDaily: hasFishObjective, catchable: true };
+}
+
+// ---------------------------------------------------------------------------
 // quest.list_available
 // ---------------------------------------------------------------------------
 
@@ -143,17 +205,47 @@ async function handleQuestListAvailable(session: AuthenticatedSession, payload: 
     // If alreadyExists but not active, it means completed this period — skip
   }
 
+  // ── Filter daily fishing quests: show at most 2 that match player's rod tier ──
+  const playerRodTier = await getPlayerRodTier(characterId);
+  const filteredAvailable: typeof available = [];
+  const eligibleFishingDailies: typeof available = [];
+
+  for (const questDto of available) {
+    const questDef = allQuestsForNpc.find((q) => q.id === questDto.id);
+    if (!questDef) { filteredAvailable.push(questDto); continue; }
+
+    const { isFishingDaily, catchable } = await isDailyFishingQuestCatchable(questDef, playerRodTier);
+    if (!isFishingDaily) {
+      filteredAvailable.push(questDto);
+    } else if (catchable) {
+      eligibleFishingDailies.push(questDto);
+    }
+    // If isFishingDaily && !catchable, skip it entirely
+  }
+
+  // Randomly select at most MAX_DAILY_FISHING_QUESTS from eligible fishing dailies
+  if (eligibleFishingDailies.length <= MAX_DAILY_FISHING_QUESTS) {
+    filteredAvailable.push(...eligibleFishingDailies);
+  } else {
+    // Fisher-Yates partial shuffle to pick random subset
+    for (let i = eligibleFishingDailies.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [eligibleFishingDailies[i], eligibleFishingDailies[j]] = [eligibleFishingDailies[j]!, eligibleFishingDailies[i]!];
+    }
+    filteredAvailable.push(...eligibleFishingDailies.slice(0, MAX_DAILY_FISHING_QUESTS));
+  }
+
   log('debug', 'quest', 'quest_list_available', {
     characterId,
     npcId: npc_id,
-    available: available.length,
+    available: filteredAvailable.length,
     active: active.length,
     completable: completable.length,
   });
 
   sendToSession(session, 'quest.available_list', {
     npc_id,
-    available_quests: available,
+    available_quests: filteredAvailable,
     active_quests: active,
     completable_quests: completable,
   });
@@ -216,6 +308,17 @@ async function handleQuestAccept(session: AuthenticatedSession, payload: unknown
   });
 
   sendToSession(session, 'quest.accepted', { quest: charQuestDto });
+
+  // Check existing inventory against collect_item objectives so items
+  // already in the player's possession count toward the new quest.
+  try {
+    const questProgress = await QuestTracker.onInventoryChanged(characterId);
+    for (const p of questProgress) {
+      sendToSession(session, 'quest.progress', p);
+    }
+  } catch (qErr) {
+    log('warn', 'quest', 'post_accept_inventory_check_error', { characterId, err: qErr });
+  }
 }
 
 // ---------------------------------------------------------------------------

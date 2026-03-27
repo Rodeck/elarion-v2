@@ -39,6 +39,12 @@ Run via Bash: `node scripts/game-entities.js <command> '<json-data>'`
 | `upload-squire-icon` | Upload PNG icon for a squire definition | POST `/api/squire-definitions/:id/icon` |
 | `create-monster-squire-loot` | Add squire loot entry to a monster | POST `/api/monsters/:id/squire-loot` |
 | `set-npc-dismisser` | Set/unset NPC squire dismisser flag | PUT `/api/npcs/:id/squire-dismisser` |
+| `create-fishing-loot` | Add a fishing loot entry | POST `/api/fishing-loot` |
+| `update-fishing-loot` | Update a fishing loot entry | PUT `/api/fishing-loot/:id` |
+| `delete-fishing-loot` | Delete a fishing loot entry | DELETE `/api/fishing-loot/:id` |
+| `create-rod-tier` | Create a fishing rod tier | POST `/api/fishing-rod-tiers` |
+| `update-rod-tier` | Update a fishing rod tier | PUT `/api/fishing-rod-tiers/:tier` |
+| `delete-rod-tier` | Delete a fishing rod tier | DELETE `/api/fishing-rod-tiers/:tier` |
 
 ## Data Format Reference
 
@@ -46,7 +52,7 @@ Run via Bash: `node scripts/game-entities.js <command> '<json-data>'`
 ```json
 {
   "name": "Iron Ore",           // required, max 64 chars
-  "category": "resource",       // required: resource|food|heal|weapon|boots|shield|greaves|bracer|tool|helmet|chestplate
+  "category": "resource",       // required: resource|food|heal|weapon|boots|shield|greaves|bracer|tool|helmet|chestplate|ring|amulet
   "description": "Raw iron",    // optional
   "stack_size": 20,             // required for resource/food/heal, forbidden otherwise
   "weapon_subtype": null,       // required for weapon: one_handed|two_handed|dagger|wand|staff|bow
@@ -237,10 +243,11 @@ Returns `{ "icon_filename": "uuid.png" }` — use this in create-npc.
     { "prereq_type": "completed_quest", "target_id": 3, "target_value": 1 },
     { "prereq_type": "class_required", "target_id": 1, "target_value": 1 }
   ],
-  "rewards": [                                // optional
+  "rewards": [                                // optional — valid types: item, xp, crowns, squire, rod_upgrade_points
     { "reward_type": "item", "target_id": 12, "quantity": 2 },
     { "reward_type": "xp", "quantity": 100 },
-    { "reward_type": "crowns", "quantity": 50 }
+    { "reward_type": "crowns", "quantity": 50 },
+    { "reward_type": "rod_upgrade_points", "quantity": 20 }
   ],
   "npc_ids": [1, 3]                           // optional, NPC IDs that offer this quest
 }
@@ -306,6 +313,78 @@ Returns `{ "icon_filename": "uuid.png" }` — use this in create-npc.
 {
   "npc_id": 1,                                // required, NPC id
   "is_squire_dismisser": true                 // required, boolean
+}
+```
+
+### create-fishing-loot
+```json
+{
+  "min_rod_tier": 2,              // required, 1-5 — minimum rod tier to access this drop
+  "item_def_id": 15,              // required, references existing item
+  "drop_weight": 10               // required, integer >= 1 — relative weight for weighted random selection
+}
+```
+
+### update-fishing-loot
+```json
+{
+  "id": 1,                        // required, fishing loot entry id
+  "min_rod_tier": 3,              // required, 1-5
+  "drop_weight": 5                // required, integer >= 1
+}
+```
+
+### delete-fishing-loot
+```json
+{
+  "id": 1                         // required, fishing loot entry id
+}
+```
+
+### create-rod-tier
+```json
+{
+  "tier": 3,                      // required, 1-5
+  "item_def_id": 22,              // required, references the fishing rod item definition for this tier
+  "upgrade_points_cost": 100,     // required, integer >= 0 (T1 should be 0)
+  "max_durability": 75,           // required, integer > 0
+  "repair_crown_cost": 50         // required, integer >= 0
+}
+```
+
+### update-rod-tier
+```json
+{
+  "tier": 3,                      // required, 1-5
+  "upgrade_points_cost": 120,     // required
+  "max_durability": 80,           // required
+  "repair_crown_cost": 60         // required
+}
+```
+
+### delete-rod-tier
+```json
+{
+  "tier": 3                       // required, 1-5
+}
+```
+
+### Fishing building action (in create-building-action)
+```json
+{
+  "zone_id": 1, "building_id": 5,
+  "action_type": "fishing",
+  "config": {
+    "min_rod_tier": 1              // optional, minimum rod tier for this spot (default: any)
+  }
+}
+```
+
+### Rod upgrade points reward type (in create-quest rewards array)
+```json
+{
+  "reward_type": "rod_upgrade_points",
+  "quantity": 20                   // amount of rod upgrade points to award
 }
 ```
 

@@ -104,6 +104,17 @@ function toProtocolBuilding(
           },
         } as unknown as BuildingActionDto;
       }
+      if ((a.action_type as string) === 'fishing') {
+        const cfg = a.config as Record<string, unknown>;
+        return {
+          id: a.id,
+          action_type: 'fishing',
+          label: 'Fish',
+          config: {
+            min_rod_tier: cfg['min_rod_tier'] ?? undefined,
+          },
+        } as unknown as BuildingActionDto;
+      }
       // travel
       const cfg = a.config as TravelActionConfig;
       const targetZoneName = zoneNameMap.get(cfg.target_zone_id) ?? `Zone ${cfg.target_zone_id}`;

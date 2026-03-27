@@ -24,6 +24,7 @@ import { registerMarketplaceHandlers } from './game/marketplace/marketplace-hand
 import { handleGatheringStart, handleGatheringCancel } from './game/gathering/gathering-handler';
 import { handleSquireRoster } from './game/squire/squire-grant-service';
 import { handleSquireDismissList, handleSquireDismissConfirm } from './game/squire/squire-dismiss-handler';
+import { registerFishingHandlers } from './game/fishing/fishing-handler';
 import { sendWorldState, setZonePlayersGetter } from './websocket/handlers/world-state-handler';
 import { getZonePlayers } from './game/world/zone-registry';
 import { loadCityMaps } from './game/world/city-map-loader';
@@ -81,6 +82,7 @@ async function bootstrap(): Promise<void> {
   registerMarketplaceHandlers();
   registerHandler('gathering.start', handleGatheringStart);
   registerHandler('gathering.cancel', handleGatheringCancel);
+  registerFishingHandlers();
   registerHandler('squire.roster', handleSquireRoster);
   registerHandler('squire.dismiss_list', handleSquireDismissList);
   registerHandler('squire.dismiss_confirm', handleSquireDismissConfirm);

@@ -109,6 +109,7 @@ export class ItemManager {
                   <option value="">— select —</option>
                   <option value="pickaxe">Pickaxe</option>
                   <option value="axe">Axe</option>
+                  <option value="fishing_rod">Fishing Rod</option>
                 </select>
               </div>
 
