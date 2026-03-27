@@ -1184,6 +1184,22 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
   }
 
+  /* ── Item Modal ─────────────────────────────────────────────── */
+  .item-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.72); display:flex; align-items:center; justify-content:center; z-index:1000; padding:1rem; }
+  .item-modal { background:#111520; border:1px solid #2a2f42; border-radius:0.75rem; width:100%; max-width:900px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 24px 64px rgba(0,0,0,0.7); overflow:hidden; }
+  .item-modal-header { display:flex; align-items:center; justify-content:space-between; padding:1rem 1.5rem; border-bottom:1px solid #2a2f42; }
+  .item-modal-header h2 { margin:0; font-size:1.1rem; color:#e0e4f0; }
+  .item-modal-body { display:flex; gap:1.5rem; padding:1.5rem; overflow-y:auto; flex:1; }
+  .item-modal-fields { flex:1; min-width:300px; display:flex; flex-direction:column; gap:8px; }
+  .item-modal-recipes { flex:1; min-width:300px; display:flex; flex-direction:column; gap:8px; border-left:1px solid #2a2f42; padding-left:1.5rem; }
+  .item-modal-footer { display:flex; justify-content:flex-end; gap:0.5rem; padding:1rem 1.5rem; border-top:1px solid #2a2f42; }
+  .recipe-entry { background:#1a1f30; border:1px solid #2a2f42; border-radius:0.5rem; padding:0.75rem; margin-bottom:0.5rem; }
+  .recipe-entry-header { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; }
+  .recipe-output-row { display:flex; align-items:center; gap:0.5rem; margin:4px 0 4px 12px; }
+  .recipe-total { font-size:0.85rem; font-weight:600; padding:0.5rem 0; }
+  .recipe-total.valid { color:#70e89a; }
+  .recipe-total.invalid { color:#ff6060; }
+
   /* ── Misc ────────────────────────────────────────────────────── */
   hr {
     border: none;

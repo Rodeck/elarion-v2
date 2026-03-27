@@ -1,23 +1,25 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.0.0 → 1.1.0
-Bump type: MINOR — Architecture Constraints updated with resolved tech stack
-decisions (TODO(TECH_STACK) and TODO(DATABASE) replaced with concrete choices).
+Version change: 1.1.0 → 1.2.0
+Bump type: MINOR — Added Principle VI (Tooling Consistency) and Quality Gate 7
+(Tooling updated). Ensures agent commands, scripts, and CLAUDE.md checklists are
+kept in sync when new game mechanics or entity types are added.
 
 Modified sections:
-  - Architecture Constraints: TODO(TECH_STACK) → Node.js 20 LTS + TypeScript 5.x
-    (backend); Phaser 3 + TypeScript (frontend).
-  - Architecture Constraints: TODO(DATABASE) → PostgreSQL 16.
+  - Core Principles: Added Principle VI — Tooling Consistency.
+  - Quality Gates: Added Gate 7 — Tooling updated.
+  - Governance: Version bumped to 1.2.0, Last Amended updated.
 
-Added sections: None.
+Added sections:
+  - Principle VI: Tooling Consistency.
+  - Quality Gate 7: Tooling updated.
+
 Removed sections: None.
 
 Templates requiring updates:
   ✅ .specify/memory/constitution.md — this file (updated now).
   ✅ All other templates remain generic; no further changes required.
-
-Deferred TODOs: None remaining.
 -->
 
 # Elarion Constitution
@@ -92,6 +94,37 @@ Rationale: independent deployability enables continuous delivery, isolated
 rollbacks, and parallel team work on client and server without coupling release
 cycles.
 
+### VI. Tooling Consistency
+
+When a feature introduces or extends game mechanics or entity types, ALL
+supporting tooling MUST be updated as part of the same feature. A feature that
+adds code but leaves agent commands, scripts, and checklists stale is incomplete.
+
+The following artifacts MUST be checked and updated when new mechanics/entities
+are added:
+
+1. **`CLAUDE.md` checklists** — If the new entity type creates a recurring
+   multi-file update pattern (e.g., adding a new NPC role, building action type,
+   equipment slot, item category, tool type, quest reward type), a checklist
+   section documenting all update locations MUST be added or updated.
+2. **`scripts/game-data.js`** + **`.claude/commands/game-data.md`** — If the
+   feature adds queryable data (new tables, new entity relationships), a query
+   command MUST be added so game designers can inspect the data.
+3. **`scripts/game-entities.js`** + **`.claude/commands/game-entities.md`** — If
+   the feature adds admin-creatable entities or extends validation arrays
+   (categories, tool types, action types, reward types), the script and its
+   documentation MUST be updated.
+4. **Game design skills** (`gd.design.md`, `gd.execute.md`, `gd.review.md`) —
+   If the feature adds entity types that game designers reference when creating
+   content (NPC roles, item fields, action types), the design templates MUST
+   include the new fields.
+
+Rationale: agent commands and scripts are the primary interface for game design
+work. Stale tooling causes silent failures — designers create content that
+doesn't match the schema, scripts reject valid data, and agent commands produce
+incorrect output. Keeping tooling in sync is as important as keeping code in
+sync.
+
 ## Architecture Constraints
 
 - **Frontend**: Browser-native (JavaScript or TypeScript). No native runtime
@@ -129,6 +162,11 @@ These gates MUST be verified by the Constitution Check in every `plan.md`:
    rejection is a gate failure.
 6. **Complexity justified**: Any design element that violates Principle III MUST
    appear in the plan's Complexity Tracking table with a written justification.
+7. **Tooling updated**: Any feature that introduces new entity types, extends
+   validation arrays, or adds queryable data MUST update agent commands
+   (`game-data.md`, `game-entities.md`), scripts (`game-data.js`,
+   `game-entities.js`), game design skills (`gd.design.md`), and `CLAUDE.md`
+   checklists as specified by Principle VI.
 
 ## Governance
 
@@ -153,4 +191,4 @@ mid-feature, the active feature's Constitution Check MUST be re-evaluated.
 Architecture Constraints updated accordingly. Future stack changes MUST follow the
 amendment procedure above.
 
-**Version**: 1.1.0 | **Ratified**: 2026-02-28 | **Last Amended**: 2026-02-28
+**Version**: 1.2.0 | **Ratified**: 2026-02-28 | **Last Amended**: 2026-03-27

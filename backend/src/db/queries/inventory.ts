@@ -26,6 +26,7 @@ export interface ItemDefinition {
   tool_type: string | null;
   max_durability: number | null;
   power: number | null;
+  disassembly_cost: number;
   created_at: Date;
 }
 
@@ -76,6 +77,7 @@ export interface CreateItemDefinitionData {
   tool_type?: string | null;
   max_durability?: number | null;
   power?: number | null;
+  disassembly_cost?: number;
 }
 
 export interface UpdateItemDefinitionData {
@@ -92,6 +94,7 @@ export interface UpdateItemDefinitionData {
   tool_type?: string | null;
   max_durability?: number | null;
   power?: number | null;
+  disassembly_cost?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,8 +126,8 @@ export async function getItemDefinitionById(id: number): Promise<ItemDefinition 
 export async function createItemDefinition(data: CreateItemDefinitionData): Promise<ItemDefinition> {
   const result = await query<ItemDefinition>(
     `INSERT INTO item_definitions
-       (name, description, category, weapon_subtype, attack, defence, heal_power, food_power, stack_size, icon_filename, tool_type, max_durability, power)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       (name, description, category, weapon_subtype, attack, defence, heal_power, food_power, stack_size, icon_filename, tool_type, max_durability, power, disassembly_cost)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING *`,
     [
       data.name,
@@ -140,6 +143,7 @@ export async function createItemDefinition(data: CreateItemDefinitionData): Prom
       data.tool_type ?? null,
       data.max_durability ?? null,
       data.power ?? null,
+      data.disassembly_cost ?? 0,
     ],
   );
   return result.rows[0]!;
@@ -163,6 +167,7 @@ export async function updateItemDefinition(id: number, data: UpdateItemDefinitio
   if (data.tool_type !== undefined)      { fields.push(`tool_type = $${paramIdx++}`);      values.push(data.tool_type); }
   if (data.max_durability !== undefined) { fields.push(`max_durability = $${paramIdx++}`); values.push(data.max_durability); }
   if (data.power !== undefined)          { fields.push(`power = $${paramIdx++}`);          values.push(data.power); }
+  if (data.disassembly_cost !== undefined) { fields.push(`disassembly_cost = $${paramIdx++}`); values.push(data.disassembly_cost); }
 
   if (fields.length === 0) {
     return getItemDefinitionById(id);

@@ -20,7 +20,7 @@ const DEFENCE_CATEGORIES = new Set(['boots', 'shield', 'greaves', 'bracer', 'hel
 const VALID_EFFECT_TYPES = ['damage', 'heal', 'buff', 'debuff', 'dot', 'reflect', 'drain'];
 const VALID_SLOT_TYPES = ['auto', 'active', 'both'];
 const VALID_ACTION_TYPES = ['travel', 'explore', 'expedition', 'gather', 'fishing'];
-const VALID_TOOL_TYPES = ['pickaxe', 'axe', 'fishing_rod'];
+const VALID_TOOL_TYPES = ['pickaxe', 'axe', 'fishing_rod', 'kiln'];
 const VALID_GATHER_EVENT_TYPES = ['resource', 'gold', 'monster', 'accident', 'nothing', 'squire'];
 
 // ─── Config ───────────────────────────────────────────────────────────────────

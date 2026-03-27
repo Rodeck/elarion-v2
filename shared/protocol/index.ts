@@ -161,6 +161,7 @@ export interface NpcDto {
   is_crafter: boolean;
   is_quest_giver: boolean;
   is_squire_dismisser: boolean;
+  is_disassembler: boolean;
 }
 
 export interface CityMapBuilding {
@@ -606,6 +607,7 @@ export interface InventorySlotDto {
   item_def_id: number;
   quantity: number;
   current_durability?: number | null;  // present for tool items
+  is_disassemblable?: boolean;         // true if item has disassembly recipes
   definition: ItemDefinitionDto;
 }
 
@@ -1867,3 +1869,94 @@ export type FishingUpgradeRodMessage     = WsMessage<FishingUpgradeRodPayload>;
 export type FishingUpgradeResultMessage  = WsMessage<FishingUpgradeResultPayload>;
 export type FishingRepairRodMessage      = WsMessage<FishingRepairRodPayload>;
 export type FishingRepairResultMessage   = WsMessage<FishingRepairResultPayload>;
+
+// ---------------------------------------------------------------------------
+// Disassembly: shared sub-types
+// ---------------------------------------------------------------------------
+
+export interface DisassemblyOutputPreview {
+  item_def_id: number;
+  item_name: string;
+  icon_url: string | null;
+  min_quantity: number;
+  max_quantity: number;
+}
+
+export interface DisassemblyReceivedItem {
+  item_def_id: number;
+  item_name: string;
+  icon_url: string | null;
+  quantity: number;
+}
+
+export type DisassemblyRejectionReason =
+  | 'NO_CHARACTER'
+  | 'NPC_NOT_FOUND'
+  | 'NPC_NOT_DISASSEMBLER'
+  | 'NOT_AT_BUILDING'
+  | 'IN_COMBAT'
+  | 'NO_KILN'
+  | 'INSUFFICIENT_KILN_DURABILITY'
+  | 'INSUFFICIENT_CROWNS'
+  | 'INSUFFICIENT_INVENTORY_SPACE'
+  | 'ITEM_NOT_DISASSEMBLABLE'
+  | 'INVALID_ITEM'
+  | 'GRID_EMPTY';
+
+// ---------------------------------------------------------------------------
+// Disassembly: Client → Server payloads
+// ---------------------------------------------------------------------------
+
+export interface DisassemblyOpenPayload {
+  npc_id: number;
+}
+
+export interface DisassemblyPreviewPayload {
+  npc_id: number;
+  slot_ids: number[];
+  kiln_slot_id: number;
+}
+
+export interface DisassemblyExecutePayload {
+  npc_id: number;
+  slot_ids: number[];
+  kiln_slot_id: number;
+}
+
+// ---------------------------------------------------------------------------
+// Disassembly: Server → Client payloads
+// ---------------------------------------------------------------------------
+
+export interface DisassemblyStatePayload {
+  npc_id: number;
+}
+
+export interface DisassemblyPreviewResultPayload {
+  possible_outputs: DisassemblyOutputPreview[];
+  total_cost: number;
+  total_item_count: number;
+  max_output_slots: number;
+}
+
+export interface DisassemblyResultPayload {
+  received_items: DisassemblyReceivedItem[];
+  new_crowns: number;
+  updated_slots: InventorySlotDto[];
+  removed_slot_ids: number[];
+  kiln_slot: InventorySlotDto | null;
+}
+
+export interface DisassemblyRejectedPayload {
+  action: 'open' | 'preview' | 'execute';
+  reason: DisassemblyRejectionReason;
+  details?: string;
+}
+
+// Disassembly: Message type aliases
+export type DisassemblyOpenMessage          = WsMessage<DisassemblyOpenPayload>;
+export type DisassemblyPreviewMessage       = WsMessage<DisassemblyPreviewPayload>;
+export type DisassemblyExecuteMessage       = WsMessage<DisassemblyExecutePayload>;
+export type DisassemblyStateMessage         = WsMessage<DisassemblyStatePayload>;
+export type DisassemblyPreviewResultMessage = WsMessage<DisassemblyPreviewResultPayload>;
+export type DisassemblyResultMessage        = WsMessage<DisassemblyResultPayload>;
+export type DisassemblyRejectedMessage      = WsMessage<DisassemblyRejectedPayload>;

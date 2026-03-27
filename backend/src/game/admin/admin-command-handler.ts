@@ -163,8 +163,46 @@ async function handleGiveItem(session: AuthenticatedSession, args: string[], rep
     await grantItemToCharacter(targetSession, character.id, itemId, quantity);
   } else {
     // Player offline — insert directly without WS notification
-    const { insertInventoryItem } = await import('../../db/queries/inventory');
-    await insertInventoryItem(character.id, itemId, quantity);
+    const { insertInventoryItem, insertToolInventoryItem, findStackableSlot, updateInventoryQuantity, getInventorySlotCount } = await import('../../db/queries/inventory');
+
+    const isStackable = itemDef.stack_size != null;
+    const isTool = itemDef.category === 'tool' && itemDef.max_durability != null;
+
+    if (isStackable) {
+      const existingSlot = await findStackableSlot(character.id, itemId);
+      if (existingSlot && existingSlot.quantity + quantity <= itemDef.stack_size!) {
+        await updateInventoryQuantity(existingSlot.id, existingSlot.quantity + quantity);
+        reply(true, `Gave ${quantity}x ${itemDef.name} to ${playerName} (offline, stacked).`);
+        return;
+      }
+    }
+
+    // Non-stackable items each get their own slot
+    const unitsToInsert = isStackable ? 1 : quantity;
+    const qtyPerSlot = isStackable ? quantity : 1;
+    let inserted = 0;
+
+    for (let u = 0; u < unitsToInsert; u++) {
+      const slotCount = await getInventorySlotCount(character.id);
+      if (slotCount >= 20) {
+        break;
+      }
+      if (isTool) {
+        await insertToolInventoryItem(character.id, itemId, itemDef.max_durability!);
+      } else {
+        await insertInventoryItem(character.id, itemId, qtyPerSlot);
+      }
+      inserted++;
+    }
+
+    if (inserted === 0) {
+      reply(false, `${playerName}'s inventory is full.`);
+      return;
+    }
+    if (inserted < unitsToInsert) {
+      reply(true, `Gave ${inserted}x ${itemDef.name} to ${playerName} (offline, inventory full — requested ${quantity}).`);
+      return;
+    }
   }
 
   log('info', 'admin', 'admin_command', {

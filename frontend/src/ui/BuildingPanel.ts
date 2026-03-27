@@ -45,6 +45,7 @@ type GatheringCancelCallback = () => void;
 type FishingCastCallback = (buildingId: number, actionId: number) => void;
 type FishingUpgradeCallback = (npcId: number) => void;
 type FishingRepairCallback = (npcId: number) => void;
+type DisassemblyOpenCallback = (npcId: number) => void;
 type InventorySlotsGetter = () => import('@elarion/protocol').InventorySlotDto[];
 
 export class BuildingPanel {
@@ -69,6 +70,7 @@ export class BuildingPanel {
   private onFishingCast: FishingCastCallback | null = null;
   private onFishingUpgrade: FishingUpgradeCallback | null = null;
   private onFishingRepair: FishingRepairCallback | null = null;
+  private onDisassemblyOpen: DisassemblyOpenCallback | null = null;
   private getInventorySlots: InventorySlotsGetter | null = null;
   private progressIntervals: number[] = [];
   private currentBuilding: CityMapBuilding | null = null;
@@ -282,6 +284,10 @@ export class BuildingPanel {
 
   setOnFishingRepair(cb: FishingRepairCallback): void {
     this.onFishingRepair = cb;
+  }
+
+  setOnDisassemblyOpen(cb: DisassemblyOpenCallback): void {
+    this.onDisassemblyOpen = cb;
   }
 
   setInventorySlotsGetter(getter: InventorySlotsGetter): void {
@@ -721,7 +727,7 @@ export class BuildingPanel {
   // NPC panel
   // ---------------------------------------------------------------------------
 
-  private renderNpcPanel(npc: { id: number; name: string; description: string; icon_url: string; is_crafter: boolean; is_quest_giver: boolean; is_squire_dismisser?: boolean }): void {
+  private renderNpcPanel(npc: { id: number; name: string; description: string; icon_url: string; is_crafter: boolean; is_quest_giver: boolean; is_squire_dismisser?: boolean; is_disassembler?: boolean }): void {
     // Header: NPC name with back chevron
     this.headerEl.innerHTML = '';
 
@@ -826,6 +832,13 @@ export class BuildingPanel {
         this.onSquireDismissList?.(npc.id);
       });
       optionsEl.appendChild(dismissOption);
+    }
+
+    if ((npc as { is_disassembler?: boolean }).is_disassembler) {
+      const disassembleOption = this.buildDialogOption('I want to disassemble some items', () => {
+        this.onDisassemblyOpen?.(npc.id);
+      });
+      optionsEl.appendChild(disassembleOption);
     }
 
     // Fishing rod upgrade/repair options — shown when the building has a fishing action

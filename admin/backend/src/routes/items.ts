@@ -11,6 +11,10 @@ import {
   deleteItemDefinition,
   type ItemDefinition,
 } from '../../../../backend/src/db/queries/inventory';
+import {
+  getRecipesWithOutputsForAdmin,
+  saveRecipesForItem,
+} from '../../../../backend/src/db/queries/disassembly';
 
 export const itemsRouter = Router();
 
@@ -64,11 +68,12 @@ function formatItem(item: ItemDefinition) {
     tool_type: item.tool_type ?? null,
     max_durability: item.max_durability ?? null,
     power: item.power ?? null,
+    disassembly_cost: item.disassembly_cost ?? 0,
     created_at: item.created_at,
   };
 }
 
-const VALID_TOOL_TYPES = ['pickaxe', 'axe', 'fishing_rod'] as const;
+const VALID_TOOL_TYPES = ['pickaxe', 'axe', 'fishing_rod', 'kiln'] as const;
 
 function validateItemFields(body: Record<string, unknown>, isCreate: boolean): string | null {
   const category = body['category'] as string | undefined;
@@ -158,6 +163,12 @@ function validateItemFields(body: Record<string, unknown>, isCreate: boolean): s
   if (stackSize !== undefined && stackSize !== null) {
     const n = Number(stackSize);
     if (!Number.isInteger(n) || n < 1) return 'stack_size must be a positive integer';
+  }
+
+  const disassemblyCost = body['disassembly_cost'];
+  if (disassemblyCost !== undefined && disassemblyCost !== null) {
+    const n = Number(disassemblyCost);
+    if (!Number.isInteger(n) || n < 0) return 'disassembly_cost must be a non-negative integer';
   }
 
   return null;
@@ -347,6 +358,7 @@ itemsRouter.post('/', upload.single('icon'), async (req: Request, res: Response)
       tool_type: body['tool_type'] ? String(body['tool_type']) : null,
       max_durability: body['max_durability'] != null ? Number(body['max_durability']) : null,
       power: body['power'] != null ? Number(body['power']) : null,
+      disassembly_cost: body['disassembly_cost'] != null ? Number(body['disassembly_cost']) : 0,
     });
     log('info', 'item_definition_created', { admin: req.username, item_id: item.id, name: item.name, category: item.category });
     return res.status(201).json(formatItem(item));
@@ -428,6 +440,7 @@ itemsRouter.put('/:id', upload.single('icon'), async (req: Request, res: Respons
   if (body['tool_type'] !== undefined)     updateData['tool_type']      = body['tool_type'] || null;
   if (body['max_durability'] !== undefined) updateData['max_durability'] = body['max_durability'] != null ? Number(body['max_durability']) : null;
   if (body['power'] !== undefined)         updateData['power']          = body['power'] != null ? Number(body['power']) : null;
+  if (body['disassembly_cost'] !== undefined) updateData['disassembly_cost'] = body['disassembly_cost'] != null ? Number(body['disassembly_cost']) : 0;
 
   try {
     const item = await updateItemDefinition(id, updateData as Parameters<typeof updateItemDefinition>[1]);
@@ -441,6 +454,105 @@ itemsRouter.put('/:id', upload.single('icon'), async (req: Request, res: Respons
       return res.status(409).json({ error: 'Item name already exists' });
     }
     log('error', 'item_update_failed', { admin: req.username, item_id: id, error: errStr });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── GET /api/items/:id/disassembly-recipes ─────────────────────────────
+
+itemsRouter.get('/:id/disassembly-recipes', async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id!, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid item id' });
+  try {
+    const recipes = await getRecipesWithOutputsForAdmin(id);
+    // Strip internal fields, return only what admin frontend needs
+    const result = recipes.map((r) => ({
+      chance_percent: r.chance_percent,
+      outputs: r.outputs.map((o) => ({
+        output_item_def_id: o.output_item_def_id,
+        quantity: o.quantity,
+      })),
+    }));
+    return res.json(result);
+  } catch (err) {
+    log('error', 'disassembly_recipes_fetch_failed', { admin: req.username, item_id: id, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── PUT /api/items/:id/disassembly-recipes ─────────────────────────────
+
+itemsRouter.put('/:id/disassembly-recipes', express.json(), async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id!, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid item id' });
+
+  const existing = await getItemDefinitionById(id);
+  if (!existing) return res.status(404).json({ error: 'Item not found' });
+
+  const body = req.body as Record<string, unknown>;
+  const recipes = body['recipes'];
+
+  if (!Array.isArray(recipes)) {
+    return res.status(400).json({ error: 'recipes must be an array' });
+  }
+
+  // Empty array is OK — clears all recipes
+  if (recipes.length === 0) {
+    try {
+      await saveRecipesForItem(id, []);
+      log('info', 'disassembly_recipes_cleared', { admin: req.username, item_id: id });
+      return res.json({ ok: true });
+    } catch (err) {
+      log('error', 'disassembly_recipes_save_failed', { admin: req.username, item_id: id, error: String(err) });
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  // Validate entries
+  let totalChance = 0;
+  for (let i = 0; i < recipes.length; i++) {
+    const entry = recipes[i] as Record<string, unknown>;
+    const chance = Number(entry['chance_percent']);
+    if (!Number.isInteger(chance) || chance < 1 || chance > 100) {
+      return res.status(400).json({ error: `recipes[${i}].chance_percent must be an integer between 1 and 100` });
+    }
+    totalChance += chance;
+
+    const outputs = entry['outputs'];
+    if (!Array.isArray(outputs) || outputs.length === 0) {
+      return res.status(400).json({ error: `recipes[${i}].outputs must be a non-empty array` });
+    }
+    for (let j = 0; j < outputs.length; j++) {
+      const out = outputs[j] as Record<string, unknown>;
+      const outId = Number(out['output_item_def_id']);
+      const qty = Number(out['quantity']);
+      if (!Number.isInteger(outId) || outId <= 0) {
+        return res.status(400).json({ error: `recipes[${i}].outputs[${j}].output_item_def_id must be a positive integer` });
+      }
+      if (!Number.isInteger(qty) || qty < 1) {
+        return res.status(400).json({ error: `recipes[${i}].outputs[${j}].quantity must be a positive integer` });
+      }
+    }
+  }
+
+  if (totalChance !== 100) {
+    return res.status(400).json({ error: `Total chance_percent must equal 100, got ${totalChance}` });
+  }
+
+  try {
+    const toSave = recipes.map((entry: Record<string, unknown>, idx: number) => ({
+      chance_percent: Number(entry['chance_percent']),
+      sort_order: idx,
+      outputs: (entry['outputs'] as Record<string, unknown>[]).map((o) => ({
+        output_item_def_id: Number(o['output_item_def_id']),
+        quantity: Number(o['quantity']),
+      })),
+    }));
+    await saveRecipesForItem(id, toSave);
+    log('info', 'disassembly_recipes_saved', { admin: req.username, item_id: id, recipe_count: toSave.length });
+    return res.json({ ok: true });
+  } catch (err) {
+    log('error', 'disassembly_recipes_save_failed', { admin: req.username, item_id: id, error: String(err) });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

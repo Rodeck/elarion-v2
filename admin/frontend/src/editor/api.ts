@@ -476,7 +476,36 @@ export interface ItemDefinitionResponse {
   tool_type: string | null;
   max_durability: number | null;
   power: number | null;
+  disassembly_cost: number;
   created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Disassembly Recipes
+// ---------------------------------------------------------------------------
+
+export interface DisassemblyRecipeOutput {
+  output_item_def_id: number;
+  quantity: number;
+}
+
+export interface DisassemblyRecipeEntry {
+  chance_percent: number;
+  outputs: DisassemblyRecipeOutput[];
+}
+
+export async function getDisassemblyRecipes(itemDefId: number): Promise<DisassemblyRecipeEntry[]> {
+  const data = await request<{ chance_percent: number; outputs: DisassemblyRecipeOutput[] }[]>(
+    `${ITEMS_BASE}/${itemDefId}/disassembly-recipes`,
+  );
+  return data;
+}
+
+export async function saveDisassemblyRecipes(itemDefId: number, recipes: DisassemblyRecipeEntry[]): Promise<void> {
+  return request<void>(`${ITEMS_BASE}/${itemDefId}/disassembly-recipes`, {
+    method: 'PUT',
+    body: JSON.stringify({ recipes }),
+  });
 }
 
 export async function getItems(category?: string): Promise<ItemDefinitionResponse[]> {
@@ -993,6 +1022,13 @@ export async function toggleNpcDismisser(npcId: number, isDismisser: boolean): P
   return request<void>(`${NPCS_BASE}/${npcId}/squire-dismisser`, {
     method: 'PUT',
     body: JSON.stringify({ is_squire_dismisser: isDismisser }),
+  });
+}
+
+export async function toggleNpcDisassembler(npcId: number, isDisassembler: boolean): Promise<void> {
+  return request<void>(`${NPCS_BASE}/${npcId}/disassembler`, {
+    method: 'PUT',
+    body: JSON.stringify({ is_disassembler: isDisassembler }),
   });
 }
 

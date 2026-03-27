@@ -89,20 +89,44 @@ adminToolsRouter.post('/grant-item', async (req, res) => {
       }
     }
 
-    // New slot
-    const slotCount = await getInventorySlotCount(character_id);
-    if (slotCount >= 20) {
-      return res
-        .status(409)
-        .json({ error: `${charName}'s inventory is full (20/20 slots)` });
+    // New slot(s) — non-stackable items must each occupy their own slot
+    const isStackable = itemDef.stack_size !== null;
+    const isTool = itemDef.category === 'tool' && itemDef.max_durability != null;
+    const unitsToInsert = isStackable ? 1 : qty;
+    const qtyPerSlot = isStackable ? qty : 1;
+
+    for (let u = 0; u < unitsToInsert; u++) {
+      const slotCount = await getInventorySlotCount(character_id);
+      if (slotCount >= 20) {
+        if (u === 0) {
+          return res
+            .status(409)
+            .json({ error: `${charName}'s inventory is full (20/20 slots)` });
+        }
+        // Partial grant — some items were inserted before inventory filled
+        log('info', 'admin_tools_grant_item', {
+          character_id,
+          char_name: charName,
+          item_def_id,
+          item_name: itemDef.name,
+          quantity: u,
+          requested: qty,
+          stacked: false,
+          partial: true,
+        });
+        return res.json({
+          success: true,
+          message: `Gave ${u}× ${itemDef.name} to ${charName} (inventory full, requested ${qty})`,
+        });
+      }
+
+      if (isTool) {
+        await insertToolInventoryItem(character_id, item_def_id, itemDef.max_durability!);
+      } else {
+        await insertInventoryItem(character_id, item_def_id, qtyPerSlot);
+      }
     }
 
-    const isTool = itemDef.category === 'tool' && itemDef.max_durability != null;
-    if (isTool) {
-      await insertToolInventoryItem(character_id, item_def_id, itemDef.max_durability!);
-    } else {
-      await insertInventoryItem(character_id, item_def_id, qty);
-    }
     log('info', 'admin_tools_grant_item', {
       character_id,
       char_name: charName,

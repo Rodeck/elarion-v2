@@ -102,8 +102,13 @@ import type {
   FishingRejectedPayload,
   FishingUpgradeResultPayload,
   FishingRepairResultPayload,
+  DisassemblyStatePayload,
+  DisassemblyPreviewResultPayload,
+  DisassemblyResultPayload,
+  DisassemblyRejectedPayload,
 } from '@elarion/protocol';
 import { FishingMinigame } from '../ui/fishing-minigame';
+import { DisassemblyModal } from '../ui/DisassemblyModal';
 
 const TILE_SIZE = 32;
 const XP_THRESHOLDS = [100, 250, 500, 900, 1400];
@@ -154,6 +159,7 @@ export class GameScene extends Phaser.Scene {
   private gatheringCombatActive = false;
   // Fishing mini-game overlay
   private fishingMinigame: FishingMinigame | null = null;
+  private disassemblyModal!: DisassemblyModal;
 
   // City map state
   private isCityMap = false;
@@ -238,6 +244,25 @@ export class GameScene extends Phaser.Scene {
     });
     this.buildingPanel.setOnSquireDismissConfirm((squireId) => {
       this.client.send('squire.dismiss_confirm', { squire_id: squireId });
+    });
+    this.disassemblyModal = new DisassemblyModal();
+    this.disassemblyModal.setSendFn((type, payload) => {
+      this.client.send(type, payload);
+    });
+    this.disassemblyModal.setInventorySlotsGetter(() => this.leftPanel.getInventorySlots());
+    this.buildingPanel.setOnDisassemblyOpen((npcId) => {
+      this.disassemblyModal.open(npcId);
+      this.client.send('disassembly.open', { npc_id: npcId });
+      // Raise inventory panel above the overlay so drag-and-drop works
+      inventoryEl.style.zIndex = '260';
+      inventoryEl.style.position = 'relative';
+      this.leftPanel.showTab('inventory');
+      this.leftPanel.setDragEnabled(true);
+    });
+    this.disassemblyModal.setOnClose(() => {
+      inventoryEl.style.zIndex = '';
+      inventoryEl.style.position = '';
+      this.leftPanel.setDragEnabled(false);
     });
     this.questLog = new QuestLog(document.getElementById('game')!);
     this.questLog.setSendFn((type, payload) => {
@@ -882,6 +907,25 @@ export class GameScene extends Phaser.Scene {
       } else {
         this.chatBox.addSystemMessage(`Repair failed: ${payload.reason ?? 'Unknown reason'}`);
       }
+    });
+
+    // Disassembly handlers
+    this.client.on<DisassemblyStatePayload>('disassembly.state', (_payload) => {
+      // NPC confirmed as disassembler — modal already open from setOnDisassemblyOpen
+    });
+    this.client.on<DisassemblyPreviewResultPayload>('disassembly.preview_result', (payload) => {
+      this.disassemblyModal.handlePreviewResult(payload);
+    });
+    this.client.on<DisassemblyResultPayload>('disassembly.result', (payload) => {
+      this.disassemblyModal.handleResult(payload);
+      // Server sends inventory.state automatically after execute — LeftPanel handles it
+      if (payload.new_crowns !== undefined) {
+        this.myCharacter.crowns = payload.new_crowns;
+        this.statsBar.updateCrowns(payload.new_crowns);
+      }
+    });
+    this.client.on<DisassemblyRejectedPayload>('disassembly.rejected', (payload) => {
+      this.disassemblyModal.handleRejected(payload);
     });
 
     // Combat handlers

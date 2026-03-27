@@ -29,7 +29,8 @@ Run via Bash: `node scripts/game-data.js <command> [args...]`
 | `quests [type]` | All quests with objective/reward/NPC counts, optionally filtered (main, side, daily, weekly, monthly, repeatable) |
 | `quest <id>` | Quest detail: objectives with resolved target names, prerequisites, rewards, NPC givers, player stats |
 | `gathering` | All gathering actions with tool requirements, duration ranges, events (resource/gold/monster/accident/nothing), and tool items |
-| `economy` | Crown sources (monster drops), crown sinks (crafting costs), equipment stats, expedition rewards, gathering rewards |
+| `disassembly [item_id]` | Disassembly recipes — chance entries with output items. Optionally filtered by item definition ID |
+| `economy` | Crown sources (monster drops), crown sinks (crafting costs, disassembly costs), equipment stats, expedition rewards, gathering rewards |
 | `search <term>` | Cross-entity name search (items, monsters, NPCs, buildings, abilities, recipes) |
 | `sql "<query>"` | Run a raw SELECT query for ad-hoc analysis |
 

@@ -59,7 +59,11 @@ Run via Bash: `node scripts/game-entities.js <command> '<json-data>'`
   "attack": null,               // weapon only, integer >= 0
   "defence": null,              // boots/shield/greaves/bracer/helmet/chestplate only, integer >= 0
   "heal_power": null,           // heal only, integer >= 0
-  "food_power": null            // food only, integer >= 0
+  "food_power": null,           // food only, integer >= 0
+  "tool_type": null,            // tool only: pickaxe|axe|fishing_rod|kiln
+  "max_durability": null,       // tool only, required for tools, integer >= 1
+  "power": null,                // tool only, optional, integer >= 1
+  "disassembly_cost": 0         // optional, crowns cost per unit to disassemble, integer >= 0
 }
 ```
 

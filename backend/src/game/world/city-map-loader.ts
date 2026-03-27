@@ -138,6 +138,7 @@ function toProtocolBuilding(
     is_crafter: n.is_crafter ?? false,
     is_quest_giver: n.is_quest_giver ?? false,
     is_squire_dismisser: n.is_squire_dismisser ?? false,
+    is_disassembler: n.is_disassembler ?? false,
   }));
 
   const result: CityMapBuilding = {

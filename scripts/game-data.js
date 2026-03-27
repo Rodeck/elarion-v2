@@ -735,6 +735,49 @@ async function questDetail(id) {
   }
 }
 
+// ─── Disassembly ──────────────────────────────────────────────────────────────
+
+async function disassembly(itemDefId) {
+  const where = itemDefId ? 'WHERE r.item_def_id = $1' : '';
+  const params = itemDefId ? [Number(itemDefId)] : [];
+
+  const { rows } = await pool.query(`
+    SELECT r.id AS recipe_id, r.item_def_id, d.name AS item_name,
+           r.chance_percent, r.sort_order,
+           o.output_item_def_id, od.name AS output_name, o.quantity,
+           d.disassembly_cost
+    FROM disassembly_recipes r
+    JOIN item_definitions d ON d.id = r.item_def_id
+    JOIN disassembly_recipe_outputs o ON o.recipe_id = r.id
+    JOIN item_definitions od ON od.id = o.output_item_def_id
+    ${where}
+    ORDER BY r.item_def_id, r.sort_order, r.id, o.id
+  `, params);
+
+  if (rows.length === 0) {
+    console.log(itemDefId ? `No disassembly recipes for item ${itemDefId}.` : 'No disassembly recipes configured.');
+    return;
+  }
+
+  // Group by item
+  const byItem = new Map();
+  for (const row of rows) {
+    const key = row.item_def_id;
+    if (!byItem.has(key)) byItem.set(key, { name: row.item_name, cost: row.disassembly_cost, recipes: new Map() });
+    const item = byItem.get(key);
+    if (!item.recipes.has(row.recipe_id)) item.recipes.set(row.recipe_id, { chance: row.chance_percent, outputs: [] });
+    item.recipes.get(row.recipe_id).outputs.push({ name: row.output_name, qty: row.quantity });
+  }
+
+  for (const [id, item] of byItem) {
+    section(`${item.name} (id:${id}) — cost: ${item.cost} crowns`);
+    for (const [, recipe] of item.recipes) {
+      const outputs = recipe.outputs.map(o => `${o.qty}x ${o.name}`).join(', ');
+      console.log(`  ${recipe.chance}% → ${outputs}`);
+    }
+  }
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 const HELP = `
@@ -754,6 +797,7 @@ Commands:
   quests [type]            List quests (optional: main|side|daily|weekly|monthly|repeatable)
   quest <id>               Quest detail with objectives, prerequisites, rewards, NPC givers
   gathering                All gathering actions with events, tool requirements, and tool items
+  disassembly [item_id]    Disassembly recipes with chance entries and outputs
   economy                  Crown sources/sinks, equipment stats, expedition rewards
   search <term>            Search across all entity types by name
   sql "<query>"            Run a raw SELECT query
@@ -781,8 +825,9 @@ async function main() {
       case 'abilities': await abilities(); break;
       case 'quests':    await quests(args[0]); break;
       case 'quest':     await questDetail(args[0]); break;
-      case 'gathering': await gathering(); break;
-      case 'economy':   await economy(); break;
+      case 'gathering':    await gathering(); break;
+      case 'disassembly': await disassembly(args[0]); break;
+      case 'economy':     await economy(); break;
       case 'search':    await search(args.join(' ')); break;
       case 'sql':       await rawSql(args.join(' ')); break;
       default:

@@ -44,6 +44,7 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT) (023-player-marketplace)
 - PostgreSQL 16 — migration `025_marketplace.sql` (2 new tables, 1 CHECK constraint extension) (023-player-marketplace)
 - PostgreSQL 16 — migration `026_fishing_system.sql` (new tables + ALTER constraints) (024-fishing-system)
+- PostgreSQL 16 — migration `027_item_disassembly.sql` (2 new tables, 3 ALTER statements) (025-item-disassembly)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -69,9 +70,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 025-item-disassembly: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 024-fishing-system: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 023-player-marketplace: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
-- 022-squire-overhaul: Added TypeScript 5.x (all packages: frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 
 
 
@@ -161,4 +162,33 @@ Update these locations:
 6. **game-entities skill** — `.claude/commands/game-entities.md`: Document the new reward type in `create-quest` rewards docs
 
 The `resolveRewardTarget()` function returns `{ name: null, icon_url: null }` for unknown types — this is fine for currency-like rewards (xp, crowns, points).
+
+## Adding a New NPC Role
+
+When adding a new NPC boolean flag (e.g., `is_disassembler`, `is_merchant`), update these locations:
+
+1. **DB migration** — `ALTER TABLE npcs ADD COLUMN is_<role> BOOLEAN NOT NULL DEFAULT false`
+2. **Shared protocol** — `shared/protocol/index.ts`: Add `is_<role>: boolean` to `NpcDto`
+3. **Game backend NPC queries** — `backend/src/db/queries/npcs.ts`: Add to `Npc`, `BuildingNpc`, `ZoneNpcRow` interfaces and SELECT column lists in `getNpcsForBuilding()` and `getNpcsForZone()`
+4. **Game backend city-map-loader** — `backend/src/game/world/city-map-loader.ts`: Add `is_<role>: n.is_<role> ?? false` to NPC DTO mapping
+5. **Game frontend BuildingPanel** — `frontend/src/ui/BuildingPanel.ts`: Add dialog option in `renderNpcPanel()` with `if (npc.is_<role>)` check, add callback type + setter + field
+6. **Game frontend GameScene** — `frontend/src/scenes/GameScene.ts`: Wire the callback via `buildingPanel.setOn<Role>Open()`
+7. **Admin backend NPC routes** — `admin/backend/src/routes/npcs.ts`: Add to `npcToResponse()`, add `PUT /:id/<role>` toggle endpoint
+8. **Admin frontend API** — `admin/frontend/src/editor/api.ts`: Add `toggleNpc<Role>()` function
+9. **Admin frontend NPC manager** — `admin/frontend/src/ui/npc-manager.ts`: Add checkbox + change handler
+10. **gd.design skill** — `.claude/commands/gd.design.md`: Add column to NPC table template
+
+Existing NPC roles: `is_crafter`, `is_quest_giver`, `is_squire_dismisser`, `is_disassembler`.
+
+## Adding a New Tool Type
+
+When adding a new `tool_type` value (e.g., `'kiln'`), update these locations:
+
+1. **DB migration** — Extend `item_definitions.tool_type` CHECK constraint
+2. **Admin backend items route** — `admin/backend/src/routes/items.ts`: Add to `VALID_TOOL_TYPES` array
+3. **Admin frontend item modal** — `admin/frontend/src/ui/item-modal.ts`: Add `<option>` to tool type select
+4. **game-entities script** — `scripts/game-entities.js`: Add to `VALID_TOOL_TYPES` array
+5. **game-entities skill** — `.claude/commands/game-entities.md`: Document the new tool type in `create-item` docs
+
+Existing tool types: `'pickaxe'`, `'axe'`, `'fishing_rod'`, `'kiln'`.
 <!-- MANUAL ADDITIONS END -->

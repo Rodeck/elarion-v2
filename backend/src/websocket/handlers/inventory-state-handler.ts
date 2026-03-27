@@ -3,6 +3,7 @@ import type { AuthenticatedSession } from '../server';
 import { log } from '../../logger';
 import { config } from '../../config';
 import { getInventoryWithDefinitions } from '../../db/queries/inventory';
+import { query } from '../../db/connection';
 import { sendEquipmentState } from './equipment-state-handler';
 import type { InventorySlotDto, ItemCategory, WeaponSubtype } from '../../../../shared/protocol/index';
 
@@ -18,11 +19,23 @@ export async function sendInventoryState(session: AuthenticatedSession): Promise
 
   const rows = await getInventoryWithDefinitions(session.characterId);
 
+  // Batch check which item definitions have disassembly recipes
+  const itemDefIds = [...new Set(rows.map((r) => r.item_def_id))];
+  const disassemblableSet = new Set<number>();
+  if (itemDefIds.length > 0) {
+    const result = await query<{ item_def_id: number }>(
+      'SELECT DISTINCT item_def_id FROM disassembly_recipes WHERE item_def_id = ANY($1)',
+      [itemDefIds],
+    );
+    for (const r of result.rows) disassemblableSet.add(r.item_def_id);
+  }
+
   const slots: InventorySlotDto[] = rows.map((row) => ({
     slot_id: row.id,
     item_def_id: row.item_def_id,
     quantity: row.quantity,
     current_durability: row.current_durability ?? undefined,
+    is_disassemblable: disassemblableSet.has(row.item_def_id),
     definition: {
       id: row.item_def_id,
       name: row.def_name,
