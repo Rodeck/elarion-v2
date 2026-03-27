@@ -39,6 +39,22 @@ export function getPlayerState(characterId: string): { zoneId: number; state: Pl
   return undefined;
 }
 
+export function getAllZonePlayerCounts(): Map<number, number> {
+  const counts = new Map<number, number>();
+  for (const [zoneId, players] of registry) {
+    counts.set(zoneId, players.size);
+  }
+  return counts;
+}
+
+export function getTotalOnlinePlayers(): number {
+  let total = 0;
+  for (const players of registry.values()) {
+    total += players.size;
+  }
+  return total;
+}
+
 export function movePlayer(characterId: string, x: number, y: number): void {
   for (const players of registry.values()) {
     const state = players.get(characterId);

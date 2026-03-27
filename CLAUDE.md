@@ -45,6 +45,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - PostgreSQL 16 — migration `025_marketplace.sql` (2 new tables, 1 CHECK constraint extension) (023-player-marketplace)
 - PostgreSQL 16 — migration `026_fishing_system.sql` (new tables + ALTER constraints) (024-fishing-system)
 - PostgreSQL 16 — migration `027_item_disassembly.sql` (2 new tables, 3 ALTER statements) (025-item-disassembly)
+- TypeScript 5.x (frontend + backend + shared) + Phaser 3.60 + Vite 5 (frontend), Node.js 20 LTS + `ws` (backend), `pg` (PostgreSQL client) (026-character-rankings)
+- PostgreSQL 16 — ALTER `characters` table (add column); no new tables (026-character-rankings)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -70,9 +72,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 026-character-rankings: Added TypeScript 5.x (frontend + backend + shared) + Phaser 3.60 + Vite 5 (frontend), Node.js 20 LTS + `ws` (backend), `pg` (PostgreSQL client)
 - 025-item-disassembly: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 024-fishing-system: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
-- 023-player-marketplace: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 
 
 

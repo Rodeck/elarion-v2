@@ -9,6 +9,7 @@
 import crypto from 'crypto';
 import { log } from '../../logger';
 import { config } from '../../config';
+import { query } from '../../db/connection';
 import { sendToSession } from '../../websocket/server';
 import { awardXp } from '../progression/xp-service';
 import { grantItemToCharacter } from '../inventory/inventory-grant-service';
@@ -353,6 +354,10 @@ export class CombatSession {
         // Award XP
         xpGained = this.monster.xp_reward;
         await awardXp(this.characterId, xpGained);
+
+        // Increment combat wins counter
+        await query('UPDATE characters SET combat_wins = combat_wins + 1 WHERE id = $1', [this.characterId]);
+        log('debug', 'combat', 'combat_win_recorded', { characterId: this.characterId, monsterId: this.monster.id });
 
         // Award crowns
         crownsGained = rollCrownDrop(this.monster);

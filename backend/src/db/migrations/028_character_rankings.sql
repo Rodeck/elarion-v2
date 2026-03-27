@@ -1,0 +1,1 @@
+ALTER TABLE characters ADD COLUMN combat_wins INTEGER NOT NULL DEFAULT 0;

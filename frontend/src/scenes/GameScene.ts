@@ -106,9 +106,11 @@ import type {
   DisassemblyPreviewResultPayload,
   DisassemblyResultPayload,
   DisassemblyRejectedPayload,
+  RankingsDataPayload,
 } from '@elarion/protocol';
 import { FishingMinigame } from '../ui/fishing-minigame';
 import { DisassemblyModal } from '../ui/DisassemblyModal';
+import { RankingsPanel } from '../ui/RankingsPanel';
 
 const TILE_SIZE = 32;
 const XP_THRESHOLDS = [100, 250, 500, 900, 1400];
@@ -129,6 +131,7 @@ export class GameScene extends Phaser.Scene {
   private questPanel!: QuestPanel;
   private questLog!: QuestLog;
   private questTracker!: QuestTracker;
+  private rankingsPanel!: RankingsPanel;
   // squire roster is now in leftPanel tab — no separate field needed
 
   // Remote players: characterId → sprite
@@ -269,6 +272,10 @@ export class GameScene extends Phaser.Scene {
       this.client.send(type, payload);
     });
     this.questTracker = new QuestTracker(document.getElementById('game')!);
+    this.rankingsPanel = new RankingsPanel(document.getElementById('game')!);
+    this.rankingsPanel.setSendFn((type, payload) => {
+      this.client.send(type, payload);
+    });
     this.buildingPanel.getCraftingModal().setSendFn((type, payload) => {
       this.client.send(type, payload);
     });
@@ -344,6 +351,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       this.myCharacter = payload.my_character;
+      this.rankingsPanel.setMyCharacterId(payload.my_character.id);
 
       if (isTravelArrival) {
         // Teardown old city map objects before rebuilding
@@ -928,6 +936,11 @@ export class GameScene extends Phaser.Scene {
       this.disassemblyModal.handleRejected(payload);
     });
 
+    // Rankings handler
+    this.client.on<RankingsDataPayload>('rankings.data', (payload) => {
+      this.rankingsPanel.handleRankingsData(payload);
+    });
+
     // Combat handlers
     this.client.on<CombatStartPayload>('combat:start', (payload) => {
       if (this.gatheringCombatActive) {
@@ -1460,6 +1473,20 @@ export class GameScene extends Phaser.Scene {
       }
     });
     document.getElementById('top-bar')!.appendChild(questLogBtn);
+
+    // Rankings toggle button in top bar
+    const rankingsBtn = document.createElement('button');
+    rankingsBtn.textContent = 'Rankings';
+    rankingsBtn.style.cssText = [
+      'position:absolute', 'right:160px', 'top:50%', 'transform:translateY(-50%)',
+      'padding:4px 12px', 'background:rgba(90,74,42,0.4)', 'border:1px solid #5a4a2a',
+      'color:#e8c870', 'font-family:Cinzel,serif', 'font-size:12px', 'cursor:pointer',
+      'border-radius:2px', 'letter-spacing:0.05em',
+    ].join(';');
+    rankingsBtn.addEventListener('click', () => {
+      this.rankingsPanel.toggle();
+    });
+    document.getElementById('top-bar')!.appendChild(rankingsBtn);
   }
 
   private handleLogout(): void {

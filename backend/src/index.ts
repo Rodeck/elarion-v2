@@ -26,6 +26,8 @@ import { handleSquireRoster } from './game/squire/squire-grant-service';
 import { handleSquireDismissList, handleSquireDismissConfirm } from './game/squire/squire-dismiss-handler';
 import { registerFishingHandlers } from './game/fishing/fishing-handler';
 import { registerDisassemblyHandlers } from './game/disassembly/disassembly-handler';
+import { handleRankingsGet } from './game/rankings/rankings-handler';
+import { startRankingsService } from './game/rankings/rankings-service';
 import { sendWorldState, setZonePlayersGetter } from './websocket/handlers/world-state-handler';
 import { getZonePlayers } from './game/world/zone-registry';
 import { loadCityMaps } from './game/world/city-map-loader';
@@ -62,6 +64,9 @@ async function bootstrap(): Promise<void> {
     })),
   );
 
+  // Start periodic rankings computation
+  startRankingsService();
+
   // Register all message handlers
   registerHandler('auth.register', handleAuthRegister);
   registerHandler('auth.login', handleAuthLogin);
@@ -85,6 +90,7 @@ async function bootstrap(): Promise<void> {
   registerHandler('gathering.cancel', handleGatheringCancel);
   registerFishingHandlers();
   registerDisassemblyHandlers();
+  registerHandler('rankings.get', handleRankingsGet);
   registerHandler('squire.roster', handleSquireRoster);
   registerHandler('squire.dismiss_list', handleSquireDismissList);
   registerHandler('squire.dismiss_confirm', handleSquireDismissConfirm);

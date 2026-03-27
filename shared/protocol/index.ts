@@ -1960,3 +1960,42 @@ export type DisassemblyStateMessage         = WsMessage<DisassemblyStatePayload>
 export type DisassemblyPreviewResultMessage = WsMessage<DisassemblyPreviewResultPayload>;
 export type DisassemblyResultMessage        = WsMessage<DisassemblyResultPayload>;
 export type DisassemblyRejectedMessage      = WsMessage<DisassemblyRejectedPayload>;
+
+// ---------------------------------------------------------------------------
+// Rankings: Shared sub-types
+// ---------------------------------------------------------------------------
+
+export interface LeaderboardEntryDto {
+  rank: number;
+  character_id: string;
+  character_name: string;
+  class_id: number;
+  class_name: string;
+  value: number;
+}
+
+export interface MapPopulationDto {
+  zone_id: number;
+  zone_name: string;
+  player_count: number;
+}
+
+// ---------------------------------------------------------------------------
+// Rankings: Server → Client payloads
+// ---------------------------------------------------------------------------
+
+export interface RankingsDataPayload {
+  updated_at: string;
+  total_players: number;
+  top_level: LeaderboardEntryDto[];
+  top_fighters: LeaderboardEntryDto[];
+  top_crafters: LeaderboardEntryDto[];
+  top_questers: LeaderboardEntryDto[];
+  map_population: MapPopulationDto[];
+  my_ranks: {
+    level: { rank: number; value: number };
+    fighters: { rank: number; value: number };
+    crafters: { rank: number; value: number };
+    questers: { rank: number; value: number };
+  };
+}
