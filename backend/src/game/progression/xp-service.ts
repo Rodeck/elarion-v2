@@ -22,7 +22,7 @@ export async function awardXp(characterId: string, amount: number): Promise<XpAw
     id: string; account_id: string; level: number; experience: number;
     max_hp: number; current_hp: number; attack_power: number; defence: number;
     class_id: number; zone_id: number; pos_x: number; pos_y: number;
-    current_node_id: number | null; in_combat: boolean; in_gathering: boolean; crowns: number; updated_at: Date; name: string;
+    current_node_id: number | null; in_combat: boolean; in_gathering: boolean; crowns: number; rod_upgrade_points: number; updated_at: Date; name: string;
   }>('SELECT * FROM characters WHERE id = $1', [characterId]);
 
   const character = result.rows[0];

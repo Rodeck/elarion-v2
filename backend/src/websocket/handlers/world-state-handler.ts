@@ -162,6 +162,7 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
       pos_y: character.pos_y,
       current_node_id: currentNodeId,
       crowns: character.crowns,
+      rod_upgrade_points: character.rod_upgrade_points,
     },
     players,
   };

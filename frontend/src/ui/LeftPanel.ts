@@ -40,6 +40,9 @@ export class LeftPanel {
 
   private inventorySlots: InventorySlotDto[] = [];
 
+  // Callback fired when a tab button is clicked (used to collapse expanded stats)
+  private onTabClick: (() => void) | null = null;
+
   getInventorySlots(): InventorySlotDto[] {
     return this.inventorySlots;
   }
@@ -151,8 +154,13 @@ export class LeftPanel {
   // Tab navigation
   // ---------------------------------------------------------------------------
 
+  setOnTabClick(cb: () => void): void {
+    this.onTabClick = cb;
+  }
+
   showTab(tab: 'equipment' | 'inventory' | 'loadout' | 'squires'): void {
     this.activeTab = tab;
+    this.onTabClick?.();
     this.updateTabVisibility();
 
     // Update button active state
@@ -317,5 +325,10 @@ export class LeftPanel {
 
   setDragEnabled(enabled: boolean): void {
     this.inventoryPanel.setDragEnabled(enabled);
+  }
+
+  /** Returns the bottom edge of the tab bar (for positioning the expanded stats panel). */
+  getTabsBottom(): number {
+    return this.tabsEl.getBoundingClientRect().bottom;
   }
 }

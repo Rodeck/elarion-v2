@@ -31,6 +31,7 @@ export interface CharacterData {
   pos_y: number;
   current_node_id: number | null;
   crowns: number;
+  rod_upgrade_points: number;
 }
 
 export interface PlayerSummary {

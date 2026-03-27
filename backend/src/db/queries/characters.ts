@@ -30,6 +30,7 @@ export interface Character {
   in_combat: boolean;
   in_gathering: boolean;
   crowns: number;
+  rod_upgrade_points: number;
   updated_at: Date;
 }
 

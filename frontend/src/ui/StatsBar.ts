@@ -1,5 +1,9 @@
+import type { CharacterData } from '../../../shared/protocol/index';
+import { getRodUpgradePointsIconUrl } from './ui-icons';
+
 export class StatsBar {
   private container: HTMLDivElement;
+  private collapsedEl: HTMLDivElement;
   private nameEl: HTMLSpanElement;
   private levelEl: HTMLSpanElement;
   private hpFillEl: HTMLDivElement;
@@ -11,8 +15,17 @@ export class StatsBar {
   private crownsEl: HTMLSpanElement | null = null;
   private maxHp = 1;
 
+  // Expand/collapse state
+  private expanded = false;
+  private expandedPanel: HTMLDivElement | null = null;
+  private expandBtn: HTMLButtonElement;
+  private characterData: CharacterData | null = null;
+  private xpThreshold = 9999;
+  private effectiveAttack = 0;
+  private effectiveDefence = 0;
+
   constructor(
-    mountEl: HTMLElement,
+    private mountEl: HTMLElement,
     name: string,
     className: string,
     level: number,
@@ -25,6 +38,7 @@ export class StatsBar {
     crowns?: number,
   ) {
     this.maxHp = maxHp;
+    this.xpThreshold = xpThreshold;
 
     this.container = document.createElement('div');
     this.container.style.cssText = `
@@ -36,7 +50,43 @@ export class StatsBar {
       padding: 10px 16px;
       gap: 8px;
       box-sizing: border-box;
+      position: relative;
     `;
+
+    // ── Expand toggle arrow (centered at top) ───────────────────
+    this.expandBtn = document.createElement('button');
+    this.expandBtn.style.cssText = `
+      position: absolute;
+      top: 2px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(37,33,25,0.9);
+      border: 1px solid #5a4a2a;
+      border-radius: 2px;
+      color: #a89880;
+      font-size: 10px;
+      cursor: pointer;
+      padding: 1px 14px;
+      line-height: 1;
+      z-index: 2;
+      transition: color 0.15s, border-color 0.15s;
+    `;
+    this.expandBtn.textContent = '\u25B2'; // ▲
+    this.expandBtn.title = 'Expand character stats';
+    this.expandBtn.addEventListener('mouseenter', () => {
+      this.expandBtn.style.color = '#d4a84b';
+      this.expandBtn.style.borderColor = '#d4a84b';
+    });
+    this.expandBtn.addEventListener('mouseleave', () => {
+      this.expandBtn.style.color = '#a89880';
+      this.expandBtn.style.borderColor = '#5a4a2a';
+    });
+    this.expandBtn.addEventListener('click', () => this.toggle());
+    this.container.appendChild(this.expandBtn);
+
+    // ── Collapsed content wrapper ────────────────────────────────
+    this.collapsedEl = document.createElement('div');
+    this.collapsedEl.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
 
     // ── Header row: name block (left) + level badge (right) ──────
     const headerRow = document.createElement('div');
@@ -172,11 +222,12 @@ export class StatsBar {
     statsRow.appendChild(defBlock);
     statsRow.appendChild(crBlock);
 
-    // ── Assemble ──────────────────────────────────────────────────
-    this.container.appendChild(headerRow);
-    this.container.appendChild(hpEl);
-    this.container.appendChild(xpEl);
-    this.container.appendChild(statsRow);
+    // ── Assemble collapsed content ───────────────────────────────
+    this.collapsedEl.appendChild(headerRow);
+    this.collapsedEl.appendChild(hpEl);
+    this.collapsedEl.appendChild(xpEl);
+    this.collapsedEl.appendChild(statsRow);
+    this.container.appendChild(this.collapsedEl);
 
     mountEl.appendChild(this.container);
 
@@ -248,6 +299,10 @@ export class StatsBar {
     return { el, fill, valueText };
   }
 
+  // ---------------------------------------------------------------------------
+  // Public update methods
+  // ---------------------------------------------------------------------------
+
   setHp(current: number, max: number): void {
     this.maxHp = max;
     const ratio = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
@@ -263,6 +318,7 @@ export class StatsBar {
   }
 
   setXp(current: number, threshold: number): void {
+    this.xpThreshold = threshold;
     const ratio = threshold > 0 ? Math.max(0, Math.min(1, current / threshold)) : 0;
     this.xpFillEl.style.width = `${Math.round(ratio * 100)}%`;
     this.xpTextEl.textContent = `${current} / ${threshold}`;
@@ -281,7 +337,282 @@ export class StatsBar {
     if (this.crownsEl) this.crownsEl.textContent = String(amount);
   }
 
+  setCharacterData(data: CharacterData, xpThreshold: number): void {
+    this.characterData = data;
+    this.xpThreshold = xpThreshold;
+    if (this.expanded && this.expandedPanel) {
+      this.renderExpandedContent();
+    }
+  }
+
+  setEffectiveStats(attack: number, defence: number): void {
+    this.effectiveAttack = attack;
+    this.effectiveDefence = defence;
+    if (this.expanded && this.expandedPanel) {
+      this.renderExpandedContent();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Expand / collapse
+  // ---------------------------------------------------------------------------
+
+  isExpanded(): boolean {
+    return this.expanded;
+  }
+
+  toggle(): void {
+    if (this.expanded) {
+      this.collapse();
+    } else {
+      this.expand();
+    }
+  }
+
+  /** Target top position — just below the left-panel tabs. */
+  private targetTop = 0;
+  setExpandTarget(tabsBottom: number): void {
+    this.targetTop = tabsBottom;
+  }
+
+  private expand(): void {
+    if (this.expanded) return;
+    this.expanded = true;
+
+    // Hide collapsed content and the expand arrow on the stats-slot
+    this.collapsedEl.style.display = 'none';
+    this.expandBtn.style.display = 'none';
+
+    // Compute geometry
+    const statsSlotRect = this.mountEl.getBoundingClientRect();
+    const targetBottom = statsSlotRect.bottom;
+    const panelWidth = statsSlotRect.width;
+    const panelLeft = statsSlotRect.left;
+    const collapsedHeight = statsSlotRect.height;
+    const expandedHeight = targetBottom - this.targetTop;
+
+    // Create the expanded panel (fixed position, grows upward)
+    if (!this.expandedPanel) {
+      this.expandedPanel = document.createElement('div');
+      this.expandedPanel.style.cssText = `
+        position: fixed;
+        overflow-y: auto;
+        overflow-x: hidden;
+        background: rgba(10, 9, 7, 0.97);
+        border-right: 1px solid #5a4a2a;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+        transition: height 0.3s ease, opacity 0.25s ease;
+      `;
+      document.body.appendChild(this.expandedPanel);
+    }
+
+    // Position at collapsed size first (for animation start)
+    this.expandedPanel.style.left = `${panelLeft}px`;
+    this.expandedPanel.style.width = `${panelWidth}px`;
+    this.expandedPanel.style.bottom = `${window.innerHeight - targetBottom}px`;
+    this.expandedPanel.style.height = `${collapsedHeight}px`;
+    this.expandedPanel.style.top = 'auto';
+    this.expandedPanel.style.display = 'flex';
+    this.expandedPanel.style.opacity = '0';
+
+    this.renderExpandedContent();
+
+    // Trigger animation on next frame
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!this.expandedPanel) return;
+        this.expandedPanel.style.height = `${expandedHeight}px`;
+        this.expandedPanel.style.opacity = '1';
+      });
+    });
+  }
+
+  collapse(): void {
+    if (!this.expanded) return;
+    this.expanded = false;
+
+    if (this.expandedPanel) {
+      // Animate back to collapsed height
+      const statsSlotRect = this.mountEl.getBoundingClientRect();
+      this.expandedPanel.style.height = `${statsSlotRect.height}px`;
+      this.expandedPanel.style.opacity = '0';
+
+      // Restore collapsed content after animation finishes
+      setTimeout(() => {
+        this.collapsedEl.style.display = 'flex';
+        this.expandBtn.style.display = '';
+        this.expandBtn.textContent = '\u25B2';
+        this.expandBtn.title = 'Expand character stats';
+        this.expandedPanel!.style.display = 'none';
+      }, 300);
+    } else {
+      // No panel — just restore immediately
+      this.collapsedEl.style.display = 'flex';
+      this.expandBtn.style.display = '';
+      this.expandBtn.textContent = '\u25B2';
+      this.expandBtn.title = 'Expand character stats';
+    }
+  }
+
+  private renderExpandedContent(): void {
+    if (!this.expandedPanel || !this.characterData) return;
+    const c = this.characterData;
+    const xpNeeded = Math.max(0, this.xpThreshold - c.experience);
+    const hpRatio = c.max_hp > 0 ? Math.max(0, Math.min(1, c.current_hp / c.max_hp)) : 0;
+
+    let hpColor = 'var(--color-hp-high)';
+    if (hpRatio <= 0.3) hpColor = 'var(--color-hp-low)';
+    else if (hpRatio <= 0.6) hpColor = 'var(--color-hp-mid)';
+
+    const effAtk = this.effectiveAttack || c.attack_power;
+    const effDef = this.effectiveDefence || c.defence;
+    const gearAtk = effAtk - c.attack_power;
+    const gearDef = effDef - c.defence;
+
+    this.expandedPanel.innerHTML = '';
+
+    // Collapse arrow at the very top
+    const collapseRow = document.createElement('div');
+    collapseRow.style.cssText = 'display:flex;justify-content:center;padding:6px 0 2px;flex-shrink:0;';
+    const collapseBtn = document.createElement('button');
+    collapseBtn.style.cssText = `
+      background: rgba(37,33,25,0.9);
+      border: 1px solid #5a4a2a;
+      border-radius: 2px;
+      color: #a89880;
+      font-size: 10px;
+      cursor: pointer;
+      padding: 1px 14px;
+      line-height: 1;
+      transition: color 0.15s, border-color 0.15s;
+    `;
+    collapseBtn.textContent = '\u25BC'; // ▼
+    collapseBtn.title = 'Collapse character stats';
+    collapseBtn.addEventListener('mouseenter', () => {
+      collapseBtn.style.color = '#d4a84b';
+      collapseBtn.style.borderColor = '#d4a84b';
+    });
+    collapseBtn.addEventListener('mouseleave', () => {
+      collapseBtn.style.color = '#a89880';
+      collapseBtn.style.borderColor = '#5a4a2a';
+    });
+    collapseBtn.addEventListener('click', () => this.collapse());
+    collapseRow.appendChild(collapseBtn);
+    this.expandedPanel.appendChild(collapseRow);
+
+    // Stats content below the arrow
+    const statsContent = document.createElement('div');
+    statsContent.style.cssText = 'display:flex;flex-direction:column;gap:14px;padding:0 20px 16px;overflow-y:auto;flex:1;';
+    statsContent.innerHTML = `
+      <div style="text-align:center;">
+        <div style="font-family:var(--font-display);font-size:18px;font-weight:bold;color:var(--color-gold-bright);letter-spacing:0.06em;">
+          ${this.esc(c.name)}
+        </div>
+        <div style="font-family:var(--font-display);font-size:11px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-top:2px;">
+          ${this.esc(c.class_name || 'Class ' + c.class_id)}
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:center;">
+        <div style="width:52px;height:52px;background:rgba(37,33,25,0.8);border:1px solid var(--color-gold-dim);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+          <span style="font-family:var(--font-display);font-size:8px;color:var(--color-text-muted);letter-spacing:1.5px;text-transform:uppercase;">LVL</span>
+          <span style="font-family:var(--font-number);font-size:20px;font-weight:600;color:var(--color-gold-bright);line-height:1;">${c.level}</span>
+        </div>
+      </div>
+
+      ${this.renderBar('HP', c.current_hp, c.max_hp, hpColor, `${c.current_hp} / ${c.max_hp}`)}
+      ${this.renderBar('XP', c.experience, this.xpThreshold, 'var(--color-xp-fill)', `${c.experience} / ${this.xpThreshold}`)}
+      <div style="font-family:var(--font-body);font-size:11px;color:var(--color-text-muted);text-align:center;margin-top:-8px;">
+        ${xpNeeded > 0 ? `${xpNeeded} XP to next level` : 'Max level reached'}
+      </div>
+
+      <div style="border-top:1px solid #3a2e1a;margin:2px 0;"></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;">
+        ${this.renderStat('Attack', effAtk, '#e8c878')}
+        ${this.renderStat('Defence', effDef, '#78a8e8')}
+        ${this.renderStat('Max HP', c.max_hp, '#6dc86d')}
+        ${this.renderStat('Crowns', c.crowns, '#d4a84b')}
+      </div>
+
+      ${this.renderRodUpgradePoints(c.rod_upgrade_points)}
+
+      <div style="border-top:1px solid #3a2e1a;margin:2px 0;"></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;">
+        ${this.renderInfo('Base ATK', String(c.attack_power))}
+        ${this.renderInfo('Base DEF', String(c.defence))}
+        ${gearAtk > 0 ? this.renderInfo('Gear ATK', '+' + gearAtk) : ''}
+        ${gearDef > 0 ? this.renderInfo('Gear DEF', '+' + gearDef) : ''}
+      </div>
+    `;
+    this.expandedPanel.appendChild(statsContent);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  private renderBar(label: string, current: number, max: number, color: string, text: string): string {
+    const pct = max > 0 ? Math.round((current / max) * 100) : 0;
+    return `
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+          <span style="font-family:var(--font-display);font-size:11px;color:var(--color-text-muted);letter-spacing:1px;text-transform:uppercase;">${label}</span>
+          <span style="font-family:var(--font-number);font-size:13px;color:var(--color-text-secondary);">${text}</span>
+        </div>
+        <div style="background:rgba(30,26,20,0.8);border:1px solid rgba(92,77,61,0.5);border-radius:2px;height:12px;overflow:hidden;">
+          <div style="height:100%;background:${color};width:${pct}%;transition:width 0.3s ease;"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderStat(label: string, value: number, color: string): string {
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-family:var(--font-display);font-size:10px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1px;">${label}</span>
+        <span style="font-family:var(--font-number);font-size:14px;color:${color};font-weight:600;">${value}</span>
+      </div>
+    `;
+  }
+
+  private renderRodUpgradePoints(points: number): string {
+    const iconUrl = getRodUpgradePointsIconUrl();
+    const iconHtml = iconUrl
+      ? `<img src="${this.esc(iconUrl)}" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;image-rendering:pixelated;" />`
+      : `<span style="font-size:14px;vertical-align:middle;">🎣</span>`;
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:0 2px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          ${iconHtml}
+          <span style="font-family:var(--font-display);font-size:10px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1px;">Rod Points</span>
+        </div>
+        <span style="font-family:var(--font-number);font-size:14px;color:#5ec4d4;font-weight:600;">${points}</span>
+      </div>
+    `;
+  }
+
+  private renderInfo(label: string, value: string): string {
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-family:var(--font-display);font-size:9px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.5px;">${label}</span>
+        <span style="font-family:var(--font-number);font-size:12px;color:var(--color-text-secondary);">${value}</span>
+      </div>
+    `;
+  }
+
+  private esc(s: string): string {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
   destroy(): void {
     this.container.remove();
+    this.expandedPanel?.remove();
   }
 }

@@ -429,6 +429,7 @@ export class GameScene extends Phaser.Scene {
         this.myCharacter.current_hp = payload.current_hp;
         this.myCharacter.max_hp = payload.max_hp;
         this.statsBar?.setHp(payload.current_hp, payload.max_hp);
+        this.syncExpandedStats();
       }
     });
 
@@ -444,6 +445,7 @@ export class GameScene extends Phaser.Scene {
         this.statsBar.setHp(payload.new_max_hp, payload.new_max_hp);
         const nextThreshold = XP_THRESHOLDS[payload.new_level] ?? 9999;
         this.statsBar.setXp(payload.new_experience, nextThreshold);
+        this.syncExpandedStats();
       }
     });
 
@@ -459,6 +461,7 @@ export class GameScene extends Phaser.Scene {
       if (this.myCharacter) {
         this.myCharacter.crowns = payload.crowns;
         this.statsBar.setCrowns(payload.crowns);
+        this.syncExpandedStats();
       }
     });
 
@@ -608,6 +611,7 @@ export class GameScene extends Phaser.Scene {
         this.myCharacter.attack_power = payload.effective_attack;
         this.myCharacter.defence = payload.effective_defence;
       }
+      this.statsBar.setEffectiveStats(payload.effective_attack, payload.effective_defence);
     });
 
     this.client.on<EquipmentEquipRejectedPayload>('equipment.equip_rejected', (payload) => {
@@ -782,6 +786,11 @@ export class GameScene extends Phaser.Scene {
       if (this.myCharacter) this.myCharacter.crowns = payload.new_crowns;
       this.statsBar?.setCrowns(payload.new_crowns);
       this.leftPanel.onInventoryState({ slots: payload.updated_slots, capacity: 20 });
+      const newPts = (payload as any).new_rod_upgrade_points;
+      if (newPts != null && this.myCharacter) {
+        this.myCharacter.rod_upgrade_points = newPts;
+        this.syncExpandedStats();
+      }
     });
     this.client.on<QuestProgressPayload>('quest.progress', (payload) => {
       this.questPanel.handleProgress(payload);
@@ -1348,6 +1357,13 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.playerAnimSprite);
   }
 
+  private syncExpandedStats(): void {
+    if (!this.myCharacter) return;
+    const c = this.myCharacter;
+    const xpThreshold = XP_THRESHOLDS[c.level - 1] ?? 9999;
+    this.statsBar.setCharacterData(c, xpThreshold);
+  }
+
   private buildStatsBar(): void {
     this.statsBar?.destroy();
     this.logoutButton?.destroy();
@@ -1369,6 +1385,19 @@ export class GameScene extends Phaser.Scene {
       c.defence,
       c.crowns,
     );
+
+    // Give StatsBar full character data for the expanded view
+    this.statsBar.setCharacterData(c, xpThreshold);
+    this.statsBar.setEffectiveStats(c.attack_power, c.defence);
+    // Tell StatsBar where the tab bar ends so it expands up to that point
+    this.statsBar.setExpandTarget(this.leftPanel.getTabsBottom());
+    // Collapse expanded stats when any tab button is clicked
+    this.leftPanel.setOnTabClick(() => {
+      if (this.statsBar.isExpanded()) {
+        this.statsBar.collapse();
+      }
+    });
+
     this.logoutButton = new LogoutButton(document.getElementById('top-bar')!, () => this.handleLogout());
 
     // Quest log toggle button in top bar

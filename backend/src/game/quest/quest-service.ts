@@ -10,7 +10,7 @@ import {
   hasCompletedQuest,
   getCurrentResetKey,
 } from '../../db/queries/quests';
-import { getInventorySlotCount } from '../../db/queries/inventory';
+import { getInventorySlotCount, updateInventoryQuantity } from '../../db/queries/inventory';
 import { grantItemToCharacter } from '../inventory/inventory-grant-service';
 import { grantSquireToCharacter } from '../squire/squire-grant-service';
 import { awardXp } from '../progression/xp-service';
@@ -313,6 +313,52 @@ export async function checkPrerequisites(
 }
 
 // ---------------------------------------------------------------------------
+// Consume collect_item objective items on quest turn-in
+// ---------------------------------------------------------------------------
+
+export async function consumeCollectItemObjectives(
+  characterId: string,
+  questId: number,
+): Promise<void> {
+  const objectives = await getObjectivesForQuest(questId);
+  const collectObjectives = objectives.filter(
+    (o) => o.objective_type === 'collect_item' && o.target_id != null,
+  );
+  if (collectObjectives.length === 0) return;
+
+  for (const obj of collectObjectives) {
+    let remaining = obj.target_quantity;
+    const rows = await query<{ id: number; quantity: number }>(
+      `SELECT id, quantity FROM inventory_items
+       WHERE character_id = $1 AND item_def_id = $2 AND equipped_slot IS NULL
+       ORDER BY quantity ASC`,
+      [characterId, obj.target_id],
+    );
+
+    for (const row of rows.rows) {
+      if (remaining <= 0) break;
+      const deduct = Math.min(remaining, row.quantity);
+      const newQty = row.quantity - deduct;
+      if (newQty <= 0) {
+        await query('DELETE FROM inventory_items WHERE id = $1', [row.id]);
+      } else {
+        await updateInventoryQuantity(row.id, newQty);
+      }
+      remaining -= deduct;
+    }
+
+    if (remaining > 0) {
+      log('warn', 'quest-service', 'collect_item_underflow', {
+        characterId,
+        questId,
+        itemDefId: obj.target_id,
+        shortBy: remaining,
+      });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Reward granting
 // ---------------------------------------------------------------------------
 
@@ -320,10 +366,11 @@ export async function grantQuestRewards(
   session: AuthenticatedSession,
   characterId: string,
   questId: number,
-): Promise<{ rewards: QuestRewardDto[]; newCrowns: number }> {
+): Promise<{ rewards: QuestRewardDto[]; newCrowns: number; newRodUpgradePoints: number | null }> {
   const rewards = await getRewardsForQuest(questId);
   const grantedRewards: QuestRewardDto[] = [];
   let newCrowns = 0;
+  let newRodUpgradePoints: number | null = null;
 
   for (const reward of rewards) {
     const target = await resolveRewardTarget(reward);
@@ -357,7 +404,7 @@ export async function grantQuestRewards(
       }
       case 'rod_upgrade_points': {
         const { updateRodUpgradePoints } = await import('../../db/queries/fishing');
-        await updateRodUpgradePoints(characterId, reward.quantity);
+        newRodUpgradePoints = await updateRodUpgradePoints(characterId, reward.quantity);
         log('info', 'quest-service', 'rod_upgrade_points_awarded', {
           characterId,
           questId,
@@ -382,7 +429,7 @@ export async function grantQuestRewards(
     rewards: grantedRewards.map((r) => `${r.reward_type}:${r.quantity}`),
   });
 
-  return { rewards: grantedRewards, newCrowns };
+  return { rewards: grantedRewards, newCrowns, newRodUpgradePoints };
 }
 
 // ---------------------------------------------------------------------------

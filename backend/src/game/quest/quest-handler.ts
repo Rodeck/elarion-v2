@@ -24,6 +24,7 @@ import {
   buildCharacterQuestDto,
   checkPrerequisites,
   grantQuestRewards,
+  consumeCollectItemObjectives,
   hasInventorySpaceForRewards,
 } from './quest-service';
 import { QuestTracker } from './quest-tracker';
@@ -350,8 +351,11 @@ async function handleQuestComplete(session: AuthenticatedSession, payload: unkno
     return;
   }
 
+  // Consume collected items from inventory (collect_item objectives)
+  await consumeCollectItemObjectives(characterId, charQuest.quest_id);
+
   // Grant rewards
-  const { rewards, newCrowns } = await grantQuestRewards(session, characterId, charQuest.quest_id);
+  const { rewards, newCrowns, newRodUpgradePoints } = await grantQuestRewards(session, characterId, charQuest.quest_id);
 
   // Mark completed
   await completeCharacterQuest(character_quest_id);
@@ -369,6 +373,7 @@ async function handleQuestComplete(session: AuthenticatedSession, payload: unkno
     character_quest_id,
     rewards_granted: rewards,
     new_crowns: newCrowns,
+    new_rod_upgrade_points: newRodUpgradePoints,
     updated_slots: updatedSlots,
   });
 }
