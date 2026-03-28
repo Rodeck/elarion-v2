@@ -1310,3 +1310,180 @@ export async function updateFishingRodTier(
 export async function deleteFishingRodTier(tier: number): Promise<void> {
   return request<void>(`${FISHING_ROD_TIERS_BASE}/${tier}`, { method: 'DELETE' });
 }
+
+// ---------------------------------------------------------------------------
+// Bosses
+// ---------------------------------------------------------------------------
+
+const BOSSES_BASE = '/api/bosses';
+
+export interface BossResponse {
+  id: number;
+  name: string;
+  description: string | null;
+  icon_url: string | null;
+  sprite_url: string | null;
+  icon_filename: string | null;
+  sprite_filename: string | null;
+  max_hp: number;
+  attack: number;
+  defense: number;
+  xp_reward: number;
+  min_crowns: number;
+  max_crowns: number;
+  building_id: number | null;
+  building_name: string | null;
+  respawn_min_seconds: number;
+  respawn_max_seconds: number;
+  is_active: boolean;
+  created_at: string;
+  abilities?: BossAbilityEntry[];
+  loot?: BossLootEntry[];
+}
+
+export interface BossAbilityEntry {
+  id: number;
+  ability_id: number;
+  priority: number;
+  name: string;
+  effect_type: string;
+  mana_cost: number;
+  effect_value: number;
+  icon_url: string | null;
+}
+
+export interface BossLootEntry {
+  id: number;
+  item_def_id: number;
+  item_name: string;
+  drop_chance: number;
+  quantity: number;
+  icon_url: string | null;
+}
+
+export interface BossInstanceEntry {
+  id: number;
+  boss_id: number;
+  boss_name: string;
+  building_id: number | null;
+  max_hp: number;
+  current_hp: number;
+  status: 'alive' | 'in_combat' | 'defeated';
+  fighting_character_id: number | null;
+  fighting_character_name: string | null;
+  total_attempts: number;
+  spawned_at: string;
+  defeated_at: string | null;
+  respawn_at: string | null;
+}
+
+export interface BuildingSummary {
+  id: number;
+  name: string;
+  zone_id: number;
+}
+
+export async function listBossBuildings(): Promise<BuildingSummary[]> {
+  return request<BuildingSummary[]>(`${BOSSES_BASE}/buildings`);
+}
+
+export async function listBosses(): Promise<BossResponse[]> {
+  return request<BossResponse[]>(BOSSES_BASE);
+}
+
+export async function getBoss(id: number): Promise<BossResponse> {
+  return request<BossResponse>(`${BOSSES_BASE}/${id}`);
+}
+
+export async function createBossApi(data: {
+  name: string;
+  description?: string;
+  max_hp: number;
+  attack: number;
+  defense: number;
+  xp_reward?: number;
+  min_crowns?: number;
+  max_crowns?: number;
+  building_id?: number | null;
+  respawn_min_seconds?: number;
+  respawn_max_seconds?: number;
+  is_active?: boolean;
+}): Promise<BossResponse> {
+  return request<BossResponse>(BOSSES_BASE, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateBossApi(id: number, data: Record<string, unknown>): Promise<BossResponse> {
+  return request<BossResponse>(`${BOSSES_BASE}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteBossApi(id: number): Promise<void> {
+  return request<void>(`${BOSSES_BASE}/${id}`, { method: 'DELETE' });
+}
+
+export async function listBossAbilities(bossId: number): Promise<BossAbilityEntry[]> {
+  return request<BossAbilityEntry[]>(`${BOSSES_BASE}/${bossId}/abilities`);
+}
+
+export async function addBossAbilityApi(
+  bossId: number,
+  data: { ability_id: number; priority: number },
+): Promise<BossAbilityEntry> {
+  return request<BossAbilityEntry>(`${BOSSES_BASE}/${bossId}/abilities`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeBossAbilityApi(bossId: number, abilityId: number): Promise<void> {
+  return request<void>(`${BOSSES_BASE}/${bossId}/abilities/${abilityId}`, { method: 'DELETE' });
+}
+
+export async function listBossLoot(bossId: number): Promise<BossLootEntry[]> {
+  return request<BossLootEntry[]>(`${BOSSES_BASE}/${bossId}/loot`);
+}
+
+export async function addBossLootApi(
+  bossId: number,
+  data: { item_def_id: number; drop_chance: number; quantity: number },
+): Promise<BossLootEntry> {
+  return request<BossLootEntry>(`${BOSSES_BASE}/${bossId}/loot`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeBossLootApi(bossId: number, lootId: number): Promise<void> {
+  return request<void>(`${BOSSES_BASE}/${bossId}/loot/${lootId}`, { method: 'DELETE' });
+}
+
+export async function listBossInstances(): Promise<BossInstanceEntry[]> {
+  return request<BossInstanceEntry[]>(`${BOSSES_BASE}/instances`);
+}
+
+export async function forceRespawnBoss(bossId: number): Promise<unknown> {
+  return request<unknown>(`${BOSSES_BASE}/${bossId}/respawn`, { method: 'POST' });
+}
+
+export async function uploadBossIcon(bossId: number, file: File): Promise<{ icon_filename: string; icon_url: string }> {
+  const form = new FormData();
+  form.append('icon', file);
+  return request<{ icon_filename: string; icon_url: string }>(`${BOSSES_BASE}/${bossId}/upload-icon`, {
+    method: 'POST',
+    body: form,
+  });
+}
+
+export async function uploadBossSprite(bossId: number, file: File): Promise<{ sprite_filename: string; sprite_url: string }> {
+  const form = new FormData();
+  form.append('sprite', file);
+  return request<{ sprite_filename: string; sprite_url: string }>(`${BOSSES_BASE}/${bossId}/upload-sprite`, {
+    method: 'POST',
+    body: form,
+  });
+}

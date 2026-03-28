@@ -39,8 +39,9 @@ async function overview() {
     pool.query(`SELECT COUNT(*) as n FROM quest_definitions`),
     pool.query(`SELECT COUNT(*) as n FROM characters`),
     pool.query(`SELECT COUNT(*) as n FROM accounts`),
+    pool.query(`SELECT COUNT(*) as n FROM bosses`).catch(() => ({ rows: [{ n: 0 }] })),
   ]);
-  const labels = ['Items', 'Monsters', 'Map Zones', 'Buildings', 'NPCs', 'Crafting Recipes', 'Abilities', 'Quests', 'Characters', 'Accounts'];
+  const labels = ['Items', 'Monsters', 'Map Zones', 'Buildings', 'NPCs', 'Crafting Recipes', 'Abilities', 'Quests', 'Characters', 'Accounts', 'Bosses'];
   section('Game Overview');
   table(labels.map((l, i) => ({ entity: l, count: counts[i].rows[0].n })));
 
@@ -778,6 +779,66 @@ async function disassembly(itemDefId) {
   }
 }
 
+// ─── Bosses ───────────────────────────────────────────────────────────────────
+
+async function bosses() {
+  section('All Bosses');
+  const result = await pool.query(`
+    SELECT b.id, b.name, b.max_hp, b.attack, b.defense, b.xp_reward, b.min_crowns, b.max_crowns,
+           b.respawn_min_seconds, b.respawn_max_seconds, b.is_active,
+           bld.name AS building_name,
+           (SELECT COUNT(*) FROM boss_abilities ba WHERE ba.boss_id = b.id) AS ability_count,
+           (SELECT COUNT(*) FROM boss_loot bl WHERE bl.boss_id = b.id) AS loot_count
+    FROM bosses b
+    LEFT JOIN buildings bld ON bld.id = b.building_id
+    ORDER BY b.id
+  `);
+  table(result.rows);
+
+  for (const boss of result.rows) {
+    // Abilities
+    const abilities = await pool.query(`
+      SELECT a.name, a.effect_type, a.effect_value, a.cooldown_turns, ba.priority
+      FROM boss_abilities ba
+      JOIN abilities a ON a.id = ba.ability_id
+      WHERE ba.boss_id = $1
+      ORDER BY ba.priority DESC
+    `, [boss.id]);
+    if (abilities.rows.length) {
+      console.log(`\n  ${boss.name} Abilities:`);
+      table(abilities.rows);
+    }
+
+    // Loot
+    const loot = await pool.query(`
+      SELECT i.name AS item, bl.drop_chance, bl.quantity
+      FROM boss_loot bl
+      JOIN item_definitions i ON i.id = bl.item_def_id
+      WHERE bl.boss_id = $1
+      ORDER BY bl.drop_chance DESC
+    `, [boss.id]);
+    if (loot.rows.length) {
+      console.log(`  ${boss.name} Loot: ${loot.rows.map(l => `${l.item} (${l.drop_chance}%, x${l.quantity})`).join(', ')}`);
+    }
+  }
+}
+
+async function bossInstances() {
+  section('Live Boss Instances');
+  const result = await pool.query(`
+    SELECT bi.id, b.name AS boss_name, bld.name AS building_name,
+           bi.current_hp, b.max_hp, bi.status,
+           c.name AS fighting_character,
+           bi.total_attempts, bi.spawned_at, bi.defeated_at, bi.respawn_at
+    FROM boss_instances bi
+    JOIN bosses b ON b.id = bi.boss_id
+    LEFT JOIN buildings bld ON bld.id = b.building_id
+    LEFT JOIN characters c ON c.id = bi.fighting_character_id
+    ORDER BY bi.spawned_at DESC
+  `);
+  table(result.rows);
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 const HELP = `
@@ -797,6 +858,8 @@ Commands:
   quests [type]            List quests (optional: main|side|daily|weekly|monthly|repeatable)
   quest <id>               Quest detail with objectives, prerequisites, rewards, NPC givers
   gathering                All gathering actions with events, tool requirements, and tool items
+  bosses                   List all boss definitions with abilities and loot
+  boss-instances           Live boss instances with HP, status, and respawn timers
   disassembly [item_id]    Disassembly recipes with chance entries and outputs
   economy                  Crown sources/sinks, equipment stats, expedition rewards
   search <term>            Search across all entity types by name
@@ -829,6 +892,8 @@ async function main() {
       case 'disassembly': await disassembly(args[0]); break;
       case 'economy':     await economy(); break;
       case 'search':    await search(args.join(' ')); break;
+      case 'bosses':       await bosses(); break;
+      case 'boss-instances': await bossInstances(); break;
       case 'sql':       await rawSql(args.join(' ')); break;
       default:
         console.error(`Unknown command: ${cmd}`);

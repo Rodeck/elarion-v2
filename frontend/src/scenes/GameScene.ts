@@ -107,10 +107,20 @@ import type {
   DisassemblyResultPayload,
   DisassemblyRejectedPayload,
   RankingsDataPayload,
+  BossDto,
+  BossStatePayload,
+  BossChallengeRejectedPayload,
+  BossCombatStartPayload,
+  BossCombatTurnResultPayload,
+  BossCombatActiveWindowPayload,
+  BossCombatEndPayload,
 } from '@elarion/protocol';
 import { FishingMinigame } from '../ui/fishing-minigame';
 import { DisassemblyModal } from '../ui/DisassemblyModal';
 import { RankingsPanel } from '../ui/RankingsPanel';
+import { BossSprite } from '../entities/BossSprite';
+import { BossInfoPanel } from '../ui/BossInfoPanel';
+import { BossAnnouncementBanner } from '../ui/BossAnnouncementBanner';
 
 const TILE_SIZE = 32;
 const XP_THRESHOLDS = [100, 250, 500, 900, 1400];
@@ -174,6 +184,12 @@ export class GameScene extends Phaser.Scene {
   private cityHotspotGraphics: Phaser.GameObjects.Graphics | null = null;
   private cityNodeMarkers: Phaser.GameObjects.Arc[] = [];
   private cityBgSprite: Phaser.GameObjects.Sprite | null = null;
+
+  // Boss system
+  private bossSprites = new Map<number, BossSprite>();
+  private bossInfoPanel!: BossInfoPanel;
+  private bossAnnouncementBanner!: BossAnnouncementBanner;
+  private currentBosses: BossDto[] = [];
 
   constructor() {
     super({ key: 'GameScene' });
@@ -267,6 +283,9 @@ export class GameScene extends Phaser.Scene {
       inventoryEl.style.position = '';
       this.leftPanel.setDragEnabled(false);
     });
+    this.buildingPanel.setOnBossChallenge((boss) => {
+      this.bossInfoPanel.show(boss, this.getBossTokenCount());
+    });
     this.questLog = new QuestLog(document.getElementById('game')!);
     this.questLog.setSendFn((type, payload) => {
       this.client.send(type, payload);
@@ -276,6 +295,11 @@ export class GameScene extends Phaser.Scene {
     this.rankingsPanel.setSendFn((type, payload) => {
       this.client.send(type, payload);
     });
+    this.bossInfoPanel = new BossInfoPanel(document.getElementById('game')!);
+    this.bossAnnouncementBanner = new BossAnnouncementBanner(document.getElementById('game')!);
+    this.bossInfoPanel.onChallenge = (bossId) => {
+      this.client.send('boss:challenge', { boss_id: bossId });
+    };
     this.buildingPanel.getCraftingModal().setSendFn((type, payload) => {
       this.client.send(type, payload);
     });
@@ -315,7 +339,10 @@ export class GameScene extends Phaser.Scene {
     this.combatScreen = new CombatScreen(() => {
       const combatId = this.combatScreen?.getCombatId();
       if (combatId) {
-        this.client.send('combat:trigger_active', { combat_id: combatId });
+        const msgType = this.combatScreen?.getVariant() === 'boss'
+          ? 'boss:combat_trigger_active'
+          : 'combat:trigger_active';
+        this.client.send(msgType, { combat_id: combatId });
       }
     });
     this.combatScreen.setOnClose(() => {
@@ -368,6 +395,8 @@ export class GameScene extends Phaser.Scene {
         this.pathPreviewGraphics = null;
         this.remotePlayers.forEach((c) => c.destroy());
         this.remotePlayers.clear();
+        this.clearBossSprites();
+        this.bossInfoPanel.hide();
         this.buildingPanel.hide();
       }
 
@@ -397,6 +426,17 @@ export class GameScene extends Phaser.Scene {
 
       // Flush any player.entered_zone events that arrived before this world.state
       this.pendingEnteredZone.splice(0).forEach((ev) => this.spawnRemotePlayer(ev.character));
+
+      // Spawn boss sprites on city maps
+      this.clearBossSprites();
+      if (this.isCityMap && payload.bosses) {
+        this.currentBosses = payload.bosses;
+        this.spawnBossSprites(payload.bosses);
+        this.buildingPanel.setBossBlockers(payload.bosses);
+      } else {
+        this.currentBosses = [];
+        this.buildingPanel.setBossBlockers([]);
+      }
 
       // Mount / update DayNightBar
       const gameEl = document.getElementById('canvas-area') ?? document.getElementById('game')!;
@@ -985,6 +1025,31 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
+    // Boss combat handlers
+    this.client.on<BossCombatStartPayload>('boss:combat_start', (payload) => {
+      this.buildingBeforeCombat = this.buildingPanel.getCurrentBuilding();
+      this.buildingPanel.hide();
+      this.leftPanel.setLoadoutLocked(true);
+      this.combatScreen?.showBoss(payload);
+    });
+
+    this.client.on<BossCombatTurnResultPayload>('boss:combat_turn_result', (payload) => {
+      this.combatScreen?.updateBossTurn(payload);
+    });
+
+    this.client.on<BossCombatActiveWindowPayload>('boss:combat_active_window', (payload) => {
+      this.combatScreen?.openActiveWindow(payload);
+    });
+
+    this.client.on<BossCombatEndPayload>('boss:combat_end', (payload) => {
+      // Update HP in character state and stats bar
+      if (this.myCharacter) this.myCharacter.current_hp = payload.current_hp;
+      this.statsBar?.setHp(payload.current_hp, this.myCharacter?.max_hp ?? 0);
+
+      this.combatScreen?.showBossEnd(payload);
+      this.leftPanel.setLoadoutLocked(false);
+    });
+
     this.client.on('connection_lost', () => {
       // Clear before close so the onClose callback does not re-open the building panel
       this.buildingBeforeCombat = null;
@@ -1003,6 +1068,19 @@ export class GameScene extends Phaser.Scene {
 
     this.client.on<LoadoutUpdateRejectedPayload>('loadout:update_rejected', (payload) => {
       this.leftPanel.handleLoadoutUpdateRejected(payload);
+    });
+
+    // Boss handlers
+    this.client.on<BossStatePayload>('boss:state', (payload) => {
+      this.handleBossStateUpdate(payload);
+    });
+
+    this.client.on<BossChallengeRejectedPayload>('boss:challenge_rejected', (payload) => {
+      this.chatBox.addSystemMessage(payload.message);
+    });
+
+    this.client.on<import('../../../shared/protocol/index').BossAnnouncementPayload>('boss:announcement', (payload) => {
+      this.bossAnnouncementBanner.show(payload);
     });
   }
 
@@ -1582,6 +1660,110 @@ export class GameScene extends Phaser.Scene {
   private removeRemotePlayer(id: string): void {
     this.remotePlayers.get(id)?.destroy();
     this.remotePlayers.delete(id);
+  }
+
+  // ── Boss system ─────────────────────────────────────────────────
+
+  private spawnBossSprites(bosses: BossDto[]): void {
+    if (!this.cityMapData) return;
+
+    for (const boss of bosses) {
+      if (boss.status === 'defeated' || boss.status === 'inactive') continue;
+      if (this.bossSprites.has(boss.id)) continue;
+
+      // Find the building and its node to get position
+      const building = this.cityMapData.buildings.find(b => b.id === boss.building_id);
+      if (!building) continue;
+      const node = this.cityMapData.nodes.find(n => n.id === building.node_id);
+      if (!node) continue;
+
+      const sprite = new BossSprite({
+        scene: this,
+        boss,
+        x: node.x,
+        y: node.y - 30, // offset above the node marker
+      });
+      this.children.add(sprite);
+      sprite.loadSprite();
+
+      // Click handler — open boss info panel
+      sprite.on('pointerdown', () => {
+        const tokenCount = this.getBossTokenCount();
+        this.bossInfoPanel.show(sprite.getBossData(), tokenCount);
+      });
+
+      this.bossSprites.set(boss.id, sprite);
+    }
+  }
+
+  private clearBossSprites(): void {
+    this.bossSprites.forEach((s) => s.destroy());
+    this.bossSprites.clear();
+  }
+
+  private handleBossStateUpdate(payload: BossStatePayload): void {
+    // Update the cached boss data
+    const idx = this.currentBosses.findIndex(b => b.id === payload.boss_id);
+    if (idx >= 0) {
+      this.currentBosses[idx]!.status = payload.status;
+      this.currentBosses[idx]!.fighting_character_name = payload.fighting_character_name;
+      this.currentBosses[idx]!.total_attempts = payload.total_attempts;
+      this.currentBosses[idx]!.respawn_at = payload.respawn_at;
+    }
+
+    const existing = this.bossSprites.get(payload.boss_id);
+
+    if (payload.status === 'alive' || payload.status === 'in_combat') {
+      if (existing) {
+        // Update existing sprite
+        existing.updateStatus(payload.status);
+        const updatedBoss = this.currentBosses.find(b => b.id === payload.boss_id);
+        if (updatedBoss) existing.setBossData(updatedBoss);
+      } else if (this.cityMapData) {
+        // Boss respawned — create a new sprite
+        const boss = this.currentBosses.find(b => b.id === payload.boss_id);
+        if (boss) {
+          boss.status = payload.status;
+          this.spawnBossSprites([boss]);
+        }
+      }
+    } else {
+      // defeated or inactive — remove sprite
+      if (existing) {
+        existing.updateStatus(payload.status);
+        // After a brief delay remove from map
+        this.time.delayedCall(500, () => {
+          existing.destroy();
+          this.bossSprites.delete(payload.boss_id);
+        });
+      }
+    }
+
+    // Update the info panel if it's showing this boss
+    if (this.bossInfoPanel.isVisible() && this.bossInfoPanel.getCurrentBossId() === payload.boss_id) {
+      const boss = this.currentBosses.find(b => b.id === payload.boss_id);
+      if (boss) {
+        this.bossInfoPanel.updateStatus(boss, this.getBossTokenCount());
+      }
+    }
+
+    // Update building panel boss blockers so it re-renders if showing a blocked/unblocked building
+    this.buildingPanel.setBossBlockers(this.currentBosses);
+  }
+
+  private getBossTokenCount(): number {
+    try {
+      const slots = this.leftPanel.getInventorySlots();
+      let count = 0;
+      for (const slot of slots) {
+        if (slot.definition.name === 'Boss Challenge Token') {
+          count += slot.quantity;
+        }
+      }
+      return count;
+    } catch {
+      return 0;
+    }
   }
 
   update(_time: number, delta: number): void {

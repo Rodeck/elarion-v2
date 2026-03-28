@@ -14,6 +14,24 @@ export default defineConfig({
         target: 'http://localhost:4001',
         changeOrigin: true,
       },
+      '/boss-icons': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
+      '/boss-sprites': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
+      '/assets/bosses/icons': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+        rewrite: (p: string) => p.replace('/assets/bosses/icons', '/boss-icons'),
+      },
+      '/assets/bosses/sprites': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+        rewrite: (p: string) => p.replace('/assets/bosses/sprites', '/boss-sprites'),
+      },
     },
   },
   build: {

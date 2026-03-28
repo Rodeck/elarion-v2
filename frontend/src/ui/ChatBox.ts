@@ -19,6 +19,11 @@ export class ChatBox {
   private history: string[] = [];
   private historyIndex = -1;
   private historyDraft = '';
+  private static readonly ADMIN_COMMANDS = [
+    '/level_up', '/item', '/clear_inventory', '/day', '/night',
+    '/crown', '/skill_all', '/crafting_finish', '/heal',
+    '/squire', '/expedition_finish', '/reset_player',
+  ];
 
   constructor(client: WSClient, container: HTMLElement = document.body) {
     this.client = client;
@@ -86,7 +91,12 @@ export class ChatBox {
     this.input.addEventListener('focus', () => { this.input.style.borderColor = 'var(--color-gold-primary)'; });
     this.input.addEventListener('blur',  () => { this.input.style.borderColor = 'var(--color-gold-subtle)'; });
     this.input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
+      if (e.key === 'Tab') {
+        const completed = this.tryTabComplete();
+        if (completed) {
+          e.preventDefault();
+        }
+      } else if (e.key === 'Enter') {
         this.sendMessage();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
@@ -258,6 +268,47 @@ export class ChatBox {
         this.rateLimitNotice.textContent = `Slow down — wait ${remaining}s`;
       }
     }, 1000);
+  }
+
+  private tryTabComplete(): boolean {
+    const text = this.input.value;
+    if (!text.startsWith('/')) return false;
+
+    const firstSpace = text.indexOf(' ');
+    const partial = (firstSpace === -1 ? text : text.substring(0, firstSpace)).toLowerCase();
+
+    // Only complete if cursor is still in the command portion (before first space or no space)
+    if (firstSpace !== -1 && this.input.selectionStart! > firstSpace) return false;
+
+    const matches = ChatBox.ADMIN_COMMANDS.filter((cmd) => cmd.startsWith(partial));
+    if (matches.length === 1) {
+      const completed = matches[0]!;
+      const rest = firstSpace === -1 ? ' ' : text.substring(firstSpace);
+      this.input.value = completed + rest;
+      const cursorPos = completed.length + (firstSpace === -1 ? 1 : 0);
+      this.input.setSelectionRange(cursorPos, cursorPos);
+      return true;
+    }
+
+    if (matches.length > 1) {
+      // Find longest common prefix among matches
+      let prefix = matches[0]!;
+      for (let i = 1; i < matches.length; i++) {
+        while (!matches[i]!.startsWith(prefix)) {
+          prefix = prefix.substring(0, prefix.length - 1);
+        }
+      }
+      if (prefix.length > partial.length) {
+        const rest = firstSpace === -1 ? '' : text.substring(firstSpace);
+        this.input.value = prefix + rest;
+        this.input.setSelectionRange(prefix.length, prefix.length);
+      }
+      // Show available matches in chat
+      this.addSystemMessage(`Commands: ${matches.join(', ')}`);
+      return true;
+    }
+
+    return false;
   }
 
   private sendMessage(): void {

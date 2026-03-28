@@ -11,6 +11,7 @@ import { RecipeManager } from './ui/recipe-manager';
 import { QuestManager } from './ui/quest-manager';
 import { SquireDefinitionManager } from './ui/squire-definition-manager';
 import { FishingManager } from './ui/fishing-manager';
+import { BossManager } from './ui/boss-manager';
 import { Toolbar } from './ui/toolbar';
 import { MapCanvas } from './editor/canvas';
 import { EditorModeManager } from './editor/modes';
@@ -49,6 +50,7 @@ let recipeManager: RecipeManager | null = null;
 let questManager: QuestManager | null = null;
 let squireDefManager: SquireDefinitionManager | null = null;
 let fishingManager: FishingManager | null = null;
+let bossManager: BossManager | null = null;
 let toolbar: Toolbar | null = null;
 let canvas: MapCanvas | null = null;
 let modeManager: EditorModeManager | null = null;
@@ -118,11 +120,12 @@ function destroyAll(): void {
   npcManager = null;
   abilityManager = null;
   recipeManager = null;
+  bossManager = null;
   destroyEditor();
   app.innerHTML = '';
 }
 
-async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' | 'quests' | 'squires' | 'fishing' = 'maps'): Promise<void> {
+async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' | 'quests' | 'squires' | 'fishing' | 'bosses' = 'maps'): Promise<void> {
   destroyAll();
 
   // Tab bar — hidden until authenticated
@@ -143,6 +146,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     <button class="btn ${activeTab === 'quests' ? 'btn--active' : ''}" id="tab-quests">Quests</button>
     <button class="btn ${activeTab === 'squires' ? 'btn--active' : ''}" id="tab-squires">Squires</button>
     <button class="btn ${activeTab === 'fishing' ? 'btn--active' : ''}" id="tab-fishing">Fishing</button>
+    <button class="btn ${activeTab === 'bosses' ? 'btn--active' : ''}" id="tab-bosses">Bosses</button>
     <div style="flex:1"></div>
     <span style="font-size:0.75rem;color:#2d3347;align-self:center;padding-right:0.5rem;letter-spacing:0.05em;font-weight:600;">ELARION ADMIN</span>
   `;
@@ -209,7 +213,12 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
   fishingManagerPanel.style.display = activeTab === 'fishing' ? '' : 'none';
   app.appendChild(fishingManagerPanel);
 
-  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' | 'quests' | 'squires' | 'fishing'): void {
+  const bossManagerPanel = document.createElement('div');
+  bossManagerPanel.id = 'boss-manager';
+  bossManagerPanel.style.display = activeTab === 'bosses' ? '' : 'none';
+  app.appendChild(bossManagerPanel);
+
+  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' | 'quests' | 'squires' | 'fishing' | 'bosses'): void {
     mapEditorPanel.style.display = tab === 'maps' ? '' : 'none';
     itemManagerPanel.style.display = tab === 'items' ? '' : 'none';
     monsterManagerPanel.style.display = tab === 'monsters' ? '' : 'none';
@@ -222,6 +231,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     questManagerPanel.style.display = tab === 'quests' ? '' : 'none';
     squireDefPanel.style.display = tab === 'squires' ? '' : 'none';
     fishingManagerPanel.style.display = tab === 'fishing' ? '' : 'none';
+    bossManagerPanel.style.display = tab === 'bosses' ? '' : 'none';
     tabBar.querySelector('#tab-maps')!.classList.toggle('btn--active', tab === 'maps');
     tabBar.querySelector('#tab-items')!.classList.toggle('btn--active', tab === 'items');
     tabBar.querySelector('#tab-monsters')!.classList.toggle('btn--active', tab === 'monsters');
@@ -234,6 +244,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     tabBar.querySelector('#tab-quests')!.classList.toggle('btn--active', tab === 'quests');
     tabBar.querySelector('#tab-squires')!.classList.toggle('btn--active', tab === 'squires');
     tabBar.querySelector('#tab-fishing')!.classList.toggle('btn--active', tab === 'fishing');
+    tabBar.querySelector('#tab-bosses')!.classList.toggle('btn--active', tab === 'bosses');
   }
 
   tabBar.querySelector('#tab-maps')!.addEventListener('click', () => setActiveTab('maps'));
@@ -337,6 +348,15 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     }
   });
 
+  tabBar.querySelector('#tab-bosses')!.addEventListener('click', async () => {
+    setActiveTab('bosses');
+    if (!bossManager) {
+      bossManager = new BossManager();
+      bossManager.init(bossManagerPanel);
+      await bossManager.load();
+    }
+  });
+
   // Initialize map list
   mapListView = new MapListView(mapEditorPanel);
   mapListView.setOnEditMap((mapId) => {
@@ -377,6 +397,10 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     recipeManager = new RecipeManager();
     recipeManager.init(recipeManagerPanel);
     await recipeManager.load();
+  } else if (activeTab === 'bosses') {
+    bossManager = new BossManager();
+    bossManager.init(bossManagerPanel);
+    await bossManager.load();
   }
 }
 

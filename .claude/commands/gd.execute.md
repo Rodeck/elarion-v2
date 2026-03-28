@@ -19,6 +19,13 @@ Create all entities defined in a design document by calling the admin REST API t
 - The admin backend must be running (`cd admin/backend && npm run dev`) on port 4001
 - The game backend should be running for verification (`cd backend && npm run dev`)
 - A review has been completed (check for `review.md` with "Ready to execute" verdict) — warn if missing but don't block
+- **Code changes check**: Read `design.md` and check the "Code Changes Required" section:
+  - If it says "None — entities only": proceed normally
+  - If code changes are listed: check whether they have been implemented:
+    - Look for a matching `specs/` directory (e.g., `specs/*-<design-name>/`)
+    - Check if `tasks.md` exists and all tasks are marked `[X]` (completed)
+    - If code changes are NOT implemented: **STOP** and warn the user: "This design requires code changes that haven't been implemented yet. Run `/speckit.specify` with this design first, then come back to `/gd.execute`."
+    - If code changes appear implemented: proceed with entity creation
 
 ### Workflow
 

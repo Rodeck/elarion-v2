@@ -47,6 +47,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - PostgreSQL 16 — migration `027_item_disassembly.sql` (2 new tables, 3 ALTER statements) (025-item-disassembly)
 - TypeScript 5.x (frontend + backend + shared) + Phaser 3.60 + Vite 5 (frontend), Node.js 20 LTS + `ws` (backend), `pg` (PostgreSQL client) (026-character-rankings)
 - PostgreSQL 16 — ALTER `characters` table (add column); no new tables (026-character-rankings)
+- TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (game backend), Phaser 3.60 + Vite 5 (game frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client), `jose` (JWT) (027-boss-encounters)
+- PostgreSQL 16 — 4 new tables (`bosses`, `boss_abilities`, `boss_loot`, `boss_instances`); in-memory `Map<bossId, BossInstance>` for active instance state (027-boss-encounters)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -72,9 +74,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 027-boss-encounters: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (game backend), Phaser 3.60 + Vite 5 (game frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 026-character-rankings: Added TypeScript 5.x (frontend + backend + shared) + Phaser 3.60 + Vite 5 (frontend), Node.js 20 LTS + `ws` (backend), `pg` (PostgreSQL client)
 - 025-item-disassembly: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
-- 024-fishing-system: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 
 
 
@@ -193,4 +195,26 @@ When adding a new `tool_type` value (e.g., `'kiln'`), update these locations:
 5. **game-entities skill** — `.claude/commands/game-entities.md`: Document the new tool type in `create-item` docs
 
 Existing tool types: `'pickaxe'`, `'axe'`, `'fishing_rod'`, `'kiln'`.
+
+## Adding a New Boss
+
+When creating a new boss, configure these through the **admin panel** (no code changes needed):
+
+1. **Boss definition** — Admin panel → Boss Manager → Create: Set name, description, stats (HP, ATK, DEF), XP, crowns, building assignment, respawn time range, active toggle
+2. **Boss abilities** — Admin panel → Boss Manager → Edit boss → Abilities tab: Assign existing abilities with priority ordering (higher priority fires first)
+3. **Boss loot** — Admin panel → Boss Manager → Edit boss → Loot tab: Add items with drop chance (%) and quantity
+4. **Boss icon** — Admin panel → Boss Manager → Edit boss → Upload icon: Combat icon PNG (stored in `backend/assets/bosses/icons/`)
+5. **Boss sprite** — Admin panel → Boss Manager → Edit boss → Upload sprite: Map sprite PNG (stored in `backend/assets/bosses/sprites/`)
+6. **Verify instance spawned** — Check `node scripts/game-data.js boss-instances` to confirm the boss instance is alive at the assigned building
+
+### If adding boss-related code changes (new boss features):
+
+1. **DB queries** — `backend/src/db/queries/bosses.ts`: Add new query functions
+2. **Instance manager** — `backend/src/game/boss/boss-instance-manager.ts`: Update lifecycle logic
+3. **Combat handler** — `backend/src/game/boss/boss-combat-handler.ts`: Update combat flow
+4. **Shared protocol** — `shared/protocol/index.ts`: Add/modify boss message types
+5. **Frontend** — `frontend/src/ui/CombatScreen.ts`, `frontend/src/entities/BossSprite.ts`, `frontend/src/ui/BossInfoPanel.ts`
+6. **Admin routes** — `admin/backend/src/routes/bosses.ts`: Update admin API
+7. **Admin UI** — `admin/frontend/src/ui/boss-manager.ts`: Update admin panel
+8. **game-data script** — `scripts/game-data.js`: Update `bosses` and `boss-instances` commands
 <!-- MANUAL ADDITIONS END -->

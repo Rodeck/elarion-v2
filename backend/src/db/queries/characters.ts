@@ -100,7 +100,7 @@ export async function findClassById(id: number): Promise<CharacterClass | null> 
 
 export async function findByName(name: string): Promise<Character | null> {
   const result = await query<Character>(
-    `SELECT * FROM characters WHERE name = $1`,
+    `SELECT * FROM characters WHERE LOWER(name) = LOWER($1)`,
     [name],
   );
   return result.rows[0] ?? null;

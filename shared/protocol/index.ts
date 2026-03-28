@@ -346,6 +346,7 @@ export interface WorldStatePayload {
   map_type: 'tile' | 'city';
   city_map?: CityMapData;
   day_night_state: DayNightStateDto;
+  bosses?: BossDto[];
 }
 
 export interface PlayerMovedPayload {
@@ -1999,3 +2000,125 @@ export interface RankingsDataPayload {
     questers: { rank: number; value: number };
   };
 }
+
+// ---------------------------------------------------------------------------
+// Boss System: Shared sub-types
+// ---------------------------------------------------------------------------
+
+export type BossHpBracket = 'full' | 'high' | 'medium' | 'low' | 'critical';
+
+export interface BossDto {
+  id: number;
+  name: string;
+  description: string | null;
+  icon_url: string | null;
+  sprite_url: string | null;
+  building_id: number;
+  status: 'alive' | 'in_combat' | 'defeated' | 'inactive';
+  fighting_character_name: string | null;
+  total_attempts: number;
+  respawn_at: string | null; // ISO 8601
+}
+
+export interface BossCombatDto {
+  id: number;
+  name: string;
+  icon_url: string | null;
+  attack: number;
+  defense: number;
+  hp_bracket: BossHpBracket;
+  abilities: { name: string; icon_url: string | null }[];
+}
+
+// ---------------------------------------------------------------------------
+// Boss System: Server → Client payloads
+// ---------------------------------------------------------------------------
+
+export interface BossCombatStartPayload {
+  combat_id: string;
+  boss: BossCombatDto;
+  player: PlayerCombatStateDto;
+  loadout: {
+    slots: CombatAbilityStateDto[];
+  };
+  turn_timer_ms: number;
+}
+
+export interface BossCombatTurnResultPayload {
+  combat_id: string;
+  turn: number;
+  phase: 'player' | 'enemy';
+  events: CombatEventDto[];
+  player_hp: number;
+  player_mana: number;
+  enemy_hp_bracket: BossHpBracket;
+  ability_states: CombatAbilityStateDto[];
+}
+
+export interface BossCombatActiveWindowPayload {
+  combat_id: string;
+  timer_ms: number;
+  ability: CombatAbilityStateDto | null;
+}
+
+export interface BossCombatEndPayload {
+  combat_id: string;
+  outcome: 'win' | 'loss';
+  current_hp: number;
+  boss_name: string;
+  boss_icon_url: string | null;
+  enemy_hp_bracket: BossHpBracket;
+  xp_gained: number;
+  crowns_gained: number;
+  items_dropped: ItemDroppedDto[];
+}
+
+export interface BossStatePayload {
+  boss_id: number;
+  building_id: number;
+  status: 'alive' | 'in_combat' | 'defeated';
+  fighting_character_name: string | null;
+  total_attempts: number;
+  respawn_at: string | null;
+}
+
+export interface BossAnnouncementPayload {
+  type: 'defeated' | 'respawned';
+  boss_name: string;
+  boss_icon_url: string | null;
+  building_name: string | null;
+  defeated_by?: string; // character name, only for 'defeated'
+  total_attempts?: number; // how many attempts this instance took
+}
+
+export interface BossChallengeRejectedPayload {
+  reason: 'no_token' | 'in_combat' | 'defeated' | 'inactive' | 'already_in_combat' | 'not_found';
+  message: string;
+  respawn_at?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Boss System: Client → Server payloads
+// ---------------------------------------------------------------------------
+
+export interface BossChallengePayload {
+  boss_id: number;
+}
+
+export interface BossCombatTriggerActivePayload {
+  combat_id: string;
+}
+
+// ---------------------------------------------------------------------------
+// Boss System: message type aliases
+// ---------------------------------------------------------------------------
+
+export type BossCombatStartMessage         = WsMessage<BossCombatStartPayload>;
+export type BossCombatTurnResultMessage    = WsMessage<BossCombatTurnResultPayload>;
+export type BossCombatActiveWindowMessage  = WsMessage<BossCombatActiveWindowPayload>;
+export type BossCombatEndMessage           = WsMessage<BossCombatEndPayload>;
+export type BossStateMessage              = WsMessage<BossStatePayload>;
+export type BossChallengeRejectedMessage  = WsMessage<BossChallengeRejectedPayload>;
+export type BossChallengeMessage          = WsMessage<BossChallengePayload>;
+export type BossCombatTriggerActiveMessage = WsMessage<BossCombatTriggerActivePayload>;
+export type BossAnnouncementMessage       = WsMessage<BossAnnouncementPayload>;

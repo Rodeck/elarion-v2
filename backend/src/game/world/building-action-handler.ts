@@ -81,6 +81,17 @@ export async function handleBuildingAction(
     return;
   }
 
+  // Gate 5: building must not be blocked by a boss
+  const { isBossBlocking } = await import('../boss/boss-instance-manager');
+  if (isBossBlocking(building_id)) {
+    sendToSession(session, 'city.building_action_rejected', {
+      reason: 'BOSS_BLOCKING',
+      message: 'A powerful guardian blocks this building. Defeat the boss to gain access.',
+    });
+    log('debug', 'building-action', 'rejected_boss_blocking', { characterId, building_id });
+    return;
+  }
+
   // ── Branch on action type ────────────────────────────────────────────────
 
   if (action.action_type === 'marketplace') {

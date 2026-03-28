@@ -22,6 +22,19 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 The text the user typed after `/speckit.specify` in the triggering message **is** the feature description. Assume you always have it available in this conversation even if `$ARGUMENTS` appears literally below. Do not ask the user to repeat it unless they provided an empty command.
 
+### Game Design Document Integration
+
+If `$ARGUMENTS` references a game design document (e.g., contains a path like `game_design/<name>/design.md`, or mentions a game design name, or was invoked from a `gd.review` or `gd.design` handoff):
+
+1. **Read the design document**: `game_design/<name>/design.md`
+2. **Extract the "Code Changes Required" section** — this becomes the feature description for the spec
+3. **Also read the Context section** for background on what the feature enables
+4. **Use the design name** as the basis for the branch short name (e.g., design "boss-encounters" → branch "boss-encounters")
+5. **Reference the design document** in the spec's Context/Background section so implementers understand the game design motivation
+6. **Scope the spec strictly to code changes** — entity creation (items, monsters, NPCs, recipes) is handled separately by `/gd.execute` and should NOT be part of this spec
+
+If `$ARGUMENTS` is a regular feature description (no game design reference), proceed normally:
+
 Given that feature description, do this:
 
 1. **Generate a concise short name** (2-4 words) for the branch:

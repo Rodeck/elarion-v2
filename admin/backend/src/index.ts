@@ -23,6 +23,7 @@ import { questsRouter } from './routes/quests';
 import { buildingItemsRouter } from './routes/building-items';
 import { squireDefinitionsRouter } from './routes/squire-definitions';
 import { fishingRouter } from './routes/fishing';
+import { bossesRouter } from './routes/bosses';
 
 const app = express();
 
@@ -57,6 +58,12 @@ app.use('/ability-icons', express.static(abilityIconsDir));
 const squireIconsDir = path.resolve(__dirname, '../../../backend/assets/squires/icons');
 app.use('/squire-icons', express.static(squireIconsDir));
 
+// Serve boss icons and sprites statically
+const bossIconsDir = path.resolve(__dirname, '../../../backend/assets/bosses/icons');
+app.use('/boss-icons', express.static(bossIconsDir));
+const bossSpritesDir = path.resolve(__dirname, '../../../backend/assets/bosses/sprites');
+app.use('/boss-sprites', express.static(bossSpritesDir));
+
 // Serve UI icons (XP, crowns) statically
 const uiIconsDir = path.resolve(__dirname, '../../../backend/assets/ui-icons');
 app.use('/ui-icons', express.static(uiIconsDir));
@@ -87,6 +94,7 @@ app.use('/api/recipes', recipesRouter);
 app.use('/api/quests', questsRouter);
 app.use('/api/squire-definitions', squireDefinitionsRouter);
 app.use('/api', fishingRouter);
+app.use('/api/bosses', bossesRouter);
 
 if (!process.env['OPENROUTER_API_KEY']) {
   console.log(JSON.stringify({ level: 'warn', event: 'openrouter_key_missing', msg: 'OPENROUTER_API_KEY not set — AI image generation will return 503', timestamp: new Date().toISOString() }));

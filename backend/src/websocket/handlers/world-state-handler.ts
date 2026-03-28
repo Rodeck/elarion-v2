@@ -182,6 +182,10 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
 
   worldStatePayload.day_night_state = getDayCycleDto();
 
+  // Include boss data for the zone
+  const { getBossesForZone } = await import('../../game/boss/boss-instance-manager');
+  worldStatePayload.bosses = getBossesForZone(character.zone_id);
+
   // Include UI icon URLs (XP, Crowns) from admin config
   const { getConfigValue: getAdminConfigValue } = await import('../../db/queries/admin-config');
   const xpIconFilename = await getAdminConfigValue('xp_icon_filename');

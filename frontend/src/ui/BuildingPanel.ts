@@ -14,6 +14,7 @@ import type {
   GatheringEndedPayload,
   GatheringRejectedPayload,
   GatheringStartPayload,
+  BossDto,
 } from '@elarion/protocol';
 import { CombatModal } from './CombatModal';
 import { getXpIconUrl, getCrownsIconUrl } from './ui-icons';
@@ -78,6 +79,8 @@ export class BuildingPanel {
   private currentSquireRoster: SquireRosterDto | null = null;
   private gatheringActive = false;
   private gatheringModal: GatheringModal;
+  private bossBlockers = new Map<number, BossDto>(); // buildingId → boss
+  private onBossChallenge: ((boss: BossDto) => void) | null = null;
   private marketplaceModal: MarketplaceModal;
 
   constructor(parent: HTMLElement, onAction: ActionCallback) {
@@ -298,6 +301,23 @@ export class BuildingPanel {
     return this.craftingModal;
   }
 
+  setOnBossChallenge(cb: (boss: BossDto) => void): void {
+    this.onBossChallenge = cb;
+  }
+
+  setBossBlockers(bosses: BossDto[]): void {
+    this.bossBlockers.clear();
+    for (const b of bosses) {
+      if (b.status === 'alive' || b.status === 'in_combat') {
+        this.bossBlockers.set(b.building_id, b);
+      }
+    }
+    // Re-render if currently showing a building that is now blocked/unblocked
+    if (this.currentBuilding) {
+      this.renderBuilding(this.currentBuilding);
+    }
+  }
+
   show(building: CityMapBuilding, expeditionState?: ExpeditionStateDto): void {
     if (expeditionState) {
       this.expeditionStates.set(expeditionState.action_id, expeditionState);
@@ -369,6 +389,63 @@ export class BuildingPanel {
         'margin:0;font-family:"Crimson Text",serif;font-size:13px;color:#a89060;line-height:1.5;';
       desc.textContent = building.description;
       this.bodyEl.appendChild(desc);
+    }
+
+    // ── Boss blocker check ───────────────────────────────────────────
+    const blocker = this.bossBlockers.get(building.id);
+    if (blocker) {
+      const blockerDiv = document.createElement('div');
+      blockerDiv.style.cssText =
+        'border:1px solid #6b2020;background:rgba(80,20,20,0.3);border-radius:4px;padding:14px;text-align:center;margin-top:8px;';
+
+      const icon = document.createElement('div');
+      icon.style.cssText = 'font-size:28px;margin-bottom:8px;';
+      icon.textContent = '\u2694\uFE0F'; // crossed swords
+      blockerDiv.appendChild(icon);
+
+      const msg = document.createElement('p');
+      msg.style.cssText =
+        'margin:0 0 6px;font-family:"Crimson Text",serif;font-size:14px;color:#e87070;line-height:1.5;';
+      msg.innerHTML = `<strong>${blocker.name}</strong> blocks this building.`;
+      blockerDiv.appendChild(msg);
+
+      const hint = document.createElement('p');
+      hint.style.cssText =
+        'margin:0;font-family:"Crimson Text",serif;font-size:12px;color:#a89060;font-style:italic;';
+      if (blocker.status === 'in_combat') {
+        hint.textContent = blocker.fighting_character_name
+          ? `${blocker.fighting_character_name} is fighting the guardian...`
+          : 'Someone is fighting the guardian...';
+      } else {
+        hint.textContent = 'Defeat the guardian to gain access.';
+      }
+      blockerDiv.appendChild(hint);
+
+      // Challenge button
+      const challengeBtn = document.createElement('button');
+      challengeBtn.style.cssText = [
+        'margin-top:12px', 'padding:8px 20px',
+        'font-family:Cinzel,serif', 'font-size:12px', 'letter-spacing:0.06em',
+        'color:#e8c870', 'background:#3a1515', 'border:1px solid #6b2020',
+        'border-radius:4px', 'cursor:pointer',
+        'transition:background 0.15s,border-color 0.15s',
+      ].join(';');
+      challengeBtn.textContent = 'Challenge';
+      challengeBtn.addEventListener('mouseenter', () => {
+        challengeBtn.style.background = '#4a2020';
+        challengeBtn.style.borderColor = '#8b3030';
+      });
+      challengeBtn.addEventListener('mouseleave', () => {
+        challengeBtn.style.background = '#3a1515';
+        challengeBtn.style.borderColor = '#6b2020';
+      });
+      challengeBtn.addEventListener('click', () => {
+        if (this.onBossChallenge) this.onBossChallenge(blocker);
+      });
+      blockerDiv.appendChild(challengeBtn);
+
+      this.bodyEl.appendChild(blockerDiv);
+      return; // Don't render NPCs, actions, etc.
     }
 
     // ── NPCs section ─────────────────────────────────────────────────

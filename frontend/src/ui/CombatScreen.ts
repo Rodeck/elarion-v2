@@ -12,6 +12,10 @@ import type {
   CombatEndPayload,
   CombatEventDto,
   CombatAbilityStateDto,
+  BossCombatStartPayload,
+  BossCombatTurnResultPayload,
+  BossCombatEndPayload,
+  BossHpBracket,
 } from '../../../shared/protocol/index';
 import { getXpIconUrl, getCrownsIconUrl } from './ui-icons';
 
@@ -35,11 +39,20 @@ export class CombatScreen {
   /** When true, combat UI is rendered inside an external container (no backdrop) */
   private embedded = false;
 
+  /** 'normal' for regular monster combat, 'boss' for boss encounters */
+  private variant: 'normal' | 'boss' = 'normal';
+
   // State stored from combat:start
   private combatId: string | null = null;
   private playerMaxHp = 0;
   private playerMaxMana = 0;
   private enemyMaxHp = 0;
+
+  // Boss bracket segments (only used when variant === 'boss')
+  private bossBracketSegments: HTMLElement[] = [];
+  private currentBossHpBracket: BossHpBracket = 'full';
+  private bossAbilitySlotsEl: HTMLElement | null = null;
+  private bossName: string | null = null;
 
   // DOM refs
   private enemyIconEl: HTMLElement | null = null;
@@ -81,6 +94,7 @@ export class CombatScreen {
   open(payload: CombatStartPayload): void {
     this.close();
 
+    this.variant       = 'normal';
     this.embedded      = false;
     this.combatId      = payload.combat_id;
     this.playerMaxHp   = payload.player.max_hp;
@@ -92,10 +106,304 @@ export class CombatScreen {
     this.readyTime = Date.now() + COMBAT_OPEN_SETTLE_MS;
   }
 
+  /** Initialize boss combat variant. */
+  showBoss(payload: BossCombatStartPayload): void {
+    this.close();
+
+    this.variant       = 'boss';
+    this.embedded      = false;
+    this.combatId      = payload.combat_id;
+    this.playerMaxHp   = payload.player.max_hp;
+    this.playerMaxMana = payload.player.max_mana;
+    this.enemyMaxHp    = 0; // Boss HP is hidden
+    this.currentBossHpBracket = payload.boss.hp_bracket;
+
+    // Convert BossCombatStartPayload to CombatStartPayload shape for buildOverlay
+    const asStartPayload: CombatStartPayload = {
+      combat_id: payload.combat_id,
+      monster: {
+        id: payload.boss.id,
+        name: payload.boss.name,
+        icon_url: payload.boss.icon_url,
+        max_hp: 0,
+        attack: payload.boss.attack,
+        defence: payload.boss.defense,
+      },
+      player: payload.player,
+      loadout: payload.loadout,
+      turn_timer_ms: payload.turn_timer_ms,
+    };
+
+    this.bossName = payload.boss.name;
+
+    this.ensureFlashStyles();
+    this.buildOverlay(asStartPayload);
+
+    // Replace enemy HP bar with boss bracket indicator
+    this.replaceBossHpBar(payload.boss.hp_bracket);
+
+    // Enlarge boss name
+    this.enlargeBossName();
+
+    // Add boss ability slots under the boss icon
+    this.buildBossAbilitySlots(payload.boss.abilities);
+
+    this.readyTime = Date.now() + COMBAT_OPEN_SETTLE_MS;
+  }
+
+  /** Handle boss turn result — same as regular but uses bracket instead of exact HP. */
+  updateBossTurn(payload: BossCombatTurnResultPayload): void {
+    if (!this.overlay) return;
+
+    // If the UI hasn't settled yet, queue and drain later (reuse turn queue path)
+    if (Date.now() < this.readyTime) {
+      // Wrap as a normal turn payload for the queue with a sentinel enemy_hp
+      const wrapped: CombatTurnResultPayload = {
+        combat_id: payload.combat_id,
+        turn: payload.turn,
+        phase: payload.phase,
+        events: payload.events,
+        player_hp: payload.player_hp,
+        player_mana: payload.player_mana,
+        enemy_hp: -1, // sentinel — boss HP is handled via bracket
+        ability_states: payload.ability_states,
+      };
+      this.pendingQueue.push({ type: 'turn', payload: wrapped });
+      this.currentBossHpBracket = payload.enemy_hp_bracket;
+      this.scheduleDrain();
+      return;
+    }
+
+    this.currentBossHpBracket = payload.enemy_hp_bracket;
+    this.updateAbilityStates(payload.ability_states);
+
+    for (const evt of payload.events) {
+      this.appendLogLine(this.formatEvent(evt));
+    }
+
+    const lastAttack = [...payload.events].reverse().find(
+      (e) => e.kind === 'auto_attack' || e.kind === 'ability_fired',
+    );
+
+    const hasAttack = !!lastAttack;
+    const isEnemyTurn = hasAttack && lastAttack.source !== 'player';
+
+    if (isEnemyTurn) {
+      this.setTurnIndicator('enemy');
+    } else if (hasAttack) {
+      this.setTurnIndicator('player');
+    }
+
+    const attackDelay = hasAttack ? TURN_INDICATOR_PAUSE_MS : 0;
+
+    setTimeout(() => {
+      if (!this.overlay) return;
+      // Flash abilities — reuse the same payload shape
+      const wrappedForFlash = {
+        ...payload,
+        enemy_hp: -1,
+      } as unknown as CombatTurnResultPayload;
+      this.flashFiredAbilities(wrappedForFlash);
+      this.spawnCombatEffects(payload.events, hasAttack ? ATTACK_ANIM_DURATION_MS : 0);
+    }, attackDelay);
+
+    const hpDelay = attackDelay + (hasAttack ? ATTACK_ANIM_DURATION_MS + FLOAT_TO_HP_DELAY_MS : 0);
+
+    if (isEnemyTurn) {
+      this.setBossBracket(payload.enemy_hp_bracket);
+      this.setPlayerMana(payload.player_mana);
+      setTimeout(() => {
+        if (!this.overlay) return;
+        this.setPlayerHp(payload.player_hp);
+      }, hpDelay);
+    } else {
+      setTimeout(() => {
+        if (!this.overlay) return;
+        this.setBossBracket(payload.enemy_hp_bracket);
+        this.setPlayerHp(payload.player_hp);
+        this.setPlayerMana(payload.player_mana);
+      }, hpDelay);
+    }
+  }
+
+  /** Show boss combat outcome screen. */
+  showBossEnd(payload: BossCombatEndPayload): void {
+    this.clearActiveWindowTimer();
+    this.ensureFlashStyles();
+    this.clearSettleTimer();
+    this.pendingQueue = [];
+
+    if (this.overlay) {
+      this.overlay.remove();
+      this.overlay = null;
+    }
+
+    const win = payload.outcome === 'win';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cs-victory-overlay';
+    overlay.style.cssText = [
+      'position:fixed', 'inset:0', 'z-index:300',
+      'background:rgba(0,0,0,0.65)',
+      'display:flex', 'align-items:center', 'justify-content:center',
+      'font-family:Cinzel,serif', 'color:#c9a55c',
+    ].join(';');
+
+    const modal = document.createElement('div');
+    modal.className = 'cs-victory-modal';
+    modal.style.cssText = [
+      'position:relative',
+      'width:400px', 'max-width:90vw',
+      'background:linear-gradient(170deg, #1a1810 0%, #252018 50%, #1a1810 100%)',
+      'border:2px solid #5a4a2a',
+      'border-radius:12px',
+      'box-shadow:0 0 60px rgba(212,168,75,0.15), 0 0 120px rgba(212,168,75,0.05), 0 8px 40px rgba(0,0,0,0.9)',
+      'display:flex', 'flex-direction:column',
+      'overflow:hidden',
+    ].join(';');
+
+    const shimmer = document.createElement('div');
+    shimmer.className = 'cs-shimmer-bar';
+    shimmer.style.cssText = [
+      'position:absolute', 'top:0', 'left:0', 'right:0', 'height:2px',
+      `background:linear-gradient(90deg, transparent, ${win ? '#e8c870' : '#c0392b'}, ${win ? '#70e89a' : '#e74c3c'}, ${win ? '#e8c870' : '#c0392b'}, transparent)`,
+      'background-size:200% 100%', 'z-index:1',
+    ].join(';');
+    modal.appendChild(shimmer);
+
+    // Header
+    const header = document.createElement('div');
+    header.style.cssText = [
+      'padding:24px 16px 16px',
+      'text-align:center',
+      'background:#111008',
+      'border-bottom:1px solid #3a2e1a',
+    ].join(';');
+
+    const title = document.createElement('div');
+    title.className = win ? 'cs-victory-title-glow' : 'cs-defeat-title-glow';
+    title.style.cssText = [
+      'font-size:2rem', 'font-weight:700',
+      `color:${win ? '#f0c060' : '#c0392b'}`,
+      'letter-spacing:0.08em',
+    ].join(';');
+    title.textContent = win ? 'Victory!' : 'Defeated';
+    header.appendChild(title);
+
+    // Boss icon + name
+    const monsterRow = document.createElement('div');
+    monsterRow.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;';
+
+    if (payload.boss_icon_url) {
+      const mIcon = document.createElement('div');
+      mIcon.style.cssText = [
+        'width:80px', 'height:80px', 'flex-shrink:0',
+        'background:#1a1510', 'border:1px solid #3a2e1a', 'border-radius:6px',
+        'overflow:hidden', 'display:flex', 'align-items:center', 'justify-content:center',
+      ].join(';');
+      const mImg = document.createElement('img');
+      mImg.src = payload.boss_icon_url;
+      mImg.alt = payload.boss_name;
+      mImg.style.cssText = 'width:100%;height:100%;object-fit:contain;image-rendering:pixelated;';
+      mImg.onerror = () => { mImg.remove(); mIcon.textContent = '👹'; mIcon.style.color = '#c9a55c'; mIcon.style.fontSize = '1.2rem'; };
+      mIcon.appendChild(mImg);
+      monsterRow.appendChild(mIcon);
+    }
+
+    const mName = document.createElement('div');
+    mName.style.cssText = 'font-size:1rem;color:#e8c870;font-family:Cinzel,serif;font-weight:700;';
+    mName.textContent = payload.boss_name;
+    monsterRow.appendChild(mName);
+    header.appendChild(monsterRow);
+
+    if (!win) {
+      const bracketLabel = this.getBracketLabel(payload.enemy_hp_bracket);
+      const sub = document.createElement('div');
+      sub.style.cssText = 'font-size:0.75rem;color:#8a7050;margin-top:8px;';
+      sub.textContent = `The guardian stands firm. It appears ${bracketLabel} wounded.`;
+      header.appendChild(sub);
+    }
+
+    modal.appendChild(header);
+
+    // Rewards body (win only)
+    if (win) {
+      const body = document.createElement('div');
+      body.style.cssText = 'padding:16px 20px;display:flex;flex-direction:column;gap:10px;';
+
+      const hasRewards = payload.xp_gained > 0 || payload.crowns_gained > 0
+        || payload.items_dropped.length > 0;
+
+      if (hasRewards) {
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;justify-content:center;';
+
+        let tileIndex = 0;
+        const addTile = (iconUrl: string | null, fallback: string, color: string, qty: number, tooltip: string) => {
+          const tile = this.buildLootTile(iconUrl, fallback, color, qty, tooltip);
+          tile.className = 'cs-loot-slide-in';
+          tile.style.animationDelay = `${0.2 + tileIndex * 0.1}s`;
+          grid.appendChild(tile);
+          tileIndex++;
+        };
+
+        if (payload.xp_gained > 0) {
+          addTile(getXpIconUrl(), '✦', '#a78bfa', payload.xp_gained, `+${payload.xp_gained} XP`);
+        }
+        if (payload.crowns_gained > 0) {
+          addTile(getCrownsIconUrl(), '♛', '#f0c060', payload.crowns_gained, `+${payload.crowns_gained} Crowns`);
+        }
+        for (const item of payload.items_dropped) {
+          addTile(item.icon_url ?? null, '◆', '#c9a55c', item.quantity, item.name);
+        }
+
+        body.appendChild(grid);
+      } else {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'text-align:center;font-size:0.8rem;color:#5a4a2a;padding:8px 0;';
+        empty.textContent = 'No drops this time.';
+        body.appendChild(empty);
+      }
+
+      modal.appendChild(body);
+    }
+
+    // Footer
+    const footer = document.createElement('div');
+    footer.style.cssText = [
+      'padding:14px 16px 18px',
+      'display:flex', 'justify-content:center',
+      'border-top:1px solid #2a2010',
+      'background:#0a0806',
+    ].join(';');
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Continue';
+    closeBtn.style.cssText = [
+      'padding:10px 40px', 'font-family:Cinzel,serif',
+      'font-size:0.95rem', 'font-weight:600', 'color:#1a1510',
+      'background:#d4a84b', 'border:1px solid #b8922e', 'cursor:pointer',
+      'border-radius:4px', 'letter-spacing:0.05em',
+      'transition:background 0.15s, transform 0.1s',
+    ].join(';');
+    closeBtn.addEventListener('mouseenter', () => { closeBtn.style.background = '#e8c060'; closeBtn.style.transform = 'scale(1.03)'; });
+    closeBtn.addEventListener('mouseleave', () => { closeBtn.style.background = '#d4a84b'; closeBtn.style.transform = 'scale(1)'; });
+    closeBtn.addEventListener('click', () => {
+      overlay.remove();
+      this.onClose?.();
+    });
+    footer.appendChild(closeBtn);
+    modal.appendChild(footer);
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  }
+
   /** Render combat UI inside an external container (no backdrop overlay). */
   openEmbedded(payload: CombatStartPayload, container: HTMLElement): void {
     this.close();
 
+    this.variant       = 'normal';
     this.embedded      = true;
     this.combatId      = payload.combat_id;
     this.playerMaxHp   = payload.player.max_hp;
@@ -242,6 +550,11 @@ export class CombatScreen {
     this.activeAbilityName = null;
     this.pendingQueue = [];
     this.readyTime = 0;
+    this.variant = 'normal';
+    this.bossBracketSegments = [];
+    this.currentBossHpBracket = 'full';
+    this.bossAbilitySlotsEl = null;
+    this.bossName = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -554,6 +867,10 @@ export class CombatScreen {
 
   getCombatId(): string | null {
     return this.combatId;
+  }
+
+  getVariant(): 'normal' | 'boss' {
+    return this.variant;
   }
 
   // ---------------------------------------------------------------------------
@@ -1044,6 +1361,11 @@ export class CombatScreen {
   // ---------------------------------------------------------------------------
 
   private setEnemyHp(hp: number): void {
+    // In boss variant, HP is handled via bracket segments, not exact numbers
+    if (this.variant === 'boss') {
+      this.setBossBracket(this.currentBossHpBracket);
+      return;
+    }
     if (this.enemyHpBar) {
       this.enemyHpBar.style.width = `${Math.max(0, (hp / this.enemyMaxHp) * 100)}%`;
     }
@@ -1075,6 +1397,198 @@ export class CombatScreen {
     const activeSlot = states.find((s) => s.slot_name === 'active');
     if (activeSlot) {
       this.buildActiveSlotContent(activeSlot);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Boss HP bracket helpers
+  // ---------------------------------------------------------------------------
+
+  private static readonly BRACKET_COLORS: Record<BossHpBracket, string> = {
+    full: '#4ade80',
+    high: '#4ade80',
+    medium: '#facc15',
+    low: '#fb923c',
+    critical: '#ef4444',
+  };
+
+  private static readonly BRACKET_ORDER: BossHpBracket[] = ['critical', 'low', 'medium', 'high', 'full'];
+
+  /** Replace the standard enemy HP bar + text with a 5-segment bracket indicator. */
+  private replaceBossHpBar(bracket: BossHpBracket): void {
+    // Find the HP bar wrapper (parent of enemyHpBar) and replace its content
+    const hpBarParent = this.enemyHpBar?.parentElement?.parentElement;
+    if (!hpBarParent) return;
+
+    hpBarParent.innerHTML = '';
+
+    const lbl = document.createElement('span');
+    lbl.style.cssText = 'font-size:0.6rem;color:#8a7050;width:18px;text-align:right;flex-shrink:0;';
+    lbl.textContent = 'HP';
+    hpBarParent.appendChild(lbl);
+
+    const segContainer = document.createElement('div');
+    segContainer.style.cssText = 'flex:1;display:flex;gap:3px;height:10px;';
+
+    this.bossBracketSegments = [];
+    for (let i = 0; i < CombatScreen.BRACKET_ORDER.length; i++) {
+      const seg = document.createElement('div');
+      seg.style.cssText = [
+        'flex:1', 'height:100%', 'border-radius:2px',
+        'border:1px solid #3a2e1a',
+        'transition:background 0.3s ease',
+      ].join(';');
+      this.bossBracketSegments.push(seg);
+      segContainer.appendChild(seg);
+    }
+
+    hpBarParent.appendChild(segContainer);
+
+    // Hide the HP text ref
+    this.enemyHpBar = null;
+    this.enemyHpText = null;
+
+    this.setBossBracket(bracket);
+  }
+
+  /** Update boss bracket segment colors based on current bracket. */
+  private setBossBracket(bracket: BossHpBracket): void {
+    this.currentBossHpBracket = bracket;
+    const bracketIdx = CombatScreen.BRACKET_ORDER.indexOf(bracket);
+
+    for (let i = 0; i < this.bossBracketSegments.length; i++) {
+      const seg = this.bossBracketSegments[i];
+      if (!seg) continue;
+      if (i <= bracketIdx) {
+        // Filled segment — color matches the current bracket level
+        seg.style.background = CombatScreen.BRACKET_COLORS[bracket];
+      } else {
+        // Empty segment
+        seg.style.background = '#2a2010';
+      }
+    }
+  }
+
+  /** Enlarge the boss nameplate to distinguish from regular monsters. */
+  private enlargeBossName(): void {
+    if (!this.overlay) return;
+    const nameplate = this.overlay.querySelector('.cs-modal')?.querySelector('div[style*="letter-spacing"]') as HTMLElement | null;
+    // Find the enemy nameplate — first one in the battle row
+    const modal = this.overlay.querySelector('.cs-modal') as HTMLElement;
+    if (!modal) return;
+    const battleRow = modal.children[0] as HTMLElement | undefined;
+    if (!battleRow) return;
+    const enemySide = battleRow.children[0] as HTMLElement | undefined;
+    if (!enemySide) return;
+    const nameplateEl = enemySide.children[0] as HTMLElement | undefined;
+    if (nameplateEl) {
+      nameplateEl.style.fontSize = '1.05rem';
+      nameplateEl.style.color = '#f0c060';
+      nameplateEl.style.textShadow = '0 0 8px rgba(240,192,96,0.4)';
+    }
+  }
+
+  /** Build boss ability slots under the boss icon on the enemy side. */
+  private buildBossAbilitySlots(abilities: { name: string; icon_url: string | null }[]): void {
+    if (!this.overlay || abilities.length === 0) return;
+
+    const modal = this.overlay.querySelector('.cs-modal') as HTMLElement | null;
+    if (!modal) return;
+    const battleRow = modal.children[0] as HTMLElement | undefined;
+    if (!battleRow) return;
+    const enemySide = battleRow.children[0] as HTMLElement | undefined;
+    if (!enemySide) return;
+
+    // Create abilities section
+    const section = document.createElement('div');
+    section.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:2px;';
+
+    const label = document.createElement('div');
+    label.style.cssText = 'font-size:0.6rem;color:#8a6a3a;letter-spacing:0.08em;text-transform:uppercase;';
+    label.textContent = 'Boss Skills';
+    section.appendChild(label);
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:5px;';
+
+    for (const ability of abilities) {
+      const chip = document.createElement('div');
+      chip.className = 'cs-boss-ability-slot';
+      chip.dataset['abilityName'] = ability.name;
+      chip.style.cssText = [
+        'width:40px', 'height:40px', 'border-radius:4px',
+        'display:flex', 'flex-direction:column', 'align-items:center', 'justify-content:center',
+        'overflow:hidden', 'position:relative',
+        'background:#2a1010', 'border:2px solid #5a2020',
+        'cursor:default', 'transition:border 0.2s,box-shadow 0.2s',
+      ].join(';');
+
+      if (ability.icon_url) {
+        const img = document.createElement('img');
+        img.src = ability.icon_url;
+        img.alt = ability.name;
+        img.style.cssText = 'width:100%;height:100%;object-fit:contain;image-rendering:pixelated;position:absolute;inset:0;';
+        img.onerror = () => { img.remove(); this.fillBossSlotText(chip, ability.name); };
+        chip.appendChild(img);
+      } else {
+        this.fillBossSlotText(chip, ability.name);
+      }
+
+      // Tooltip on hover
+      const tooltip = document.createElement('div');
+      tooltip.className = 'cs-tooltip';
+      tooltip.style.cssText = [
+        'display:none', 'position:absolute', 'bottom:calc(100% + 6px)', 'left:50%',
+        'transform:translateX(-50%)', 'background:#1a1208', 'border:1px solid #5a4a2a',
+        'border-radius:3px', 'padding:4px 8px', 'white-space:nowrap',
+        'font-size:0.6rem', 'color:#e8c870', 'z-index:10', 'pointer-events:none',
+      ].join(';');
+      tooltip.textContent = ability.name;
+      chip.appendChild(tooltip);
+      chip.addEventListener('mouseenter', () => { tooltip.style.display = 'block'; });
+      chip.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+
+      row.appendChild(chip);
+    }
+
+    section.appendChild(row);
+    this.bossAbilitySlotsEl = row;
+    enemySide.appendChild(section);
+  }
+
+  private fillBossSlotText(chip: HTMLElement, name: string): void {
+    const abbr = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 3);
+    const txt = document.createElement('span');
+    txt.style.cssText = 'font-size:0.5rem;color:#cc6666;text-align:center;line-height:1.2;';
+    txt.textContent = abbr;
+    chip.appendChild(txt);
+  }
+
+  /** Flash a boss ability slot when the boss uses that ability. */
+  private flashBossAbilitySlot(abilityName: string): void {
+    if (!this.bossAbilitySlotsEl) return;
+    const chips = this.bossAbilitySlotsEl.querySelectorAll<HTMLElement>('.cs-boss-ability-slot');
+    for (const chip of chips) {
+      if (chip.dataset['abilityName'] === abilityName) {
+        chip.style.border = '2px solid #ff4444';
+        chip.style.boxShadow = '0 0 10px rgba(255,68,68,0.6)';
+        setTimeout(() => {
+          chip.style.border = '2px solid #5a2020';
+          chip.style.boxShadow = 'none';
+        }, 800);
+        break;
+      }
+    }
+  }
+
+  /** Convert bracket enum to human-readable label for defeat messages. */
+  private getBracketLabel(bracket: BossHpBracket): string {
+    switch (bracket) {
+      case 'full': return 'barely';
+      case 'high': return 'slightly';
+      case 'medium': return 'moderately';
+      case 'low': return 'heavily';
+      case 'critical': return 'critically';
     }
   }
 
@@ -1380,8 +1894,15 @@ export class CombatScreen {
   }
 
   private formatEvent(evt: CombatEventDto): string {
-    const src = evt.source === 'player' ? 'You' : 'Enemy';
-    const tgt = evt.target === 'player' ? 'you' : 'enemy';
+    const enemyLabel = this.bossName ?? 'Enemy';
+    const src = evt.source === 'player' ? 'You' : enemyLabel;
+    const tgt = evt.target === 'player' ? 'you' : enemyLabel.toLowerCase();
+
+    // Flash boss ability slot when boss fires an ability
+    if (this.variant === 'boss' && evt.source === 'enemy' &&
+        (evt.kind === 'ability_fired' || evt.kind === 'effect_applied') && evt.ability_name) {
+      this.flashBossAbilitySlot(evt.ability_name);
+    }
 
     switch (evt.kind) {
       case 'auto_attack':

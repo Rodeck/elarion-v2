@@ -831,6 +831,11 @@ async function main() {
       case 'create-rod-tier':       await createRodTierCmd(data); break;
       case 'update-rod-tier':       await updateRodTierCmd(data); break;
       case 'delete-rod-tier':       await deleteRodTierCmd(data); break;
+      case 'create-boss':           await createBossCmd(data); break;
+      case 'create-boss-loot':      await createBossLootCmd(data); break;
+      case 'assign-boss-ability':   await assignBossAbilityCmd(data); break;
+      case 'upload-boss-icon':      await uploadBossIconCmd(data); break;
+      case 'upload-boss-sprite':    await uploadBossSpriteCmd(data); break;
       default:
         console.error(`Unknown command: ${cmd}`);
         console.log(HELP);
@@ -917,6 +922,93 @@ async function deleteRodTierCmd(data) {
   const token = await authenticate();
   await apiDelete(`/api/fishing-rod-tiers/${data.tier}`, token);
   output('delete-rod-tier', true, { tier: data.tier });
+}
+
+// ─── Boss Commands ──────────────────────────────────────────────────────────
+
+async function createBossCmd(data) {
+  const errors = [];
+  if (!data.name || typeof data.name !== 'string') errors.push('name required (string)');
+  if (data.max_hp == null || typeof data.max_hp !== 'number' || data.max_hp < 1) errors.push('max_hp required (number > 0)');
+  if (data.attack == null || typeof data.attack !== 'number' || data.attack < 0) errors.push('attack required (number >= 0)');
+  if (data.defense == null || typeof data.defense !== 'number' || data.defense < 0) errors.push('defense required (number >= 0)');
+  if (errors.length) return output('create-boss', false, errors);
+
+  const token = await authenticate();
+  const body = {
+    name: data.name,
+    description: data.description || null,
+    max_hp: data.max_hp,
+    attack: data.attack,
+    defense: data.defense,
+    xp_reward: data.xp_reward || 0,
+    min_crowns: data.min_crowns || 0,
+    max_crowns: data.max_crowns || 0,
+    building_id: data.building_id || null,
+    respawn_min_seconds: data.respawn_min_seconds || 3600,
+    respawn_max_seconds: data.respawn_max_seconds || 7200,
+    is_active: data.is_active !== false,
+  };
+  const res = await apiPost('/api/bosses', body, token);
+  output('create-boss', true, res);
+}
+
+async function createBossLootCmd(data) {
+  const errors = [];
+  if (data.boss_id == null || typeof data.boss_id !== 'number') errors.push('boss_id required (number)');
+  if (data.item_def_id == null || typeof data.item_def_id !== 'number') errors.push('item_def_id required (number)');
+  if (data.drop_chance == null || typeof data.drop_chance !== 'number') errors.push('drop_chance required (number 0-100)');
+  if (errors.length) return output('create-boss-loot', false, errors);
+
+  const token = await authenticate();
+  const res = await apiPost(`/api/bosses/${data.boss_id}/loot`, {
+    item_def_id: data.item_def_id,
+    drop_chance: data.drop_chance,
+    quantity: data.quantity || 1,
+  }, token);
+  output('create-boss-loot', true, res);
+}
+
+async function assignBossAbilityCmd(data) {
+  const errors = [];
+  if (data.boss_id == null || typeof data.boss_id !== 'number') errors.push('boss_id required (number)');
+  if (data.ability_id == null || typeof data.ability_id !== 'number') errors.push('ability_id required (number)');
+  if (errors.length) return output('assign-boss-ability', false, errors);
+
+  const token = await authenticate();
+  const res = await apiPost(`/api/bosses/${data.boss_id}/abilities`, {
+    ability_id: data.ability_id,
+    priority: data.priority || 0,
+  }, token);
+  output('assign-boss-ability', true, res);
+}
+
+async function uploadBossIconCmd(data) {
+  const errors = [];
+  if (data.boss_id == null) errors.push('boss_id required');
+  if (!data.file_path) errors.push('file_path required');
+  if (errors.length) return output('upload-boss-icon', false, errors);
+
+  const filePath = path.resolve(data.file_path);
+  if (!fs.existsSync(filePath)) return output('upload-boss-icon', false, ['File not found: ' + filePath]);
+
+  const token = await authenticate();
+  const res = await uploadFile(`/api/bosses/${data.boss_id}/upload-icon`, filePath, 'icon', token);
+  output('upload-boss-icon', true, res);
+}
+
+async function uploadBossSpriteCmd(data) {
+  const errors = [];
+  if (data.boss_id == null) errors.push('boss_id required');
+  if (!data.file_path) errors.push('file_path required');
+  if (errors.length) return output('upload-boss-sprite', false, errors);
+
+  const filePath = path.resolve(data.file_path);
+  if (!fs.existsSync(filePath)) return output('upload-boss-sprite', false, ['File not found: ' + filePath]);
+
+  const token = await authenticate();
+  const res = await uploadFile(`/api/bosses/${data.boss_id}/upload-sprite`, filePath, 'icon', token);
+  output('upload-boss-sprite', true, res);
 }
 
 main();

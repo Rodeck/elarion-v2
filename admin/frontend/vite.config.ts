@@ -42,6 +42,14 @@ export default defineConfig({
         target: 'http://localhost:4001',
         changeOrigin: true,
       },
+      '/boss-icons': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
+      '/boss-sprites': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
     },
   },
 });

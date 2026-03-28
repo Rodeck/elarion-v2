@@ -5,6 +5,10 @@ handoffs:
     agent: gd.review
     prompt: Review this design for balance issues against existing game data
     send: true
+  - label: Implement Code Changes
+    agent: speckit.specify
+    prompt: "Implement the code changes required by this game design. Read game_design/<name>/design.md — the 'Code Changes Required' section describes what needs to be built."
+    send: true
   - label: Generate Art Prompts
     agent: gd.prompts
     prompt: Generate AI art prompts for items and monsters in this design
@@ -160,6 +164,33 @@ Explain the logic behind the organization.]
 
 ---
 
+## Code Changes Required
+
+[List any code changes needed to support this design. If the design only adds entities (items, monsters, NPCs, recipes, etc.) via the admin API and no new game mechanics or systems are needed, write "None — entities only" and skip to Execution Plan.]
+
+[If code changes ARE needed, describe each one:]
+
+### Summary
+| Change | Scope | Description |
+|--------|-------|-------------|
+| [DB migration] | backend | [what tables/columns to add or alter] |
+| [WebSocket messages] | shared/backend/frontend | [new message types needed] |
+| [Backend handler] | backend | [new game logic or handlers] |
+| [Frontend UI] | frontend | [new screens, panels, or UI components] |
+| [Admin support] | admin | [new admin routes or UI for managing the feature] |
+
+### Detailed Requirements
+[For each code change, describe:]
+1. **[Change name]**: [What it does, why it's needed, how it connects to the game design. Include enough detail for a technical spec — expected behavior, edge cases, integration points with existing systems.]
+
+### Implementation Sequence
+[Code changes must be implemented BEFORE entity execution. The order is:]
+1. `/speckit.specify` — Create technical spec from this section
+2. `speckit.plan` → `speckit.tasks` → `speckit.implement` — Build the code
+3. `/gd.execute` — Create entities via admin API (requires the code to be in place)
+
+---
+
 ## Execution Plan
 
 All content is created via the `game-entities` skill (admin REST API). Order matters for FK constraints.
@@ -200,7 +231,10 @@ All content is created via the `game-entities` skill (admin REST API). Order mat
 - [ ] [No duplicates] with existing content
 ```
 
-6. **Report**: Print the design file path and suggest `/gd.review` or `/gd.prompts` as next steps.
+6. **Report**: Print the design file path and suggest next steps based on the design:
+   - If "Code Changes Required" is "None — entities only": suggest `/gd.review` → `/gd.execute`
+   - If code changes are needed: suggest `/gd.review` → `/speckit.specify` → (implement) → `/gd.execute`
+   - Always mention `/gd.prompts` for art assets
 
 ## Guidelines
 
@@ -209,3 +243,4 @@ All content is created via the `game-entities` skill (admin REST API). Order mat
 - **Balance justification**: If a stat is outside the research baseline range, add a note explaining why
 - **Phased execution**: Put ambitious/risky content in Phase 2 — ship the core loop in Phase 1
 - **Elarion tone**: Descriptions should be grounded medieval fantasy — dark, tactile, no generic fantasy cliches
+- **Code change honesty**: Be explicit about whether a design needs code changes. Adding new entities to existing systems (items, monsters, recipes) typically needs no code. Adding new mechanics, new action types, new UI screens, or new DB tables DOES need code. Reference CLAUDE.md checklists (e.g., "Adding a New Building Action Type") when relevant.

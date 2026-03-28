@@ -1,9 +1,13 @@
 ---
 description: Review a game design document for balance, consistency, and completeness against existing game data.
 handoffs:
-  - label: Execute Design
+  - label: Execute Design (entities only)
     agent: gd.execute
     prompt: Execute this design by creating entities via admin API
+    send: true
+  - label: Implement Code Changes First
+    agent: speckit.specify
+    prompt: "Implement the code changes required by this game design. Read game_design/<name>/design.md — the 'Code Changes Required' section describes what needs to be built. After code is implemented, run /gd.execute to create entities."
     send: true
   - label: Revise Design
     agent: gd.design
@@ -146,11 +150,30 @@ Balance-review a game design against live game data. This is the quality gate be
 
 ---
 
+## Code Changes Assessment
+
+| Needs Code Changes? | Scope |
+|---------------------|-------|
+| [Yes / No] | [Brief description or "Entities only — no code changes needed"] |
+
+[If Yes:]
+- **What**: [Summarize the code changes from the design's "Code Changes Required" section]
+- **Validated**: [Are the described code changes complete and realistic? Any missing pieces?]
+- **Next step**: Run `/speckit.specify` before `/gd.execute`
+
+[If No:]
+- **Next step**: Proceed directly to `/gd.execute`
+
+---
+
 ## Recommendations
 [Summary of what needs to change before execution, or confirmation that the design is ready]
 ```
 
-4. **Report**: Summarize the verdict and key findings. Suggest `/gd.execute` if ready, or `/gd.design` to revise.
+4. **Report**: Summarize the verdict and key findings. Route the user to the correct next step:
+   - If "Code Changes Required" is "None — entities only" AND verdict is "Ready to execute": suggest `/gd.execute`
+   - If code changes are needed AND verdict is "Ready to execute": suggest `/speckit.specify` to implement code first, THEN `/gd.execute`
+   - If verdict is "Needs revision": suggest `/gd.design` to revise
 
 ## Balance Check Details
 
