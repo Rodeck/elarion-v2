@@ -21,8 +21,11 @@ const BORDER_ACTIVE = '3px solid #f0c060';
 const SHADOW_ACTIVE = '0 0 12px rgba(240,192,96,0.7)';
 const SHADOW_IDLE   = 'none';
 
-// Delay before player HP drops after enemy attacks (animation placeholder)
-const ENEMY_ATTACK_LAND_MS = 900;
+// Timing sequence: turn indicator → pause → attack anims → floating numbers → HP update
+const COMBAT_OPEN_SETTLE_MS = 1200;   // grace period after combat opens before processing turns
+const TURN_INDICATOR_PAUSE_MS = 400;  // pause after turn indicator before attack plays
+const ATTACK_ANIM_DURATION_MS = 450;  // how long the slash/shake takes before numbers show
+const FLOAT_TO_HP_DELAY_MS = 300;     // extra delay after floating numbers before HP bar drops
 
 export class CombatScreen {
   private overlay: HTMLElement | null = null;
@@ -53,6 +56,11 @@ export class CombatScreen {
   private combatLogEl: HTMLElement | null = null;
   private activeTooltipEl: HTMLElement | null = null;
 
+  // Settle queue — buffers messages arriving before the player has focused on the UI
+  private readyTime = 0;
+  private pendingQueue: Array<{ type: 'turn'; payload: CombatTurnResultPayload } | { type: 'active'; payload: CombatActiveWindowPayload }> = [];
+  private settleTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Active window
   private activeWindowInterval: ReturnType<typeof setInterval> | null = null;
   private activeWindowEndTime = 0;
@@ -81,6 +89,7 @@ export class CombatScreen {
 
     this.ensureFlashStyles();
     this.buildOverlay(payload);
+    this.readyTime = Date.now() + COMBAT_OPEN_SETTLE_MS;
   }
 
   /** Render combat UI inside an external container (no backdrop overlay). */
@@ -95,10 +104,18 @@ export class CombatScreen {
 
     this.ensureFlashStyles();
     this.buildOverlay(payload, container);
+    this.readyTime = Date.now() + COMBAT_OPEN_SETTLE_MS;
   }
 
   applyTurnResult(payload: CombatTurnResultPayload): void {
     if (!this.overlay) return;
+
+    // If the UI hasn't settled yet, queue and drain later
+    if (Date.now() < this.readyTime) {
+      this.pendingQueue.push({ type: 'turn', payload });
+      this.scheduleDrain();
+      return;
+    }
 
     this.updateAbilityStates(payload.ability_states);
 
@@ -106,37 +123,60 @@ export class CombatScreen {
       this.appendLogLine(this.formatEvent(evt));
     }
 
-    // Flash auto-ability slots that fired this turn
-    this.flashFiredAbilities(payload);
-
-    // Spawn floating numbers for relevant events
-    this.spawnFloatingNumbers(payload.events);
-
     const lastAttack = [...payload.events].reverse().find(
       (e) => e.kind === 'auto_attack' || e.kind === 'ability_fired',
     );
 
-    if (lastAttack && lastAttack.source !== 'player') {
-      // Enemy's turn: highlight enemy immediately, delay the HP drop so it feels
-      // like the attack animation lands rather than being instant.
+    const hasAttack = !!lastAttack;
+    const isEnemyTurn = hasAttack && lastAttack.source !== 'player';
+
+    // 1) Turn indicator — shows immediately
+    if (isEnemyTurn) {
       this.setTurnIndicator('enemy');
-      this.setEnemyHp(payload.enemy_hp);   // DoT / reflect on enemy can update now
+    } else if (hasAttack) {
+      this.setTurnIndicator('player');
+    }
+
+    // 2) After a pause, play attack animations + ability flashes
+    const attackDelay = hasAttack ? TURN_INDICATOR_PAUSE_MS : 0;
+
+    setTimeout(() => {
+      if (!this.overlay) return;
+      this.flashFiredAbilities(payload);
+      // Attack impacts fire at attackDelay, floating numbers stagger after ATTACK_ANIM_DURATION_MS
+      this.spawnCombatEffects(payload.events, hasAttack ? ATTACK_ANIM_DURATION_MS : 0);
+    }, attackDelay);
+
+    // 3) HP/MP bar updates — after attack anim + floating numbers have landed
+    const hpDelay = attackDelay + (hasAttack ? ATTACK_ANIM_DURATION_MS + FLOAT_TO_HP_DELAY_MS : 0);
+
+    if (isEnemyTurn) {
+      // Enemy DoT / reflect on enemy can update sooner
+      this.setEnemyHp(payload.enemy_hp);
       this.setPlayerMana(payload.player_mana);
       setTimeout(() => {
-        if (!this.overlay) return;         // combat may have ended in the meantime
+        if (!this.overlay) return;
         this.setPlayerHp(payload.player_hp);
-      }, ENEMY_ATTACK_LAND_MS);
+      }, hpDelay);
     } else {
-      // Player's turn: everything updates immediately
-      this.setEnemyHp(payload.enemy_hp);
-      this.setPlayerHp(payload.player_hp);
-      this.setPlayerMana(payload.player_mana);
-      if (lastAttack) this.setTurnIndicator('player');
+      setTimeout(() => {
+        if (!this.overlay) return;
+        this.setEnemyHp(payload.enemy_hp);
+        this.setPlayerHp(payload.player_hp);
+        this.setPlayerMana(payload.player_mana);
+      }, hpDelay);
     }
   }
 
   openActiveWindow(payload: CombatActiveWindowPayload): void {
     if (!this.overlay) return;
+
+    // If the UI hasn't settled yet, queue and drain later
+    if (Date.now() < this.readyTime) {
+      this.pendingQueue.push({ type: 'active', payload });
+      this.scheduleDrain();
+      return;
+    }
 
     this.activeAbilityName = payload.ability?.name ?? null;
     const canUse = payload.ability !== null;
@@ -173,6 +213,7 @@ export class CombatScreen {
 
   close(): void {
     this.clearActiveWindowTimer();
+    this.clearSettleTimer();
     this.removeActiveTooltip();
     if (this.overlay) {
       if (this.embedded) {
@@ -199,10 +240,47 @@ export class CombatScreen {
     this.combatLogEl = null;
     this.combatId = null;
     this.activeAbilityName = null;
+    this.pendingQueue = [];
+    this.readyTime = 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Settle queue — buffer messages that arrive before the player has focused
+  // ---------------------------------------------------------------------------
+
+  private scheduleDrain(): void {
+    if (this.settleTimer) return;
+    const wait = Math.max(0, this.readyTime - Date.now());
+    this.settleTimer = setTimeout(() => {
+      this.settleTimer = null;
+      this.drainQueue();
+    }, wait);
+  }
+
+  private drainQueue(): void {
+    const queue = this.pendingQueue;
+    this.pendingQueue = [];
+    for (const msg of queue) {
+      if (msg.type === 'turn') {
+        this.applyTurnResult(msg.payload);
+      } else {
+        this.openActiveWindow(msg.payload);
+      }
+    }
+  }
+
+  private clearSettleTimer(): void {
+    if (this.settleTimer !== null) {
+      clearTimeout(this.settleTimer);
+      this.settleTimer = null;
+    }
   }
 
   showOutcome(payload: CombatEndPayload): void {
     this.clearActiveWindowTimer();
+    this.ensureFlashStyles();
+    this.clearSettleTimer();
+    this.pendingQueue = [];
 
     // Remove combat overlay entirely to avoid double-darkening
     if (this.overlay) {
@@ -212,8 +290,9 @@ export class CombatScreen {
 
     const win = payload.outcome === 'win';
 
-    // Fresh overlay — single semi-transparent backdrop
+    // Fresh overlay — single semi-transparent backdrop with fade-in
     const overlay = document.createElement('div');
+    overlay.className = 'cs-victory-overlay';
     overlay.style.cssText = [
       'position:fixed', 'inset:0', 'z-index:300',
       'background:rgba(0,0,0,0.65)',
@@ -221,46 +300,58 @@ export class CombatScreen {
       'font-family:Cinzel,serif', 'color:#c9a55c',
     ].join(';');
 
-    // Result modal — same styling as the combat modal
+    // Result modal — animated scale-in like disassembly popup
     const modal = document.createElement('div');
+    modal.className = 'cs-victory-modal';
     modal.style.cssText = [
+      'position:relative',
       'width:400px', 'max-width:90vw',
-      'background:#0d0b08',
-      'border:1px solid #5a4a2a',
-      'border-radius:6px',
-      'box-shadow:0 8px 40px rgba(0,0,0,0.9)',
+      'background:linear-gradient(170deg, #1a1810 0%, #252018 50%, #1a1810 100%)',
+      'border:2px solid #5a4a2a',
+      'border-radius:12px',
+      'box-shadow:0 0 60px rgba(212,168,75,0.15), 0 0 120px rgba(212,168,75,0.05), 0 8px 40px rgba(0,0,0,0.9)',
       'display:flex', 'flex-direction:column',
       'overflow:hidden',
     ].join(';');
 
+    // Shimmer bar at the top
+    const shimmer = document.createElement('div');
+    shimmer.className = 'cs-shimmer-bar';
+    shimmer.style.cssText = [
+      'position:absolute', 'top:0', 'left:0', 'right:0', 'height:2px',
+      `background:linear-gradient(90deg, transparent, ${win ? '#e8c870' : '#c0392b'}, ${win ? '#70e89a' : '#e74c3c'}, ${win ? '#e8c870' : '#c0392b'}, transparent)`,
+      'background-size:200% 100%', 'z-index:1',
+    ].join(';');
+    modal.appendChild(shimmer);
+
     // ── Header ──
     const header = document.createElement('div');
     header.style.cssText = [
-      'padding:20px 16px 14px',
+      'padding:24px 16px 16px',
       'text-align:center',
       'background:#111008',
       'border-bottom:1px solid #3a2e1a',
     ].join(';');
 
     const title = document.createElement('div');
+    title.className = win ? 'cs-victory-title-glow' : 'cs-defeat-title-glow';
     title.style.cssText = [
-      'font-size:1.8rem', 'font-weight:700',
+      'font-size:2rem', 'font-weight:700',
       `color:${win ? '#f0c060' : '#c0392b'}`,
-      'text-shadow:0 2px 8px rgba(0,0,0,0.8)',
-      'letter-spacing:0.06em',
+      'letter-spacing:0.08em',
     ].join(';');
     title.textContent = win ? 'Victory!' : 'Defeated';
     header.appendChild(title);
 
     // Monster icon + name under title
     const monsterRow = document.createElement('div');
-    monsterRow.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px;';
+    monsterRow.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;';
 
     if (payload.monster_icon_url) {
       const mIcon = document.createElement('div');
       mIcon.style.cssText = [
         'width:80px', 'height:80px', 'flex-shrink:0',
-        'background:#1a1510', 'border:1px solid #3a2e1a', 'border-radius:4px',
+        'background:#1a1510', 'border:1px solid #3a2e1a', 'border-radius:6px',
         'overflow:hidden', 'display:flex', 'align-items:center', 'justify-content:center',
       ].join(';');
       const mImg = document.createElement('img');
@@ -280,7 +371,7 @@ export class CombatScreen {
 
     if (!win) {
       const sub = document.createElement('div');
-      sub.style.cssText = 'font-size:0.75rem;color:#8a7050;margin-top:6px;';
+      sub.style.cssText = 'font-size:0.75rem;color:#8a7050;margin-top:8px;';
       sub.textContent = 'You have fallen in battle.';
       header.appendChild(sub);
     }
@@ -290,31 +381,40 @@ export class CombatScreen {
     // ── Rewards body (win only) ──
     if (win) {
       const body = document.createElement('div');
-      body.style.cssText = 'padding:14px 16px;display:flex;flex-direction:column;gap:10px;';
+      body.style.cssText = 'padding:16px 20px;display:flex;flex-direction:column;gap:10px;';
 
       const hasRewards = payload.xp_gained > 0 || payload.crowns_gained > 0
         || payload.items_dropped.length > 0 || payload.ability_drops.length > 0
         || (payload.squires_dropped?.length ?? 0) > 0;
 
       if (hasRewards) {
-        // Loot grid — icon tiles with quantity badges (like gathering results)
+        // Loot grid — icon tiles with quantity badges, staggered reveal
         const grid = document.createElement('div');
-        grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;';
+        grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;justify-content:center;';
+
+        let tileIndex = 0;
+        const addTile = (iconUrl: string | null, fallback: string, color: string, qty: number, tooltip: string) => {
+          const tile = this.buildLootTile(iconUrl, fallback, color, qty, tooltip);
+          tile.className = 'cs-loot-slide-in';
+          tile.style.animationDelay = `${0.2 + tileIndex * 0.1}s`;
+          grid.appendChild(tile);
+          tileIndex++;
+        };
 
         if (payload.xp_gained > 0) {
-          grid.appendChild(this.buildLootTile(getXpIconUrl(), '✦', '#a78bfa', payload.xp_gained, `+${payload.xp_gained} XP`));
+          addTile(getXpIconUrl(), '✦', '#a78bfa', payload.xp_gained, `+${payload.xp_gained} XP`);
         }
         if (payload.crowns_gained > 0) {
-          grid.appendChild(this.buildLootTile(getCrownsIconUrl(), '♛', '#f0c060', payload.crowns_gained, `+${payload.crowns_gained} Crowns`));
+          addTile(getCrownsIconUrl(), '♛', '#f0c060', payload.crowns_gained, `+${payload.crowns_gained} Crowns`);
         }
         for (const item of payload.items_dropped) {
-          grid.appendChild(this.buildLootTile(item.icon_url ?? null, '◆', '#c9a55c', item.quantity, item.name));
+          addTile(item.icon_url ?? null, '◆', '#c9a55c', item.quantity, item.name);
         }
         for (const ability of payload.ability_drops) {
-          grid.appendChild(this.buildLootTile(ability.icon_url ?? null, '✦', '#6ab4e8', 1, `New: ${ability.name}`));
+          addTile(ability.icon_url ?? null, '✦', '#6ab4e8', 1, `New: ${ability.name}`);
         }
         for (const squire of payload.squires_dropped ?? []) {
-          grid.appendChild(this.buildLootTile(squire.icon_url ?? null, '⚔', '#d4a84b', 1, `${squire.name} (${squire.rank})`));
+          addTile(squire.icon_url ?? null, '⚔', '#d4a84b', 1, `${squire.name} (${squire.rank})`);
         }
 
         body.appendChild(grid);
@@ -331,7 +431,7 @@ export class CombatScreen {
     // ── Footer with button ──
     const footer = document.createElement('div');
     footer.style.cssText = [
-      'padding:12px 16px 16px',
+      'padding:14px 16px 18px',
       'display:flex', 'justify-content:center',
       'border-top:1px solid #2a2010',
       'background:#0a0806',
@@ -340,14 +440,14 @@ export class CombatScreen {
     const closeBtn = document.createElement('button');
     closeBtn.textContent = 'Continue';
     closeBtn.style.cssText = [
-      'padding:8px 36px', 'font-family:Cinzel,serif',
-      'font-size:0.9rem', 'font-weight:600', 'color:#1a1510',
+      'padding:10px 40px', 'font-family:Cinzel,serif',
+      'font-size:0.95rem', 'font-weight:600', 'color:#1a1510',
       'background:#d4a84b', 'border:1px solid #b8922e', 'cursor:pointer',
-      'border-radius:3px', 'letter-spacing:0.05em',
-      'transition:background 0.15s',
+      'border-radius:4px', 'letter-spacing:0.05em',
+      'transition:background 0.15s, transform 0.1s',
     ].join(';');
-    closeBtn.addEventListener('mouseenter', () => { closeBtn.style.background = '#e8c060'; });
-    closeBtn.addEventListener('mouseleave', () => { closeBtn.style.background = '#d4a84b'; });
+    closeBtn.addEventListener('mouseenter', () => { closeBtn.style.background = '#e8c060'; closeBtn.style.transform = 'scale(1.03)'; });
+    closeBtn.addEventListener('mouseleave', () => { closeBtn.style.background = '#d4a84b'; closeBtn.style.transform = 'scale(1)'; });
     closeBtn.addEventListener('click', () => {
       overlay.remove();
       this.onClose?.();
@@ -1032,6 +1132,86 @@ export class CombatScreen {
         40%  { box-shadow: 0 0 10px 2px rgba(240,192,96,0.5); border-color: #d4a84b; }
         100% { box-shadow: 0 0 0 0 rgba(240,192,96,0); border-color: #3a2e1a; }
       }
+      /* Attack impact — shake the target icon */
+      .cs-icon-shake {
+        animation: cs-shake 0.4s ease-out;
+      }
+      @keyframes cs-shake {
+        0%   { transform: translate(0, 0); }
+        15%  { transform: translate(-6px, 2px); }
+        30%  { transform: translate(5px, -3px); }
+        45%  { transform: translate(-4px, 1px); }
+        60%  { transform: translate(3px, -1px); }
+        75%  { transform: translate(-2px, 1px); }
+        100% { transform: translate(0, 0); }
+      }
+      /* Red flash overlay on damaged icon */
+      .cs-icon-hit-flash {
+        animation: cs-hit-flash 0.5s ease-out forwards;
+      }
+      @keyframes cs-hit-flash {
+        0%   { opacity: 0.6; }
+        100% { opacity: 0; }
+      }
+      /* Slash overlay across the icon */
+      .cs-slash-effect {
+        animation: cs-slash 0.45s ease-out forwards;
+      }
+      @keyframes cs-slash {
+        0%   { opacity: 0; transform: translate(-50%, -50%) rotate(-45deg) scaleX(0); }
+        20%  { opacity: 1; transform: translate(-50%, -50%) rotate(-45deg) scaleX(1); }
+        100% { opacity: 0; transform: translate(-50%, -50%) rotate(-45deg) scaleX(1.3); }
+      }
+      /* Victory modal entrance */
+      .cs-victory-modal {
+        animation: cs-victory-scale-in 0.4s cubic-bezier(0.175,0.885,0.32,1.275) forwards;
+      }
+      @keyframes cs-victory-scale-in {
+        from { opacity: 0; transform: scale(0.7); }
+        to   { opacity: 1; transform: scale(1); }
+      }
+      /* Victory title glow */
+      .cs-victory-title-glow {
+        animation: cs-victory-glow 2s ease-in-out infinite;
+      }
+      @keyframes cs-victory-glow {
+        0%, 100% { text-shadow: 0 0 8px rgba(240,192,96,0.4), 0 2px 8px rgba(0,0,0,0.8); }
+        50%      { text-shadow: 0 0 20px rgba(240,192,96,0.8), 0 0 40px rgba(212,168,75,0.3), 0 2px 8px rgba(0,0,0,0.8); }
+      }
+      /* Defeat title pulse */
+      .cs-defeat-title-glow {
+        animation: cs-defeat-glow 2s ease-in-out infinite;
+      }
+      @keyframes cs-defeat-glow {
+        0%, 100% { text-shadow: 0 0 8px rgba(192,57,43,0.4), 0 2px 8px rgba(0,0,0,0.8); }
+        50%      { text-shadow: 0 0 20px rgba(192,57,43,0.8), 0 0 40px rgba(192,57,43,0.3), 0 2px 8px rgba(0,0,0,0.8); }
+      }
+      /* Shimmer bar */
+      .cs-shimmer-bar {
+        animation: cs-shimmer 2s linear infinite;
+        background-size: 200% 100%;
+      }
+      @keyframes cs-shimmer {
+        0%   { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      /* Loot item slide-in */
+      .cs-loot-slide-in {
+        opacity: 0;
+        animation: cs-loot-slide 0.35s ease-out forwards;
+      }
+      @keyframes cs-loot-slide {
+        from { opacity: 0; transform: translateY(12px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      /* Victory overlay fade-in */
+      .cs-victory-overlay {
+        animation: cs-victory-fade 0.3s ease-out forwards;
+      }
+      @keyframes cs-victory-fade {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -1040,32 +1220,39 @@ export class CombatScreen {
   // Floating combat numbers
   // ---------------------------------------------------------------------------
 
-  private spawnFloatingNumbers(events: CombatEventDto[]): void {
+  /**
+   * Plays attack impacts immediately, then floating numbers after `numberDelay` ms.
+   */
+  private spawnCombatEffects(events: CombatEventDto[], numberDelay: number): void {
     this.ensureFloatingStyles();
 
-    let playerDelay = 0;
-    let enemyDelay = 0;
+    let playerStagger = 0;
+    let enemyStagger = 0;
 
     for (const evt of events) {
       if (evt.value === undefined || evt.value === 0) continue;
 
       if (evt.kind === 'auto_attack' || evt.kind === 'ability_fired') {
-        // Damage dealt
         const targetEl = evt.target === 'player' ? this.playerIconEl : this.enemyIconEl;
-        const delay = evt.target === 'player' ? (playerDelay += 150) - 150 : (enemyDelay += 150) - 150;
+        const stagger = evt.target === 'player' ? (playerStagger += 150) - 150 : (enemyStagger += 150) - 150;
+        const slashColor = evt.source === 'player' ? '#f0c060' : '#e74c3c';
+
+        // Attack impact plays immediately (within this timeout context)
+        this.showAttackImpact(targetEl, slashColor, stagger);
+
+        // Floating number appears after the slash animation finishes
         if (evt.is_crit) {
-          this.showFloating(targetEl, `-${evt.value}`, '#ff4444', delay, true);
+          this.showFloating(targetEl, `-${evt.value}`, '#ff4444', stagger + numberDelay, true);
         } else {
-          this.showFloating(targetEl, `-${evt.value}`, '#e74c3c', delay, false);
+          this.showFloating(targetEl, `-${evt.value}`, '#e74c3c', stagger + numberDelay, false);
         }
       } else if (evt.kind === 'mana_gained') {
-        this.showFloating(this.playerIconEl, `+${evt.value} MP`, '#5dade2', playerDelay, false);
-        playerDelay += 150;
+        this.showFloating(this.playerIconEl, `+${evt.value} MP`, '#5dade2', playerStagger + numberDelay, false);
+        playerStagger += 150;
       } else if (evt.kind === 'effect_tick') {
-        // DoT damage
         const targetEl = evt.target === 'player' ? this.playerIconEl : this.enemyIconEl;
-        const delay = evt.target === 'player' ? (playerDelay += 150) - 150 : (enemyDelay += 150) - 150;
-        this.showFloating(targetEl, `-${evt.value}`, '#e67e22', delay, false);
+        const stagger = evt.target === 'player' ? (playerStagger += 150) - 150 : (enemyStagger += 150) - 150;
+        this.showFloating(targetEl, `-${evt.value}`, '#e67e22', stagger + numberDelay, false);
       }
     }
   }
@@ -1087,7 +1274,7 @@ export class CombatScreen {
       el.style.cssText = [
         'position:fixed', 'z-index:9999', 'pointer-events:none',
         'font-family:Cinzel,serif', 'font-weight:700',
-        `font-size:${isCrit ? '1.3rem' : '1rem'}`,
+        `font-size:${isCrit ? '1.8rem' : '1.3rem'}`,
         `color:${color}`,
         `text-shadow:0 0 6px ${color}80, 0 2px 4px rgba(0,0,0,0.9)`,
         `left:${rect.left + rect.width / 2}px`,
@@ -1100,15 +1287,59 @@ export class CombatScreen {
     }, delay);
   }
 
+  private showAttackImpact(
+    anchor: HTMLElement | null,
+    slashColor: string,
+    delay: number,
+  ): void {
+    if (!anchor) return;
+
+    setTimeout(() => {
+      // 1) Shake the icon
+      anchor.classList.remove('cs-icon-shake');
+      void anchor.offsetWidth;
+      anchor.classList.add('cs-icon-shake');
+      anchor.addEventListener('animationend', () => anchor.classList.remove('cs-icon-shake'), { once: true });
+
+      // 2) Red/gold flash overlay on the icon
+      const flash = document.createElement('div');
+      flash.className = 'cs-icon-hit-flash';
+      flash.style.cssText = [
+        'position:absolute', 'inset:0', 'pointer-events:none',
+        `background:${slashColor}`, 'border-radius:4px', 'z-index:2',
+      ].join(';');
+      anchor.style.position = 'relative';
+      anchor.appendChild(flash);
+      flash.addEventListener('animationend', () => flash.remove());
+
+      // 3) Slash streak across the icon
+      const rect = anchor.getBoundingClientRect();
+      const slash = document.createElement('div');
+      slash.className = 'cs-slash-effect';
+      slash.style.cssText = [
+        'position:fixed', 'pointer-events:none', 'z-index:9998',
+        `left:${rect.left + rect.width / 2}px`,
+        `top:${rect.top + rect.height / 2}px`,
+        `width:${rect.width * 1.2}px`, 'height:3px',
+        `background:linear-gradient(90deg, transparent, ${slashColor}, white, ${slashColor}, transparent)`,
+        'border-radius:2px',
+        `box-shadow:0 0 8px ${slashColor}`,
+      ].join(';');
+      document.body.appendChild(slash);
+      slash.addEventListener('animationend', () => slash.remove());
+    }, delay);
+  }
+
   private ensureFloatingStyles(): void {
     if (document.getElementById('cs-floating-style')) return;
     const style = document.createElement('style');
     style.id = 'cs-floating-style';
     style.textContent = `
       @keyframes cs-float-up {
-        0%   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        0%   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.1); }
+        15%  { opacity: 1; transform: translateX(-50%) translateY(-10px) scale(1); }
         70%  { opacity: 1; }
-        100% { opacity: 0; transform: translateX(-50%) translateY(-60px); }
+        100% { opacity: 0; transform: translateX(-50%) translateY(-80px); }
       }
     `;
     document.head.appendChild(style);
