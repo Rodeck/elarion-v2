@@ -39,6 +39,7 @@ import type {
   CombatTurnResultPayload,
   CombatActiveWindowPayload,
   CombatEndPayload,
+  ActiveEffectDto,
   LoadoutSlotDto,
   ItemDroppedDto,
   AbilityDroppedDto,
@@ -156,6 +157,7 @@ export class CombatSession {
         slots: this.buildAbilityStates(),
       },
       turn_timer_ms: TURN_TIMER_MS,
+      active_effects: [],
     };
 
     sendToSession(this.wsSession, 'combat:start', startPayload);
@@ -527,8 +529,29 @@ export class CombatSession {
       player_mana:    this.engineState.playerMana,
       enemy_hp:       this.engineState.enemyHp,
       ability_states: this.buildAbilityStates(),
+      active_effects: this.serializeActiveEffects(),
     };
     sendToSession(this.wsSession, 'combat:turn_result', payload);
+  }
+
+  private serializeActiveEffects(): ActiveEffectDto[] {
+    // Build a name→iconUrl lookup from the player's loadout
+    const iconMap = new Map<string, string | null>();
+    for (const slot of [this.loadout.auto_1, this.loadout.auto_2, this.loadout.auto_3, this.loadout.active]) {
+      if (slot) iconMap.set(slot.name, slot.iconUrl);
+    }
+
+    return this.engineState.activeEffects.map((e) => ({
+      id:              e.id,
+      source:          e.source,
+      target:          e.target,
+      effect_type:     e.effectType,
+      stat:            e.stat,
+      value:           e.value,
+      turns_remaining: e.turnsRemaining,
+      ability_name:    e.abilityName,
+      icon_url:        iconMap.get(e.abilityName) ?? null,
+    }));
   }
 
   private buildLoadout(slots: LoadoutSlotDto[]): CombatLoadout {

@@ -69,6 +69,18 @@ export interface TurnResult {
 
 const DEFAULT_CRIT_DAMAGE = 150;
 
+/** Effect types that create persistent ActiveEffect entries (not instant effects). */
+const DURATION_EFFECT_TYPES = new Set(['buff', 'debuff', 'dot', 'reflect', 'shield']);
+
+// ---------------------------------------------------------------------------
+// Helper: check if an ability already has an active effect (anti-stacking)
+// ---------------------------------------------------------------------------
+
+function hasActiveEffectForAbility(state: EngineState, abilityName: string, effectType: string): boolean {
+  if (!DURATION_EFFECT_TYPES.has(effectType)) return false;
+  return state.activeEffects.some((e) => e.abilityName === abilityName);
+}
+
 // ---------------------------------------------------------------------------
 // Helper: resolve a dodge roll
 // ---------------------------------------------------------------------------
@@ -203,6 +215,9 @@ export function computeAutoAbilities(
     const cooldown = newState.abilityCooldowns.get(ability.abilityId) ?? 0;
     if (newState.playerMana < ability.manaCost || cooldown > 0) continue;
 
+    // Skip if this ability already has an active effect (no stacking)
+    if (hasActiveEffectForAbility(newState, ability.name, ability.effectType)) continue;
+
     // Special case: Execute only fires when enemy < 30% HP
     if (ability.name === 'Execute' && newState.enemyHp > 0) {
       // need enemy max hp for this check — we skip if we can't verify; engine caller should handle
@@ -245,6 +260,9 @@ export function computeActiveAbility(
   if (newState.playerMana < ability.manaCost) return { events, newState };
   const cooldown = newState.abilityCooldowns.get(ability.abilityId) ?? 0;
   if (cooldown > 0) return { events, newState };
+
+  // Skip if this ability already has an active effect (no stacking)
+  if (hasActiveEffectForAbility(newState, ability.name, ability.effectType)) return { events, newState };
 
   newState.playerMana = newState.playerMana - ability.manaCost;
   events.push({ kind: 'mana_spent', source: 'player', target: 'player', value: ability.manaCost, ability_name: ability.name });

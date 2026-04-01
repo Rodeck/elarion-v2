@@ -12,6 +12,7 @@ import type {
   CombatEndPayload,
   CombatEventDto,
   CombatAbilityStateDto,
+  ActiveEffectDto,
   BossCombatStartPayload,
   BossCombatTurnResultPayload,
   BossCombatEndPayload,
@@ -68,6 +69,13 @@ export class CombatScreen {
   private activeTimerEl: HTMLElement | null = null;
   private combatLogEl: HTMLElement | null = null;
   private activeTooltipEl: HTMLElement | null = null;
+
+  // Buff/debuff indicator containers (flanking icons)
+  private playerDebuffsEl: HTMLElement | null = null;
+  private playerBuffsEl: HTMLElement | null = null;
+  private enemyDebuffsEl: HTMLElement | null = null;
+  private enemyBuffsEl: HTMLElement | null = null;
+  private effectTooltipEl: HTMLElement | null = null;
 
   // Settle queue — buffers messages arriving before the player has focused on the UI
   private readyTime = 0;
@@ -132,6 +140,7 @@ export class CombatScreen {
       player: payload.player,
       loadout: payload.loadout,
       turn_timer_ms: payload.turn_timer_ms,
+      active_effects: payload.active_effects ?? [],
     };
 
     this.bossName = payload.boss.name;
@@ -167,6 +176,7 @@ export class CombatScreen {
         player_mana: payload.player_mana,
         enemy_hp: -1, // sentinel — boss HP is handled via bracket
         ability_states: payload.ability_states,
+        active_effects: payload.active_effects ?? [],
       };
       this.pendingQueue.push({ type: 'turn', payload: wrapped });
       this.currentBossHpBracket = payload.enemy_hp_bracket;
@@ -176,6 +186,7 @@ export class CombatScreen {
 
     this.currentBossHpBracket = payload.enemy_hp_bracket;
     this.updateAbilityStates(payload.ability_states);
+    this.updateActiveEffects(payload.active_effects ?? []);
 
     for (const evt of payload.events) {
       this.appendLogLine(this.formatEvent(evt));
@@ -426,6 +437,7 @@ export class CombatScreen {
     }
 
     this.updateAbilityStates(payload.ability_states);
+    this.updateActiveEffects(payload.active_effects ?? []);
 
     for (const evt of payload.events) {
       this.appendLogLine(this.formatEvent(evt));
@@ -555,6 +567,11 @@ export class CombatScreen {
     this.currentBossHpBracket = 'full';
     this.bossAbilitySlotsEl = null;
     this.bossName = null;
+    this.playerDebuffsEl = null;
+    this.playerBuffsEl = null;
+    this.enemyDebuffsEl = null;
+    this.enemyBuffsEl = null;
+    this.removeEffectTooltip();
   }
 
   // ---------------------------------------------------------------------------
@@ -965,8 +982,21 @@ export class CombatScreen {
     this.enemyHpBar  = enemyHpFill;
     this.enemyHpText = enemyHpText;
 
+    // Wrap enemy icon with debuff (left) and buff (right) columns
+    const enemyIconRow = document.createElement('div');
+    enemyIconRow.style.cssText = 'display:flex;align-items:center;gap:4px;justify-content:center;';
+
+    this.enemyDebuffsEl = document.createElement('div');
+    this.enemyDebuffsEl.style.cssText = 'display:flex;flex-direction:column;gap:3px;min-width:28px;align-items:flex-end;';
+    this.enemyBuffsEl = document.createElement('div');
+    this.enemyBuffsEl.style.cssText = 'display:flex;flex-direction:column;gap:3px;min-width:28px;align-items:flex-start;';
+
+    enemyIconRow.appendChild(this.enemyDebuffsEl);
+    enemyIconRow.appendChild(enemyIcon);
+    enemyIconRow.appendChild(this.enemyBuffsEl);
+
     enemySide.appendChild(enemyNameplate);
-    enemySide.appendChild(enemyIcon);
+    enemySide.appendChild(enemyIconRow);
     enemySide.appendChild(enemyHpBarWrap);
 
     // Player side
@@ -1056,8 +1086,21 @@ export class CombatScreen {
     skillsRow.appendChild(this.activeTimerEl);
     skillsSection.appendChild(skillsRow);
 
+    // Wrap player icon with debuff (left) and buff (right) columns
+    const playerIconRow = document.createElement('div');
+    playerIconRow.style.cssText = 'display:flex;align-items:center;gap:4px;justify-content:center;';
+
+    this.playerDebuffsEl = document.createElement('div');
+    this.playerDebuffsEl.style.cssText = 'display:flex;flex-direction:column;gap:3px;min-width:28px;align-items:flex-end;';
+    this.playerBuffsEl = document.createElement('div');
+    this.playerBuffsEl.style.cssText = 'display:flex;flex-direction:column;gap:3px;min-width:28px;align-items:flex-start;';
+
+    playerIconRow.appendChild(this.playerDebuffsEl);
+    playerIconRow.appendChild(playerIcon);
+    playerIconRow.appendChild(this.playerBuffsEl);
+
     playerSide.appendChild(playerNameplate);
-    playerSide.appendChild(playerIcon);
+    playerSide.appendChild(playerIconRow);
     playerSide.appendChild(playerHpBarWrap);
     playerSide.appendChild(playerManaBarWrap);
     playerSide.appendChild(skillsSection);
@@ -1421,14 +1464,12 @@ export class CombatScreen {
     if (!hpBarParent) return;
 
     hpBarParent.innerHTML = '';
-
-    const lbl = document.createElement('span');
-    lbl.style.cssText = 'font-size:0.6rem;color:#8a7050;width:18px;text-align:right;flex-shrink:0;';
-    lbl.textContent = 'HP';
-    hpBarParent.appendChild(lbl);
+    // Center the bracket bar by matching icon width and removing the label offset
+    hpBarParent.style.width = '140px';
+    hpBarParent.style.justifyContent = 'center';
 
     const segContainer = document.createElement('div');
-    segContainer.style.cssText = 'flex:1;display:flex;gap:3px;height:10px;';
+    segContainer.style.cssText = 'width:100%;display:flex;gap:3px;height:10px;';
 
     this.bossBracketSegments = [];
     for (let i = 0; i < CombatScreen.BRACKET_ORDER.length; i++) {
@@ -1926,6 +1967,188 @@ export class CombatScreen {
         return `✅ ${evt.effect_name ?? 'Effect'} on ${tgt} expired`;
       default:
         return `• ${evt.kind}`;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Active effect indicators (buff/debuff icons flanking combatant icons)
+  // ---------------------------------------------------------------------------
+
+  /** Classify an effect as buff (positive for target) or debuff (negative for target). */
+  private static classifyEffect(e: ActiveEffectDto): 'buff' | 'debuff' {
+    if (e.effect_type === 'buff') return 'buff';
+    // reflect and shield are positive for the entity that owns them
+    if (e.effect_type === 'reflect' || e.effect_type === 'shield') return 'buff';
+    return 'debuff'; // debuff, dot
+  }
+
+  /** Human-readable label for effect type. */
+  private static effectLabel(e: ActiveEffectDto): string {
+    switch (e.effect_type) {
+      case 'buff': return e.stat === 'defence' ? 'DEF Up' : 'ATK Up';
+      case 'debuff': return e.stat === 'defence' ? 'DEF Down' : 'Weakened';
+      case 'dot': return 'Poison';
+      case 'reflect': return 'Reflect';
+      case 'shield': return 'Shield';
+      default: return e.effect_type;
+    }
+  }
+
+  /** Short abbreviation for effect chip when no icon available. */
+  private static effectAbbrev(e: ActiveEffectDto): string {
+    switch (e.effect_type) {
+      case 'buff': return e.stat === 'defence' ? 'DEF' : 'ATK';
+      case 'debuff': return e.stat === 'defence' ? 'DEF' : 'WKN';
+      case 'dot': return 'DOT';
+      case 'reflect': return 'RFL';
+      case 'shield': return 'SHL';
+      default: return '?';
+    }
+  }
+
+  /** Update all four effect containers based on the latest active_effects array. */
+  private updateActiveEffects(effects: ActiveEffectDto[]): void {
+    // Separate effects by target
+    const playerEffects = effects.filter((e) => e.target === 'player');
+    const enemyEffects = effects.filter((e) => e.target === 'enemy');
+
+    // Player side
+    const playerBuffs = playerEffects.filter((e) => CombatScreen.classifyEffect(e) === 'buff');
+    const playerDebuffs = playerEffects.filter((e) => CombatScreen.classifyEffect(e) === 'debuff');
+    this.renderEffectColumn(this.playerBuffsEl, playerBuffs, 'buff');
+    this.renderEffectColumn(this.playerDebuffsEl, playerDebuffs, 'debuff');
+
+    // Enemy side
+    const enemyBuffs = enemyEffects.filter((e) => CombatScreen.classifyEffect(e) === 'buff');
+    const enemyDebuffs = enemyEffects.filter((e) => CombatScreen.classifyEffect(e) === 'debuff');
+    this.renderEffectColumn(this.enemyBuffsEl, enemyBuffs, 'buff');
+    this.renderEffectColumn(this.enemyDebuffsEl, enemyDebuffs, 'debuff');
+  }
+
+  private renderEffectColumn(container: HTMLElement | null, effects: ActiveEffectDto[], kind: 'buff' | 'debuff'): void {
+    if (!container) return;
+    container.innerHTML = '';
+
+    for (const effect of effects) {
+      const chip = document.createElement('div');
+      const borderColor = kind === 'buff' ? '#3a8a3a' : '#8a3a3a';
+      const bgColor = kind === 'buff' ? '#1a2a1a' : '#2a1a1a';
+      chip.style.cssText = [
+        'width:26px', 'height:26px', 'border-radius:3px',
+        `border:2px solid ${borderColor}`,
+        `background:${bgColor}`,
+        'display:flex', 'align-items:center', 'justify-content:center',
+        'position:relative', 'cursor:default', 'overflow:hidden',
+        'transition:border-color 0.2s,box-shadow 0.2s',
+      ].join(';');
+
+      // Skill icon or abbreviation fallback
+      if (effect.icon_url) {
+        const img = document.createElement('img');
+        img.src = effect.icon_url;
+        img.alt = effect.ability_name;
+        img.style.cssText = 'width:100%;height:100%;object-fit:contain;image-rendering:pixelated;border-radius:1px;';
+        img.onerror = () => {
+          img.remove();
+          const abbr = document.createElement('span');
+          abbr.style.cssText = 'font-size:0.45rem;font-weight:700;color:#c0b080;letter-spacing:0.02em;text-transform:uppercase;line-height:1;';
+          abbr.textContent = CombatScreen.effectAbbrev(effect);
+          chip.insertBefore(abbr, chip.firstChild);
+        };
+        chip.appendChild(img);
+      } else {
+        const abbr = document.createElement('span');
+        abbr.style.cssText = 'font-size:0.45rem;font-weight:700;color:#c0b080;letter-spacing:0.02em;text-transform:uppercase;line-height:1;';
+        abbr.textContent = CombatScreen.effectAbbrev(effect);
+        chip.appendChild(abbr);
+      }
+
+      // Turn counter badge
+      const badge = document.createElement('span');
+      badge.style.cssText = [
+        'position:absolute', 'bottom:-3px', 'right:-3px',
+        'min-width:12px', 'height:12px', 'border-radius:6px',
+        'font-size:0.4rem', 'font-weight:700', 'color:#fff',
+        'display:flex', 'align-items:center', 'justify-content:center',
+        'padding:0 2px',
+        `background:${kind === 'buff' ? '#2d7a2d' : '#7a2d2d'}`,
+        'border:1px solid #0a0a0a',
+      ].join(';');
+      badge.textContent = `${effect.turns_remaining}`;
+      chip.appendChild(badge);
+
+      // Hover tooltip
+      chip.addEventListener('mouseenter', (ev) => this.showEffectTooltip(ev as MouseEvent, effect, kind));
+      chip.addEventListener('mouseleave', () => this.removeEffectTooltip());
+
+      // Hover glow
+      chip.addEventListener('mouseenter', () => {
+        chip.style.borderColor = kind === 'buff' ? '#5ada5a' : '#da5a5a';
+        chip.style.boxShadow = kind === 'buff' ? '0 0 6px rgba(90,218,90,0.5)' : '0 0 6px rgba(218,90,90,0.5)';
+      });
+      chip.addEventListener('mouseleave', () => {
+        chip.style.borderColor = borderColor;
+        chip.style.boxShadow = 'none';
+      });
+
+      container.appendChild(chip);
+    }
+  }
+
+  private showEffectTooltip(ev: MouseEvent, effect: ActiveEffectDto, kind: 'buff' | 'debuff'): void {
+    this.removeEffectTooltip();
+
+    const tip = document.createElement('div');
+    tip.style.cssText = [
+      'position:fixed', 'z-index:9999', 'pointer-events:none',
+      'background:linear-gradient(180deg,#1e1a12 0%,#141008 100%)',
+      'border:1px solid #5a4a2a', 'border-radius:4px',
+      'padding:8px 12px', 'min-width:140px', 'max-width:220px',
+      'font-family:Cinzel,serif',
+    ].join(';');
+
+    // Name
+    const nameEl = document.createElement('div');
+    const accentColor = kind === 'buff' ? '#5ade5a' : '#de5a5a';
+    nameEl.style.cssText = `font-size:0.72rem;font-weight:700;color:${accentColor};margin-bottom:4px;border-bottom:1px solid #2a2010;padding-bottom:3px;`;
+    nameEl.textContent = effect.ability_name;
+    tip.appendChild(nameEl);
+
+    // Effect type label
+    const typeEl = document.createElement('div');
+    typeEl.style.cssText = 'font-size:0.62rem;color:#b0a070;margin-bottom:3px;';
+    typeEl.textContent = CombatScreen.effectLabel(effect);
+    if (effect.value) {
+      typeEl.textContent += ` (${effect.value}%)`;
+    }
+    tip.appendChild(typeEl);
+
+    // Turns remaining
+    const turnsEl = document.createElement('div');
+    turnsEl.style.cssText = 'font-size:0.6rem;color:#8a7a50;';
+    turnsEl.textContent = effect.turns_remaining === 1
+      ? '1 turn remaining'
+      : `${effect.turns_remaining} turns remaining`;
+    tip.appendChild(turnsEl);
+
+    document.body.appendChild(tip);
+
+    // Position near cursor
+    const rect = tip.getBoundingClientRect();
+    let x = ev.clientX + 12;
+    let y = ev.clientY - rect.height - 8;
+    if (y < 4) y = ev.clientY + 12;
+    if (x + rect.width > window.innerWidth - 4) x = ev.clientX - rect.width - 12;
+    tip.style.left = `${x}px`;
+    tip.style.top = `${y}px`;
+
+    this.effectTooltipEl = tip;
+  }
+
+  private removeEffectTooltip(): void {
+    if (this.effectTooltipEl) {
+      this.effectTooltipEl.remove();
+      this.effectTooltipEl = null;
     }
   }
 }

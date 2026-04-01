@@ -924,6 +924,22 @@ export interface OwnedAbilityDto {
 }
 
 // ---------------------------------------------------------------------------
+// Active effect DTO (sent with turn results for UI buff/debuff indicators)
+// ---------------------------------------------------------------------------
+
+export interface ActiveEffectDto {
+  id: string;
+  source: 'player' | 'enemy';
+  target: 'player' | 'enemy';
+  effect_type: 'buff' | 'debuff' | 'dot' | 'reflect' | 'shield';
+  stat?: 'attack' | 'defence';
+  value: number;
+  turns_remaining: number;
+  ability_name: string;
+  icon_url?: string | null;
+}
+
+// ---------------------------------------------------------------------------
 // Combat System: Server → Client payloads
 // ---------------------------------------------------------------------------
 
@@ -935,6 +951,7 @@ export interface CombatStartPayload {
     slots: CombatAbilityStateDto[];
   };
   turn_timer_ms: number;
+  active_effects: ActiveEffectDto[];
 }
 
 export interface CombatTurnResultPayload {
@@ -946,6 +963,7 @@ export interface CombatTurnResultPayload {
   player_mana: number;
   enemy_hp: number;
   ability_states: CombatAbilityStateDto[];
+  active_effects: ActiveEffectDto[];
 }
 
 export interface CombatActiveWindowPayload {
@@ -2042,6 +2060,7 @@ export interface BossCombatStartPayload {
     slots: CombatAbilityStateDto[];
   };
   turn_timer_ms: number;
+  active_effects: ActiveEffectDto[];
 }
 
 export interface BossCombatTurnResultPayload {
@@ -2053,6 +2072,7 @@ export interface BossCombatTurnResultPayload {
   player_mana: number;
   enemy_hp_bracket: BossHpBracket;
   ability_states: CombatAbilityStateDto[];
+  active_effects: ActiveEffectDto[];
 }
 
 export interface BossCombatActiveWindowPayload {

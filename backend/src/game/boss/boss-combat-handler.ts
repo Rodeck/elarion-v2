@@ -35,6 +35,7 @@ import type {
   BossCombatActiveWindowPayload,
   BossCombatEndPayload,
   CombatAbilityStateDto,
+  ActiveEffectDto,
   ItemDroppedDto,
   LoadoutSlotDto,
   BossHpBracket,
@@ -220,6 +221,7 @@ export async function handleBossChallenge(
     },
     loadout: { slots: buildAbilityStates(combatSession) },
     turn_timer_ms: TURN_TIMER_MS,
+    active_effects: [],
   };
 
   sendToSession(session, 'boss:combat_start', startPayload);
@@ -363,6 +365,7 @@ async function runEnemyTurn(cs: BossCombatSession): Promise<void> {
   }
 
   // Boss abilities (fire by priority, unlimited mana, gated by cooldown)
+  const DURATION_EFFECTS = new Set(['buff', 'debuff', 'dot', 'reflect', 'shield']);
   for (const ba of cs.bossAbilities) {
     const cooldown = cs.engineState.abilityCooldowns.get(ba.ability_id) ?? 0;
     if (cooldown > 0) continue;
@@ -370,6 +373,9 @@ async function runEnemyTurn(cs: BossCombatSession): Promise<void> {
     const abilityName = ba.name ?? 'Unknown';
     const effectType = ba.effect_type ?? 'damage';
     const effectValue = ba.effect_value ?? 0;
+
+    // Skip if this boss ability already has an active effect (no stacking)
+    if (DURATION_EFFECTS.has(effectType) && cs.engineState.activeEffects.some((e) => e.abilityName === abilityName)) continue;
 
     // Apply boss ability effect — boss is the source, player is the target
     const abilityEvents = applyBossAbilityEffect(
@@ -529,8 +535,32 @@ function sendTurnResult(cs: BossCombatSession, phase: 'player' | 'enemy', events
     player_mana: cs.engineState.playerMana,
     enemy_hp_bracket: bossManager.hpToBracket(cs.engineState.enemyHp, cs.enemyMaxHp),
     ability_states: buildAbilityStates(cs),
+    active_effects: serializeActiveEffects(cs),
   };
   sendToSession(cs.session, 'boss:combat_turn_result', payload);
+}
+
+function serializeActiveEffects(cs: BossCombatSession): ActiveEffectDto[] {
+  // Build name→iconUrl lookup from player loadout + boss abilities
+  const iconMap = new Map<string, string | null>();
+  for (const slot of [cs.loadout.auto_1, cs.loadout.auto_2, cs.loadout.auto_3, cs.loadout.active]) {
+    if (slot) iconMap.set(slot.name, slot.iconUrl);
+  }
+  for (const ba of cs.bossAbilities) {
+    if (ba.name) iconMap.set(ba.name, buildAbilityIconUrl(ba.icon_filename ?? null));
+  }
+
+  return cs.engineState.activeEffects.map((e) => ({
+    id:              e.id,
+    source:          e.source,
+    target:          e.target,
+    effect_type:     e.effectType,
+    stat:            e.stat,
+    value:           e.value,
+    turns_remaining: e.turnsRemaining,
+    ability_name:    e.abilityName,
+    icon_url:        iconMap.get(e.abilityName) ?? null,
+  }));
 }
 
 function buildLoadout(slots: LoadoutSlotDto[]): CombatLoadout {
