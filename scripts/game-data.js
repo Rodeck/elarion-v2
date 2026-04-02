@@ -386,7 +386,7 @@ async function zoneDetail(id) {
 
 async function npcs() {
   const res = await pool.query(`
-    SELECT n.id, n.name, n.is_crafter,
+    SELECT n.id, n.name, n.is_crafter, n.is_trainer,
       (SELECT string_agg(b.name || ' (' || z.name || ')', ', ')
        FROM building_npcs bn JOIN buildings b ON b.id = bn.building_id JOIN map_zones z ON z.id = b.zone_id
        WHERE bn.npc_id = n.id) as locations,
@@ -902,6 +902,26 @@ async function arenaDetail(id) {
   }
 }
 
+async function characterStats(name) {
+  if (!name) { console.error('Usage: character-stats <name>'); return; }
+  const res = await pool.query(`
+    SELECT c.name, c.level, c.experience,
+      c.attr_constitution, c.attr_strength, c.attr_intelligence, c.attr_dexterity, c.attr_toughness,
+      c.stat_points_unspent, c.max_hp, c.attack_power, c.defence,
+      cc.name as class_name, cc.base_hp, cc.base_attack, cc.base_defence
+    FROM characters c
+    JOIN character_classes cc ON cc.id = c.class_id
+    WHERE LOWER(c.name) = LOWER($1)
+  `, [name]);
+  if (!res.rows.length) { console.log(`Character '${name}' not found.`); return; }
+  const c = res.rows[0];
+  section(`Character: ${c.name} (${c.class_name} Lv.${c.level})`);
+  console.log(`  Unspent Points: ${c.stat_points_unspent}`);
+  console.log(`  CON: ${c.attr_constitution}  STR: ${c.attr_strength}  INT: ${c.attr_intelligence}  DEX: ${c.attr_dexterity}  TOU: ${c.attr_toughness}`);
+  console.log(`  Derived → HP: ${c.base_hp + c.attr_constitution * 4}  ATK: ${c.base_attack + c.attr_constitution + c.attr_strength * 2}  DEF: ${c.base_defence + c.attr_toughness}`);
+  console.log(`  DB columns → max_hp: ${c.max_hp}  attack_power: ${c.attack_power}  defence: ${c.defence}`);
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 const HELP = `
@@ -927,6 +947,7 @@ Commands:
   boss-instances           Live boss instances with HP, status, and respawn timers
   disassembly [item_id]    Disassembly recipes with chance entries and outputs
   economy                  Crown sources/sinks, equipment stats, expedition rewards
+  character-stats <name>   Character attributes, unspent points, derived stats
   search <term>            Search across all entity types by name
   sql "<query>"            Run a raw SELECT query
 `;
@@ -956,6 +977,7 @@ async function main() {
       case 'gathering':    await gathering(); break;
       case 'disassembly': await disassembly(args[0]); break;
       case 'economy':     await economy(); break;
+      case 'character-stats': await characterStats(args.join(' ')); break;
       case 'search':    await search(args.join(' ')); break;
       case 'arenas':       await arenas(); break;
       case 'arena':        await arenaDetail(args[0]); break;

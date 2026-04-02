@@ -88,9 +88,9 @@ Explain the logic behind the organization.]
 
 ## NPCs to Create (N)
 
-| NPC | Description | is_crafter | is_disassembler | Building Assignment |
-|-----|-------------|------------|-----------------|---------------------|
-| [name] | [personality + role, 1-2 sentences] | [true/false] | [true/false] | [building name (id)] |
+| NPC | Description | is_crafter | is_disassembler | is_trainer | Building Assignment |
+|-----|-------------|------------|-----------------|------------|---------------------|
+| [name] | [personality + role, 1-2 sentences] | [true/false] | [true/false] | [true/false] | [building name (id)] |
 
 ---
 

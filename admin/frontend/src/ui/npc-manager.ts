@@ -7,6 +7,7 @@ import {
   toggleNpcCrafter,
   toggleNpcDismisser,
   toggleNpcDisassembler,
+  toggleNpcTrainer,
   type NpcResponse,
 } from '../editor/api';
 import { ImageGenDialog } from './image-gen-dialog';
@@ -135,6 +136,7 @@ export class NpcManager {
     const isCrafter = (n as NpcResponse & { is_crafter?: boolean }).is_crafter ?? false;
     const isDismisser = (n as NpcResponse & { is_squire_dismisser?: boolean }).is_squire_dismisser ?? false;
     const isDisassembler = (n as NpcResponse & { is_disassembler?: boolean }).is_disassembler ?? false;
+    const isTrainer = (n as NpcResponse & { is_trainer?: boolean }).is_trainer ?? false;
     card.innerHTML = `
       <div class="npc-card-icon">
         <img src="${n.icon_url}" alt="${this.esc(n.name)}" />
@@ -153,6 +155,10 @@ export class NpcManager {
         <label style="font-size:0.75rem;color:#9ba8d0;display:flex;align-items:center;gap:4px;cursor:pointer;">
           <input type="checkbox" class="npc-disassembler-toggle" data-id="${n.id}" ${isDisassembler ? 'checked' : ''} />
           Disassembler
+        </label>
+        <label style="font-size:0.75rem;color:#9ba8d0;display:flex;align-items:center;gap:4px;cursor:pointer;">
+          <input type="checkbox" class="npc-trainer-toggle" data-id="${n.id}" ${isTrainer ? 'checked' : ''} />
+          Trainer
         </label>
       </div>
       <div class="monster-card-actions">
@@ -191,6 +197,17 @@ export class NpcManager {
       } catch (err) {
         checkbox.checked = !checkbox.checked;
         alert(`Failed to toggle disassembler: ${(err as Error).message}`);
+      }
+    });
+
+    card.querySelector<HTMLInputElement>('.npc-trainer-toggle')!.addEventListener('change', async (e) => {
+      const checkbox = e.target as HTMLInputElement;
+      try {
+        await toggleNpcTrainer(n.id, checkbox.checked);
+        (n as NpcResponse & { is_trainer?: boolean }).is_trainer = checkbox.checked;
+      } catch (err) {
+        checkbox.checked = !checkbox.checked;
+        alert(`Failed to toggle trainer: ${(err as Error).message}`);
       }
     });
 

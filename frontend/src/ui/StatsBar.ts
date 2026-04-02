@@ -23,6 +23,9 @@ export class StatsBar {
   private xpThreshold = 9999;
   private effectiveAttack = 0;
   private effectiveDefence = 0;
+  private unspentBadge: HTMLSpanElement | null = null;
+  private badgeDismissed = false;
+  private lastUnspentCount = 0;
 
   constructor(
     private mountEl: HTMLElement,
@@ -222,6 +225,17 @@ export class StatsBar {
     statsRow.appendChild(defBlock);
     statsRow.appendChild(crBlock);
 
+    // Unspent stat points badge
+    this.unspentBadge = document.createElement('span');
+    this.unspentBadge.style.cssText = 'display:none;background:#d4a84b;color:#1a1510;font-family:var(--font-number);font-size:10px;font-weight:bold;padding:1px 5px;border-radius:9px;cursor:pointer;margin-left:4px;';
+    this.unspentBadge.title = 'Unspent stat points — click to dismiss';
+    this.unspentBadge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.badgeDismissed = true;
+      if (this.unspentBadge) this.unspentBadge.style.display = 'none';
+    });
+    statsRow.appendChild(this.unspentBadge);
+
     // ── Assemble collapsed content ───────────────────────────────
     this.collapsedEl.appendChild(headerRow);
     this.collapsedEl.appendChild(hpEl);
@@ -335,6 +349,21 @@ export class StatsBar {
 
   setCrowns(amount: number): void {
     if (this.crownsEl) this.crownsEl.textContent = String(amount);
+  }
+
+  setUnspentPoints(count: number): void {
+    if (!this.unspentBadge) return;
+    // If new points were earned (count increased), reset dismissal
+    if (count > this.lastUnspentCount) {
+      this.badgeDismissed = false;
+    }
+    this.lastUnspentCount = count;
+    if (count > 0 && !this.badgeDismissed) {
+      this.unspentBadge.textContent = `SP ${count}`;
+      this.unspentBadge.style.display = 'inline';
+    } else {
+      this.unspentBadge.style.display = 'none';
+    }
   }
 
   setCharacterData(data: CharacterData, xpThreshold: number): void {

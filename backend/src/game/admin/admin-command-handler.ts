@@ -95,16 +95,12 @@ async function handleLevelUp(session: AuthenticatedSession, args: string[], repl
   }
 
   const newLevel = character.level + count;
-  const newMaxHp = character.max_hp + cls.hp_per_level * count;
-  const newAttackPower = character.attack_power + cls.attack_per_level * count;
-  const newDefence = character.defence + cls.defence_per_level * count;
+  const statPointsGained = 7 * count;
+  const statPointsUnspent = character.stat_points_unspent + statPointsGained;
 
   await updateCharacter(character.id, {
     level: newLevel,
-    max_hp: newMaxHp,
-    current_hp: newMaxHp,
-    attack_power: newAttackPower,
-    defence: newDefence,
+    stat_points_unspent: statPointsUnspent,
   });
 
   // Notify target player if online
@@ -112,10 +108,12 @@ async function handleLevelUp(session: AuthenticatedSession, args: string[], repl
   if (targetSession) {
     sendToSession(targetSession, 'character.levelled_up', {
       new_level: newLevel,
-      new_max_hp: newMaxHp,
-      new_attack_power: newAttackPower,
-      new_defence: newDefence,
+      new_max_hp: character.max_hp,
+      new_attack_power: character.attack_power,
+      new_defence: character.defence,
       new_experience: character.experience,
+      stat_points_gained: statPointsGained,
+      stat_points_unspent: statPointsUnspent,
     });
   }
 

@@ -51,6 +51,7 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - PostgreSQL 16 — 4 new tables (`bosses`, `boss_abilities`, `boss_loot`, `boss_instances`); in-memory `Map<bossId, BossInstance>` for active instance state (027-boss-encounters)
 - TypeScript 5.x (all packages) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT) (029-arena-system)
 - PostgreSQL 16 — 3 new tables (`arenas`, `arena_monsters`, `arena_participants`), 1 ALTER (`characters.arena_id`); in-memory `Map<string, PvpCombatSession>` for active fights (029-arena-system)
+- PostgreSQL 16 — ALTER `characters` table (6 new columns), ALTER `npcs` table (1 new column); migration `033_stat_allocation.sql` (030-stat-allocation)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -76,9 +77,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 030-stat-allocation: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 029-arena-system: Added TypeScript 5.x (all packages) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 027-boss-encounters: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (game backend), Phaser 3.60 + Vite 5 (game frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
-- 026-character-rankings: Added TypeScript 5.x (frontend + backend + shared) + Phaser 3.60 + Vite 5 (frontend), Node.js 20 LTS + `ws` (backend), `pg` (PostgreSQL client)
 
 
 
@@ -184,7 +185,7 @@ When adding a new NPC boolean flag (e.g., `is_disassembler`, `is_merchant`), upd
 9. **Admin frontend NPC manager** — `admin/frontend/src/ui/npc-manager.ts`: Add checkbox + change handler
 10. **gd.design skill** — `.claude/commands/gd.design.md`: Add column to NPC table template
 
-Existing NPC roles: `is_crafter`, `is_quest_giver`, `is_squire_dismisser`, `is_disassembler`.
+Existing NPC roles: `is_crafter`, `is_quest_giver`, `is_squire_dismisser`, `is_disassembler`, `is_trainer`.
 
 ## Adding a New Tool Type
 

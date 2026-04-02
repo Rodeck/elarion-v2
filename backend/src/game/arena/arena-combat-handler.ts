@@ -704,17 +704,13 @@ async function endPvpCombat(
   // Sync characters.current_hp to arena HP (prevents stale HP in stats panel).
   // Also overrides level-up full-heal if one occurred.
   await query('UPDATE characters SET current_hp = $1 WHERE id = $2', [winnerHp, winnerId]);
-  const winnerMaxHp = winnerXpResult?.levelledUp ? winnerXpResult.newMaxHp! : (getParticipant(winnerId)?.participant.maxHp ?? winnerHp);
+  const winnerMaxHp = getParticipant(winnerId)?.participant.maxHp ?? winnerHp;
   sendToSession(winnerSession, 'character.hp_changed', {
     current_hp: winnerHp,
     max_hp: winnerMaxHp,
   });
 
-  // Update winner's max_hp in arena state if they levelled up
-  if (winnerXpResult?.levelledUp && winnerXpResult.newMaxHp) {
-    const wp = getParticipant(winnerId);
-    if (wp) wp.participant.maxHp = winnerXpResult.newMaxHp;
-  }
+  // Level-up no longer changes max_hp (stat allocation system) — no arena state update needed
 
   // Broadcast winner's updated state (include refreshed stats)
   const winnerP = getParticipant(winnerId);

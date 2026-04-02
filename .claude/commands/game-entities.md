@@ -39,6 +39,7 @@ Run via Bash: `node scripts/game-entities.js <command> '<json-data>'`
 | `upload-squire-icon` | Upload PNG icon for a squire definition | POST `/api/squire-definitions/:id/icon` |
 | `create-monster-squire-loot` | Add squire loot entry to a monster | POST `/api/monsters/:id/squire-loot` |
 | `set-npc-dismisser` | Set/unset NPC squire dismisser flag | PUT `/api/npcs/:id/squire-dismisser` |
+| `set-npc-trainer` | Set/unset NPC trainer flag (stat allocation) | PUT `/api/npcs/:id/trainer` |
 | `create-fishing-loot` | Add a fishing loot entry | POST `/api/fishing-loot` |
 | `update-fishing-loot` | Update a fishing loot entry | PUT `/api/fishing-loot/:id` |
 | `delete-fishing-loot` | Delete a fishing loot entry | DELETE `/api/fishing-loot/:id` |
@@ -317,6 +318,14 @@ Returns `{ "icon_filename": "uuid.png" }` — use this in create-npc.
 {
   "npc_id": 1,                                // required, NPC id
   "is_squire_dismisser": true                 // required, boolean
+}
+```
+
+### set-npc-trainer
+```json
+{
+  "npc_id": 1,                                // required, NPC id
+  "is_trainer": true                          // required, boolean — enables stat allocation dialog
 }
 ```
 

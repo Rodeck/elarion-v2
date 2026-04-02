@@ -34,6 +34,12 @@ export interface Character {
   arena_id: number | null;
   arena_cooldown_until: Date | null;
   arena_pvp_wins: number;
+  stat_points_unspent: number;
+  attr_constitution: number;
+  attr_strength: number;
+  attr_intelligence: number;
+  attr_dexterity: number;
+  attr_toughness: number;
   updated_at: Date;
 }
 
@@ -75,7 +81,7 @@ export async function findByAccountId(accountId: string): Promise<Character | nu
 
 export async function updateCharacter(
   id: string,
-  fields: Partial<Pick<Character, 'level' | 'experience' | 'max_hp' | 'current_hp' | 'attack_power' | 'defence' | 'zone_id' | 'pos_x' | 'pos_y' | 'in_combat' | 'in_gathering'>>,
+  fields: Partial<Pick<Character, 'level' | 'experience' | 'max_hp' | 'current_hp' | 'attack_power' | 'defence' | 'zone_id' | 'pos_x' | 'pos_y' | 'in_combat' | 'in_gathering' | 'stat_points_unspent' | 'attr_constitution' | 'attr_strength' | 'attr_intelligence' | 'attr_dexterity' | 'attr_toughness'>>,
 ): Promise<Character> {
   const keys = Object.keys(fields) as (keyof typeof fields)[];
   const setClauses = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');

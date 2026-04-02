@@ -1,12 +1,13 @@
 import { log } from '../../logger';
 import type { Character, CharacterClass } from '../../db/queries/characters';
 
+const STAT_POINTS_PER_LEVEL = 7;
+
 export interface LevelUpResult {
   levelledUp: boolean;
   newLevel: number;
-  newMaxHp: number;
-  newAttackPower: number;
-  newDefence: number;
+  statPointsGained: number;
+  statPointsUnspent: number;
 }
 
 export function checkLevelUp(character: Character, cls: CharacterClass, newXp: number): LevelUpResult {
@@ -28,25 +29,22 @@ export function checkLevelUp(character: Character, cls: CharacterClass, newXp: n
     return {
       levelledUp: false,
       newLevel: character.level,
-      newMaxHp: character.max_hp,
-      newAttackPower: character.attack_power,
-      newDefence: character.defence,
+      statPointsGained: 0,
+      statPointsUnspent: character.stat_points_unspent,
     };
   }
 
   const levelsGained = newLevel - character.level;
-  const newMaxHp = character.max_hp + cls.hp_per_level * levelsGained;
-  const newAttackPower = character.attack_power + cls.attack_per_level * levelsGained;
-  const newDefence = character.defence + cls.defence_per_level * levelsGained;
+  const statPointsGained = STAT_POINTS_PER_LEVEL * levelsGained;
+  const statPointsUnspent = character.stat_points_unspent + statPointsGained;
 
   log('info', 'progression', 'level_up', {
     characterId: character.id,
     from: character.level,
     to: newLevel,
-    newMaxHp,
-    newAttackPower,
-    newDefence,
+    statPointsGained,
+    statPointsUnspent,
   });
 
-  return { levelledUp: true, newLevel, newMaxHp, newAttackPower, newDefence };
+  return { levelledUp: true, newLevel, statPointsGained, statPointsUnspent };
 }

@@ -32,6 +32,12 @@ export interface CharacterData {
   current_node_id: number | null;
   crowns: number;
   rod_upgrade_points: number;
+  attr_constitution: number;
+  attr_strength: number;
+  attr_intelligence: number;
+  attr_dexterity: number;
+  attr_toughness: number;
+  stat_points_unspent: number;
 }
 
 export interface PlayerSummary {
@@ -170,6 +176,7 @@ export interface NpcDto {
   is_quest_giver: boolean;
   is_squire_dismisser: boolean;
   is_disassembler: boolean;
+  is_trainer: boolean;
 }
 
 export interface CityMapBuilding {
@@ -383,6 +390,8 @@ export interface CharacterLevelledUpPayload {
   new_attack_power: number;
   new_defence: number;
   new_experience: number;
+  stat_points_gained: number;
+  stat_points_unspent: number;
 }
 
 export interface ChatMessagePayload {
@@ -2336,3 +2345,91 @@ export type ArenaLeaveMessage              = WsMessage<ArenaLeavePayload>;
 export type ArenaChallengePlayerMessage    = WsMessage<ArenaChallengePlayerPayload>;
 export type ArenaChallengeNpcMessage       = WsMessage<ArenaChallengeNpcPayload>;
 export type ArenaCombatTriggerActiveMessage = WsMessage<ArenaCombatTriggerActivePayload>;
+
+// ---------------------------------------------------------------------------
+// Training (Stat Allocation): payloads
+// ---------------------------------------------------------------------------
+
+export interface TrainingOpenPayload {
+  npc_id: number;
+}
+
+export interface TrainingAttributesDto {
+  constitution: number;
+  strength: number;
+  intelligence: number;
+  dexterity: number;
+  toughness: number;
+}
+
+export interface TrainingDerivedStatsDto {
+  max_hp: number;
+  attack_power: number;
+  defence: number;
+  max_mana: number;
+  crit_chance: number;
+  crit_damage: number;
+  dodge_chance: number;
+}
+
+export interface TrainingDescriptionsDto {
+  constitution: string;
+  strength: string;
+  intelligence: string;
+  dexterity: string;
+  toughness: string;
+}
+
+export interface TrainingBaseStatsDto {
+  hp: number;
+  attack: number;
+  defence: number;
+}
+
+export interface TrainingEquipmentStatsDto {
+  attack: number;
+  defence: number;
+  max_mana: number;
+  crit_chance: number;
+  crit_damage: number;
+  dodge_chance: number;
+}
+
+export interface TrainingStatePayload {
+  attributes: TrainingAttributesDto;
+  unspent_points: number;
+  per_stat_cap: number;
+  level: number;
+  derived_stats: TrainingDerivedStatsDto;
+  descriptions: TrainingDescriptionsDto;
+  base_stats: TrainingBaseStatsDto;
+  equipment_stats: TrainingEquipmentStatsDto;
+}
+
+export interface TrainingAllocatePayload {
+  npc_id: number;
+  increments: TrainingAttributesDto;
+}
+
+export interface TrainingResultPayload {
+  attributes: TrainingAttributesDto;
+  unspent_points: number;
+  new_max_hp: number;
+  new_attack_power: number;
+  new_defence: number;
+  new_max_mana: number;
+  new_crit_chance: number;
+  new_crit_damage: number;
+  new_dodge_chance: number;
+}
+
+export interface TrainingErrorPayload {
+  message: string;
+}
+
+// Training: message types
+export type TrainingOpenMessage     = WsMessage<TrainingOpenPayload>;
+export type TrainingStateMessage    = WsMessage<TrainingStatePayload>;
+export type TrainingAllocateMessage = WsMessage<TrainingAllocatePayload>;
+export type TrainingResultMessage   = WsMessage<TrainingResultPayload>;
+export type TrainingErrorMessage    = WsMessage<TrainingErrorPayload>;

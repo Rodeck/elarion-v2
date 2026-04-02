@@ -127,7 +127,11 @@ import type {
   ArenaCombatTurnResultPayload,
   ArenaCombatActiveWindowPayload,
   ArenaCombatEndPayload,
+  TrainingStatePayload,
+  TrainingResultPayload,
+  TrainingErrorPayload,
 } from '@elarion/protocol';
+import { TrainingModal } from '../ui/TrainingModal';
 import { FishingMinigame } from '../ui/fishing-minigame';
 import { DisassemblyModal } from '../ui/DisassemblyModal';
 import { RankingsPanel } from '../ui/RankingsPanel';
@@ -201,6 +205,7 @@ export class GameScene extends Phaser.Scene {
 
   // Arena system
   private arenaPanel: ArenaPanel | null = null;
+  private trainingModal!: TrainingModal;
   private inArenaCombat = false;
   private pendingArenaPayload: ArenaEnteredPayload | null = null;
 
@@ -301,6 +306,14 @@ export class GameScene extends Phaser.Scene {
       inventoryEl.style.zIndex = '';
       inventoryEl.style.position = '';
       this.leftPanel.setDragEnabled(false);
+    });
+    this.trainingModal = new TrainingModal(document.getElementById('game')!);
+    this.trainingModal.setSendFn((type, payload) => {
+      this.client.send(type, payload);
+    });
+    this.buildingPanel.setOnTrainingOpen((npcId) => {
+      this.trainingModal.open(npcId);
+      this.client.send('training.open', { npc_id: npcId });
     });
     this.buildingPanel.setOnBossChallenge((boss) => {
       this.bossInfoPanel.show(boss, this.getBossTokenCount());
@@ -546,16 +559,14 @@ export class GameScene extends Phaser.Scene {
     this.client.on<CharacterLevelledUpPayload>('character.levelled_up', (payload) => {
       if (this.myCharacter) {
         this.myCharacter.level = payload.new_level;
-        this.myCharacter.max_hp = payload.new_max_hp;
-        this.myCharacter.current_hp = payload.new_max_hp;
-        this.myCharacter.attack_power = payload.new_attack_power;
-        this.myCharacter.defence = payload.new_defence;
         this.myCharacter.experience = payload.new_experience;
+        this.myCharacter.stat_points_unspent = payload.stat_points_unspent;
         this.statsBar.setLevel(payload.new_level);
-        this.statsBar.setHp(payload.new_max_hp, payload.new_max_hp);
         const nextThreshold = XP_THRESHOLDS[payload.new_level] ?? 9999;
         this.statsBar.setXp(payload.new_experience, nextThreshold);
+        this.statsBar.setUnspentPoints(payload.stat_points_unspent);
         this.syncExpandedStats();
+        this.chatBox.addSystemMessage(`Level up! You gained ${payload.stat_points_gained} stat points. Visit a trainer to allocate them.`);
       }
     });
 
@@ -1018,6 +1029,32 @@ export class GameScene extends Phaser.Scene {
     });
     this.client.on<DisassemblyRejectedPayload>('disassembly.rejected', (payload) => {
       this.disassemblyModal.handleRejected(payload);
+    });
+
+    // Training (stat allocation) handlers
+    this.client.on<TrainingStatePayload>('training.state', (payload) => {
+      this.trainingModal.handleState(payload);
+    });
+    this.client.on<TrainingResultPayload>('training.result', (payload) => {
+      this.trainingModal.handleResult(payload);
+      if (this.myCharacter) {
+        this.myCharacter.max_hp = payload.new_max_hp;
+        this.myCharacter.attack_power = payload.new_attack_power;
+        this.myCharacter.defence = payload.new_defence;
+        this.myCharacter.attr_constitution = payload.attributes.constitution;
+        this.myCharacter.attr_strength = payload.attributes.strength;
+        this.myCharacter.attr_intelligence = payload.attributes.intelligence;
+        this.myCharacter.attr_dexterity = payload.attributes.dexterity;
+        this.myCharacter.attr_toughness = payload.attributes.toughness;
+        this.myCharacter.stat_points_unspent = payload.unspent_points;
+        this.statsBar.setHp(this.myCharacter.current_hp, payload.new_max_hp);
+        this.statsBar.updateStats(payload.new_attack_power, payload.new_defence);
+        this.statsBar.setUnspentPoints(payload.unspent_points);
+        this.syncExpandedStats();
+      }
+    });
+    this.client.on<TrainingErrorPayload>('training.error', (payload) => {
+      this.trainingModal.handleError(payload.message);
     });
 
     // Rankings handler
@@ -1712,6 +1749,7 @@ export class GameScene extends Phaser.Scene {
     // Give StatsBar full character data for the expanded view
     this.statsBar.setCharacterData(c, xpThreshold);
     this.statsBar.setEffectiveStats(c.attack_power, c.defence);
+    this.statsBar.setUnspentPoints(c.stat_points_unspent);
     // Tell StatsBar where the tab bar ends so it expands up to that point
     this.statsBar.setExpandTarget(this.leftPanel.getTabsBottom());
     // Collapse expanded stats when any tab button is clicked

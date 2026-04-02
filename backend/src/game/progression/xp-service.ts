@@ -1,29 +1,21 @@
-import { findByAccountId, findClassById, updateCharacter } from '../../db/queries/characters';
+import { findByAccountId, findClassById, updateCharacter, type Character } from '../../db/queries/characters';
 import { checkLevelUp } from './level-up-service';
 import { getSessionByCharacterId, sendToSocket } from '../../websocket/server';
 import { log } from '../../logger';
 import { QuestTracker } from '../quest/quest-tracker';
 
-const XP_THRESHOLDS = [0, 100, 250, 500, 900, 1400];
-
 export interface XpAwardResult {
   newXp: number;
   levelledUp: boolean;
   newLevel?: number;
-  newMaxHp?: number;
-  newAttackPower?: number;
-  newDefence?: number;
+  statPointsGained?: number;
+  statPointsUnspent?: number;
 }
 
 export async function awardXp(characterId: string, amount: number): Promise<XpAwardResult> {
   // We need the character by ID; findByAccountId isn't right here — use a direct query
   const { query } = await import('../../db/connection');
-  const result = await query<{
-    id: string; account_id: string; level: number; experience: number;
-    max_hp: number; current_hp: number; attack_power: number; defence: number;
-    class_id: number; zone_id: number; pos_x: number; pos_y: number;
-    current_node_id: number | null; in_combat: boolean; in_gathering: boolean; crowns: number; rod_upgrade_points: number; updated_at: Date; name: string;
-  }>('SELECT * FROM characters WHERE id = $1', [characterId]);
+  const result = await query<Character>('SELECT * FROM characters WHERE id = $1', [characterId]);
 
   const character = result.rows[0];
   if (!character) {
@@ -46,28 +38,24 @@ export async function awardXp(characterId: string, amount: number): Promise<XpAw
     await updateCharacter(characterId, {
       experience: newXp,
       level: levelResult.newLevel,
-      max_hp: levelResult.newMaxHp,
-      current_hp: levelResult.newMaxHp, // restore to full HP on level up
-      attack_power: levelResult.newAttackPower,
-      defence: levelResult.newDefence,
+      stat_points_unspent: levelResult.statPointsUnspent,
     });
-
-    const nextThreshold = XP_THRESHOLDS[levelResult.newLevel] ?? 9999;
-    void nextThreshold;
 
     // Emit level-up notification to the player
     const session = getSessionByCharacterId(characterId);
     if (session) {
       sendToSocket(session.socket, 'character.levelled_up', {
         new_level: levelResult.newLevel,
-        new_max_hp: levelResult.newMaxHp,
-        new_attack_power: levelResult.newAttackPower,
-        new_defence: levelResult.newDefence,
+        new_max_hp: character.max_hp,
+        new_attack_power: character.attack_power,
+        new_defence: character.defence,
         new_experience: newXp,
+        stat_points_gained: levelResult.statPointsGained,
+        stat_points_unspent: levelResult.statPointsUnspent,
       });
     }
 
-    // Quest tracking: level up (best-effort, progress picked up on next quest log if session unavailable)
+    // Quest tracking: level up
     try {
       await QuestTracker.onLevelUp(characterId, levelResult.newLevel!);
     } catch {
@@ -79,15 +67,15 @@ export async function awardXp(characterId: string, amount: number): Promise<XpAw
       amount,
       newXp,
       newLevel: levelResult.newLevel,
+      statPointsGained: levelResult.statPointsGained,
     });
 
     return {
       newXp,
       levelledUp: true,
       newLevel: levelResult.newLevel,
-      newMaxHp: levelResult.newMaxHp,
-      newAttackPower: levelResult.newAttackPower,
-      newDefence: levelResult.newDefence,
+      statPointsGained: levelResult.statPointsGained,
+      statPointsUnspent: levelResult.statPointsUnspent,
     };
   }
 

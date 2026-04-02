@@ -1032,6 +1032,13 @@ export async function toggleNpcDisassembler(npcId: number, isDisassembler: boole
   });
 }
 
+export async function toggleNpcTrainer(npcId: number, isTrainer: boolean): Promise<void> {
+  return request<void>(`${NPCS_BASE}/${npcId}/trainer`, {
+    method: 'PUT',
+    body: JSON.stringify({ is_trainer: isTrainer }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Quests
 // ---------------------------------------------------------------------------

@@ -256,6 +256,12 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
       current_node_id: currentNodeId,
       crowns: character.crowns,
       rod_upgrade_points: character.rod_upgrade_points,
+      attr_constitution: character.attr_constitution,
+      attr_strength: character.attr_strength,
+      attr_intelligence: character.attr_intelligence,
+      attr_dexterity: character.attr_dexterity,
+      attr_toughness: character.attr_toughness,
+      stat_points_unspent: character.stat_points_unspent,
     },
     players,
   };

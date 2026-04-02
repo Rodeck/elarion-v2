@@ -151,6 +151,7 @@ function toProtocolBuilding(
     is_quest_giver: n.is_quest_giver ?? false,
     is_squire_dismisser: n.is_squire_dismisser ?? false,
     is_disassembler: n.is_disassembler ?? false,
+    is_trainer: n.is_trainer ?? false,
   }));
 
   const result: CityMapBuilding = {

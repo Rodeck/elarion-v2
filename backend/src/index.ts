@@ -28,12 +28,14 @@ import { registerFishingHandlers } from './game/fishing/fishing-handler';
 import { registerDisassemblyHandlers } from './game/disassembly/disassembly-handler';
 import { handleRankingsGet } from './game/rankings/rankings-handler';
 import { startRankingsService } from './game/rankings/rankings-service';
+import { startHpRegenService } from './game/regen/hp-regen-service';
 import { sendWorldState, setZonePlayersGetter } from './websocket/handlers/world-state-handler';
 import { getZonePlayers } from './game/world/zone-registry';
 import { loadCityMaps } from './game/world/city-map-loader';
 import * as bossInstanceManager from './game/boss/boss-instance-manager';
 import { handleBossChallenge, handleBossCombatTriggerActive } from './game/boss/boss-combat-handler';
 import { registerArenaHandlers } from './game/arena/arena-handler';
+import { registerTrainingHandlers } from './game/training/training-handler';
 import { loadFromDb as loadArenaState } from './game/arena/arena-state-manager';
 
 async function bootstrap(): Promise<void> {
@@ -78,6 +80,9 @@ async function bootstrap(): Promise<void> {
   // Start periodic rankings computation
   startRankingsService();
 
+  // Start passive HP regeneration (10% every 10 minutes)
+  startHpRegenService();
+
   // Register all message handlers
   registerHandler('auth.register', handleAuthRegister);
   registerHandler('auth.login', handleAuthLogin);
@@ -108,6 +113,7 @@ async function bootstrap(): Promise<void> {
   registerHandler('boss:challenge', handleBossChallenge);
   registerHandler('boss:combat_trigger_active', handleBossCombatTriggerActive);
   registerArenaHandlers();
+  registerTrainingHandlers();
 
   // Start WebSocket server (also sends world.state on connect)
   startWebSocketServer();
