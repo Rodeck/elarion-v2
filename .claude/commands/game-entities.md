@@ -28,7 +28,7 @@ Run via Bash: `node scripts/game-entities.js <command> '<json-data>'`
 | `upload-npc-icon` | Upload PNG icon for NPC use | POST `/api/npcs/upload` |
 | `set-npc-crafter` | Set/unset NPC crafter flag | PUT `/api/npcs/:id/crafter` |
 | `create-recipe` | Create a crafting recipe | POST `/api/recipes` |
-| `create-building-action` | Create building action (travel/explore/expedition/gather) | POST `/api/maps/:z/buildings/:b/actions` |
+| `create-building-action` | Create building action (travel/explore/expedition/gather/arena) | POST `/api/maps/:z/buildings/:b/actions` |
 | `assign-building-npc` | Assign NPC to a building | POST `/api/maps/:z/buildings/:b/npcs` |
 | `create-ability` | Create a combat ability | POST `/api/abilities` |
 | `set-encounter` | Set night random encounter entry | PUT `/api/encounter-tables/:zoneId` |
@@ -370,6 +370,17 @@ Returns `{ "icon_filename": "uuid.png" }` — use this in create-npc.
 ```json
 {
   "tier": 3                       // required, 1-5
+}
+```
+
+### Arena building action (in create-building-action)
+```json
+{
+  "zone_id": 1, "building_id": 5,
+  "action_type": "arena",
+  "config": {
+    "arena_id": 1                  // required, references existing arena (from `game-data arenas`)
+  }
 }
 ```
 

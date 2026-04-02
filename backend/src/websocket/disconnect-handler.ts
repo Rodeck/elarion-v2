@@ -3,6 +3,7 @@ import { broadcastPlayerLeft } from '../game/world/zone-broadcasts';
 import { clearRateWindow } from '../game/world/movement-rate-limiter';
 import { setCharacterInCombat } from '../db/queries/loadouts';
 import { CombatSessionManager } from '../game/combat/combat-session-manager';
+import { handleArenaDisconnect, handleArenaNpcDisconnect, isInPvpCombat, isInNpcCombat } from '../game/arena/arena-combat-handler';
 import { log } from '../logger';
 import type { AuthenticatedSession } from './server';
 
@@ -32,6 +33,14 @@ export function onClientDisconnect(session: AuthenticatedSession): void {
     const combatSession = CombatSessionManager.get(characterId);
     if (combatSession) {
       combatSession.abort();
+    } else if (isInPvpCombat(characterId)) {
+      handleArenaDisconnect(characterId).catch((err) => {
+        log('error', 'disconnect', 'arena_pvp_disconnect_error', { characterId, err });
+      });
+    } else if (isInNpcCombat(characterId)) {
+      handleArenaNpcDisconnect(characterId).catch((err) => {
+        log('error', 'disconnect', 'arena_npc_disconnect_error', { characterId, err });
+      });
     } else {
       setCharacterInCombat(characterId, false).catch(() => undefined);
     }

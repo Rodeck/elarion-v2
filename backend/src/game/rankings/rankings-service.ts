@@ -14,6 +14,7 @@ interface RankingSnapshot {
   top_fighters: LeaderboardEntryDto[];
   top_crafters: LeaderboardEntryDto[];
   top_questers: LeaderboardEntryDto[];
+  top_arena: LeaderboardEntryDto[];
   map_population: MapPopulationDto[];
 }
 
@@ -38,8 +39,9 @@ export async function getPlayerRanks(characterId: string): Promise<{
   fighters: { rank: number; value: number };
   crafters: { rank: number; value: number };
   questers: { rank: number; value: number };
+  arena: { rank: number; value: number };
 }> {
-  const [levelRes, fightersRes, craftersRes, questersRes] = await Promise.all([
+  const [levelRes, fightersRes, craftersRes, questersRes, arenaRes] = await Promise.all([
     query<{ rank: string; value: number }>(
       `SELECT
          (SELECT COUNT(*) + 1 FROM characters c2
@@ -83,6 +85,13 @@ export async function getPlayerRanks(characterId: string): Promise<{
          (SELECT cnt FROM player_quests) AS value`,
       [characterId]
     ),
+    query<{ rank: string; value: number }>(
+      `SELECT
+         (SELECT COUNT(*) + 1 FROM characters c2 WHERE c2.arena_pvp_wins > c.arena_pvp_wins) AS rank,
+         c.arena_pvp_wins AS value
+       FROM characters c WHERE c.id = $1`,
+      [characterId]
+    ),
   ]);
 
   return {
@@ -90,6 +99,7 @@ export async function getPlayerRanks(characterId: string): Promise<{
     fighters: { rank: Number(fightersRes.rows[0]?.rank ?? 1), value: Number(fightersRes.rows[0]?.value ?? 0) },
     crafters: { rank: Number(craftersRes.rows[0]?.rank ?? 1), value: Number(craftersRes.rows[0]?.value ?? 0) },
     questers: { rank: Number(questersRes.rows[0]?.rank ?? 1), value: Number(questersRes.rows[0]?.value ?? 0) },
+    arena:    { rank: Number(arenaRes.rows[0]?.rank ?? 1),    value: Number(arenaRes.rows[0]?.value ?? 0) },
   };
 }
 
@@ -100,7 +110,7 @@ export async function getPlayerRanks(characterId: string): Promise<{
 async function computeSnapshot(): Promise<void> {
   const start = Date.now();
   try {
-    const [levelRes, fightersRes, craftersRes, questersRes, zoneNamesRes] = await Promise.all([
+    const [levelRes, fightersRes, craftersRes, questersRes, arenaRes, zoneNamesRes] = await Promise.all([
       // Top Level
       query<{ id: string; name: string; class_id: number; class_name: string; value: number }>(
         `SELECT c.id, c.name, c.class_id, cc.name AS class_name, c.level AS value
@@ -139,6 +149,15 @@ async function computeSnapshot(): Promise<void> {
          ORDER BY COUNT(cq.id) DESC, c.name ASC
          LIMIT 20`
       ),
+      // Top Arena PvP
+      query<{ id: string; name: string; class_id: number; class_name: string; value: number }>(
+        `SELECT c.id, c.name, c.class_id, cc.name AS class_name, c.arena_pvp_wins AS value
+         FROM characters c
+         JOIN character_classes cc ON cc.id = c.class_id
+         WHERE c.arena_pvp_wins > 0
+         ORDER BY c.arena_pvp_wins DESC, c.name ASC
+         LIMIT 20`
+      ),
       // Map zone names (for labeling online player counts)
       query<{ id: number; name: string }>('SELECT id, name FROM map_zones ORDER BY name ASC'),
     ]);
@@ -175,6 +194,7 @@ async function computeSnapshot(): Promise<void> {
       top_fighters: fightersRes.rows.map(toEntry),
       top_crafters: craftersRes.rows.map(toEntry),
       top_questers: questersRes.rows.map(toEntry),
+      top_arena: arenaRes.rows.map(toEntry),
       map_population: mapPopulation,
     };
 

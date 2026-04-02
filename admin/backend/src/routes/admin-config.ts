@@ -10,13 +10,14 @@ import {
   isKnownKey,
   VALID_IMAGE_GEN_MODELS,
 } from '../../../../backend/src/db/queries/admin-config';
+import { resizeUpload } from '../middleware/resize-upload';
 
 const UI_ICONS_DIR = path.resolve(__dirname, '../../../../backend/assets/ui-icons');
 if (!fs.existsSync(UI_ICONS_DIR)) fs.mkdirSync(UI_ICONS_DIR, { recursive: true });
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
     cb(null, file.mimetype === 'image/png');
   },
@@ -69,7 +70,7 @@ adminConfigRouter.put('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/admin-config/icon/:type  (type = 'xp' | 'crowns')
-adminConfigRouter.post('/icon/:type', upload.single('icon'), async (req: Request, res: Response) => {
+adminConfigRouter.post('/icon/:type', upload.single('icon'), resizeUpload(), async (req: Request, res: Response) => {
   const iconType = req.params['type'];
   if (iconType !== 'xp' && iconType !== 'crowns' && iconType !== 'rod_upgrade_points') {
     return res.status(400).json({ error: 'Icon type must be "xp", "crowns", or "rod_upgrade_points".' });

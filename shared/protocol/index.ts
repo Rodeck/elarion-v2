@@ -119,7 +119,15 @@ export interface FishingBuildingActionDto {
   };
 }
 
-export type BuildingActionDto = TravelBuildingActionDto | ExploreBuildingActionDto | ExpeditionBuildingActionDto | GatherBuildingActionDto | MarketplaceBuildingActionDto | FishingBuildingActionDto;
+export interface ArenaBuildingActionDto {
+  id: number;
+  action_type: 'arena';
+  sort_order: number;
+  arena_id: number;
+  arena_name: string;
+}
+
+export type BuildingActionDto = TravelBuildingActionDto | ExploreBuildingActionDto | ExpeditionBuildingActionDto | GatherBuildingActionDto | MarketplaceBuildingActionDto | FishingBuildingActionDto | ArenaBuildingActionDto;
 
 // ---------------------------------------------------------------------------
 // Expedition sub-types
@@ -263,7 +271,7 @@ export interface CityMovePayload {
 export interface CityBuildingActionPayload {
   building_id: number;
   action_id: number;
-  action_type: 'travel' | 'explore' | 'gather' | 'marketplace' | 'fishing';
+  action_type: 'travel' | 'explore' | 'gather' | 'marketplace' | 'fishing' | 'arena';
 }
 
 // ---------------------------------------------------------------------------
@@ -527,7 +535,20 @@ export type AnyServerMessage =
   | MarketplaceMyListingsResultMessage
   | MarketplaceCollectCrownsResultMessage
   | MarketplaceCollectItemsResultMessage
-  | MarketplaceRejectedMessage;
+  | MarketplaceRejectedMessage
+  | ArenaEnteredMessage
+  | ArenaEnterRejectedMessage
+  | ArenaLeftMessage
+  | ArenaLeaveRejectedMessage
+  | ArenaPlayerEnteredMessage
+  | ArenaPlayerLeftMessage
+  | ArenaChallengeRejectedMessage
+  | ArenaCombatStartMessage
+  | ArenaCombatActiveWindowMessage
+  | ArenaCombatTurnResultMessage
+  | ArenaCombatEndMessage
+  | ArenaParticipantUpdatedMessage
+  | ArenaKickedMessage;
 
 export type AnyClientMessage =
   | AuthRegisterMessage
@@ -952,6 +973,7 @@ export interface CombatStartPayload {
   };
   turn_timer_ms: number;
   active_effects: ActiveEffectDto[];
+  initial_enemy_hp?: number;
 }
 
 export interface CombatTurnResultPayload {
@@ -2010,12 +2032,14 @@ export interface RankingsDataPayload {
   top_fighters: LeaderboardEntryDto[];
   top_crafters: LeaderboardEntryDto[];
   top_questers: LeaderboardEntryDto[];
+  top_arena: LeaderboardEntryDto[];
   map_population: MapPopulationDto[];
   my_ranks: {
     level: { rank: number; value: number };
     fighters: { rank: number; value: number };
     crafters: { rank: number; value: number };
     questers: { rank: number; value: number };
+    arena: { rank: number; value: number };
   };
 }
 
@@ -2142,3 +2166,173 @@ export type BossChallengeRejectedMessage  = WsMessage<BossChallengeRejectedPaylo
 export type BossChallengeMessage          = WsMessage<BossChallengePayload>;
 export type BossCombatTriggerActiveMessage = WsMessage<BossCombatTriggerActivePayload>;
 export type BossAnnouncementMessage       = WsMessage<BossAnnouncementPayload>;
+
+// ---------------------------------------------------------------------------
+// Arena System
+// ---------------------------------------------------------------------------
+
+export interface ArenaDto {
+  id: number;
+  name: string;
+  building_id: number;
+  min_stay_seconds: number;
+  reentry_cooldown_seconds: number;
+  level_bracket: number;
+}
+
+export interface ArenaParticipantDto {
+  character_id: string;
+  name: string;
+  class_id: number;
+  level: number;
+  in_combat: boolean;
+  entered_at: string;
+  current_streak: number;
+  arena_pvp_wins: number;
+}
+
+export interface ArenaCombatantDto {
+  character_id: string;
+  name: string;
+  class_id: number;
+  level: number;
+  max_hp: number;
+  current_hp: number;
+  attack: number;
+  defence: number;
+  icon_url: string | null;
+}
+
+// --- Arena Server → Client Payloads ---
+
+export interface ArenaEnteredPayload {
+  arena: ArenaDto;
+  participants: ArenaParticipantDto[];
+  monsters: MonsterCombatDto[];
+  can_leave_at: string;
+  current_hp: number;
+  max_hp: number;
+}
+
+export interface ArenaEnterRejectedPayload {
+  reason: 'cooldown' | 'in_combat' | 'in_gathering' | 'already_in_arena' | 'inactive' | 'not_found';
+  message: string;
+  cooldown_until?: string;
+}
+
+export interface ArenaLeftPayload {
+  arena_id: number;
+  cooldown_until: string;
+}
+
+export interface ArenaLeaveRejectedPayload {
+  reason: 'too_early' | 'in_combat';
+  message: string;
+  can_leave_at: string;
+}
+
+export interface ArenaPlayerEnteredPayload {
+  participant: ArenaParticipantDto;
+}
+
+export interface ArenaPlayerLeftPayload {
+  character_id: string;
+}
+
+export interface ArenaChallengeRejectedPayload {
+  reason: 'not_in_arena' | 'target_not_found' | 'target_in_combat' | 'self_in_combat' | 'level_bracket' | 'no_token' | 'monster_not_found';
+  message: string;
+}
+
+export interface ArenaCombatStartPayload {
+  combat_id: string;
+  opponent: ArenaCombatantDto;
+  player: PlayerCombatStateDto;
+  loadout: { slots: CombatAbilityStateDto[] };
+  is_pvp: boolean;
+  turn_timer_ms: number;
+}
+
+export interface ArenaCombatActiveWindowPayload {
+  combat_id: string;
+  timer_ms: number;
+  ability: CombatAbilityStateDto | null;
+}
+
+export interface ArenaCombatTurnResultPayload {
+  combat_id: string;
+  turn: number;
+  phase: 'player' | 'enemy';
+  events: CombatEventDto[];
+  player_hp: number;
+  player_mana: number;
+  opponent_hp: number;
+  ability_states: CombatAbilityStateDto[];
+  active_effects: ActiveEffectDto[];
+}
+
+export interface ArenaCombatEndPayload {
+  combat_id: string;
+  outcome: 'victory' | 'defeat';
+  current_hp: number;
+  xp_gained: number;
+  crowns_gained: number;
+  opponent_name: string;
+  is_pvp: boolean;
+}
+
+export interface ArenaParticipantUpdatedPayload {
+  character_id: string;
+  in_combat: boolean;
+  current_streak?: number;
+  arena_pvp_wins?: number;
+}
+
+export interface ArenaKickedPayload {
+  reason: 'defeat' | 'admin' | 'arena_closed';
+  message: string;
+  cooldown_until: string;
+}
+
+// --- Arena Client → Server Payloads ---
+
+export interface ArenaEnterPayload {
+  action_id: number;
+}
+
+export interface ArenaLeavePayload {
+  arena_id: number;
+}
+
+export interface ArenaChallengePlayerPayload {
+  target_character_id: string;
+}
+
+export interface ArenaChallengeNpcPayload {
+  monster_id: number;
+}
+
+export interface ArenaCombatTriggerActivePayload {
+  combat_id: string;
+}
+
+// --- Arena Message Types ---
+
+export type ArenaEnteredMessage            = WsMessage<ArenaEnteredPayload>;
+export type ArenaEnterRejectedMessage      = WsMessage<ArenaEnterRejectedPayload>;
+export type ArenaLeftMessage               = WsMessage<ArenaLeftPayload>;
+export type ArenaLeaveRejectedMessage      = WsMessage<ArenaLeaveRejectedPayload>;
+export type ArenaPlayerEnteredMessage      = WsMessage<ArenaPlayerEnteredPayload>;
+export type ArenaPlayerLeftMessage         = WsMessage<ArenaPlayerLeftPayload>;
+export type ArenaChallengeRejectedMessage  = WsMessage<ArenaChallengeRejectedPayload>;
+export type ArenaCombatStartMessage        = WsMessage<ArenaCombatStartPayload>;
+export type ArenaCombatActiveWindowMessage = WsMessage<ArenaCombatActiveWindowPayload>;
+export type ArenaCombatTurnResultMessage   = WsMessage<ArenaCombatTurnResultPayload>;
+export type ArenaCombatEndMessage          = WsMessage<ArenaCombatEndPayload>;
+export type ArenaParticipantUpdatedMessage = WsMessage<ArenaParticipantUpdatedPayload>;
+export type ArenaKickedMessage             = WsMessage<ArenaKickedPayload>;
+export type ArenaEnterMessage              = WsMessage<ArenaEnterPayload>;
+export type ArenaLeaveMessage              = WsMessage<ArenaLeavePayload>;
+export type ArenaChallengePlayerMessage    = WsMessage<ArenaChallengePlayerPayload>;
+export type ArenaChallengeNpcMessage       = WsMessage<ArenaChallengeNpcPayload>;
+export type ArenaCombatTriggerActiveMessage = WsMessage<ArenaCombatTriggerActivePayload>;

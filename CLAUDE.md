@@ -49,6 +49,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - PostgreSQL 16 — ALTER `characters` table (add column); no new tables (026-character-rankings)
 - TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (game backend), Phaser 3.60 + Vite 5 (game frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client), `jose` (JWT) (027-boss-encounters)
 - PostgreSQL 16 — 4 new tables (`bosses`, `boss_abilities`, `boss_loot`, `boss_instances`); in-memory `Map<bossId, BossInstance>` for active instance state (027-boss-encounters)
+- TypeScript 5.x (all packages) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT) (029-arena-system)
+- PostgreSQL 16 — 3 new tables (`arenas`, `arena_monsters`, `arena_participants`), 1 ALTER (`characters.arena_id`); in-memory `Map<string, PvpCombatSession>` for active fights (029-arena-system)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -74,9 +76,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 029-arena-system: Added TypeScript 5.x (all packages) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 027-boss-encounters: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (game backend), Phaser 3.60 + Vite 5 (game frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 026-character-rankings: Added TypeScript 5.x (frontend + backend + shared) + Phaser 3.60 + Vite 5 (frontend), Node.js 20 LTS + `ws` (backend), `pg` (PostgreSQL client)
-- 025-item-disassembly: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 
 
 

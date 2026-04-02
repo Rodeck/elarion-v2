@@ -24,6 +24,7 @@ import { buildingItemsRouter } from './routes/building-items';
 import { squireDefinitionsRouter } from './routes/squire-definitions';
 import { fishingRouter } from './routes/fishing';
 import { bossesRouter } from './routes/bosses';
+import { arenasRouter } from './routes/arenas';
 
 const app = express();
 
@@ -95,6 +96,7 @@ app.use('/api/quests', questsRouter);
 app.use('/api/squire-definitions', squireDefinitionsRouter);
 app.use('/api', fishingRouter);
 app.use('/api/bosses', bossesRouter);
+app.use('/api/arenas', arenasRouter);
 
 if (!process.env['OPENROUTER_API_KEY']) {
   console.log(JSON.stringify({ level: 'warn', event: 'openrouter_key_missing', msg: 'OPENROUTER_API_KEY not set — AI image generation will return 503', timestamp: new Date().toISOString() }));

@@ -2,13 +2,14 @@ import type { RankingsDataPayload, LeaderboardEntryDto, MapPopulationDto } from 
 
 type SendFn = (type: string, payload: unknown) => void;
 
-type TabId = 'level' | 'fighters' | 'crafters' | 'questers' | 'maps';
+type TabId = 'level' | 'fighters' | 'crafters' | 'questers' | 'arena' | 'maps';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'level', label: 'Level' },
   { id: 'fighters', label: 'Fighters' },
   { id: 'crafters', label: 'Crafters' },
   { id: 'questers', label: 'Questers' },
+  { id: 'arena', label: 'Arena' },
   { id: 'maps', label: 'Maps' },
 ];
 
@@ -17,6 +18,7 @@ const VALUE_LABELS: Record<TabId, string> = {
   fighters: 'Wins',
   crafters: 'Crafts',
   questers: 'Quests',
+  arena: 'PvP Wins',
   maps: '',
 };
 
@@ -266,6 +268,7 @@ export class RankingsPanel {
       case 'fighters': return this.data.top_fighters;
       case 'crafters': return this.data.top_crafters;
       case 'questers': return this.data.top_questers;
+      case 'arena': return this.data.top_arena;
       default: return [];
     }
   }
@@ -277,6 +280,7 @@ export class RankingsPanel {
       case 'fighters': return this.data.my_ranks.fighters;
       case 'crafters': return this.data.my_ranks.crafters;
       case 'questers': return this.data.my_ranks.questers;
+      case 'arena': return this.data.my_ranks.arena;
       default: return null;
     }
   }

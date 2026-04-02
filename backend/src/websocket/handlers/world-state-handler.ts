@@ -22,6 +22,9 @@ import {
 } from '../../db/queries/squires';
 import { buildSquireRosterDto } from '../../game/squire/squire-grant-service';
 import { query } from '../../db/connection';
+import { getParticipant, addParticipant as addArenaParticipant } from '../../game/arena/arena-state-manager';
+import { getArenaById, getParticipantByCharacterId, getParticipantsByArena, getArenaMonstersWithDetails } from '../../db/queries/arenas';
+import type { ArenaParticipantDto, MonsterCombatDto } from '@elarion/protocol';
 
 let getZonePlayers: ((zoneId: number) => { characterId: string; name: string; classId: number; level: number; posX: number; posY: number; currentNodeId: number | null }[]) | null = null;
 
@@ -57,6 +60,93 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
     await updateCharacter(character.id, { in_gathering: false }).catch(() => undefined);
     character.in_gathering = false;
     log('warn', 'world-state', 'stale_in_gathering_cleared', { characterId: character.id });
+  }
+
+  // ── Arena restore on reconnect ─────────────────────────────────────
+  const charArenaId = character.arena_id;
+  if (charArenaId != null) {
+    // Player was in an arena when they disconnected / server restarted.
+    // Restore them to the arena lobby instead of placing them on the map.
+    const arena = await getArenaById(charArenaId);
+    const dbParticipant = await getParticipantByCharacterId(character.id);
+    if (arena && dbParticipant) {
+      // Re-attach socket in state manager
+      const existing = getParticipant(character.id);
+      if (existing) {
+        existing.participant.socket = session.socket;
+      } else {
+        // State manager didn't have them (shouldn't happen, but handle gracefully)
+        addArenaParticipant(charArenaId, {
+          characterId: character.id,
+          name: character.name,
+          classId: character.class_id,
+          level: character.level,
+          currentHp: dbParticipant.current_hp,
+          maxHp: character.max_hp,
+          inCombat: false,
+          fightingCharacterId: null,
+          canLeaveAt: new Date(dbParticipant.can_leave_at),
+          currentStreak: (dbParticipant as unknown as { current_streak: number }).current_streak ?? 0,
+          arenaPvpWins: character.arena_pvp_wins ?? 0,
+          socket: session.socket,
+        });
+      }
+
+      onClientReconnect(character.id);
+
+      // Build arena:entered payload and send to client
+      const participants = await getParticipantsByArena(charArenaId);
+      const participantDtos: ArenaParticipantDto[] = participants.map(p => ({
+        character_id: p.character_id,
+        name: p.name,
+        class_id: p.class_id,
+        level: p.level,
+        in_combat: p.in_combat,
+        entered_at: p.entered_at.toISOString(),
+        current_streak: (p as unknown as { current_streak: number }).current_streak ?? 0,
+        arena_pvp_wins: 0, // will be populated from state manager if available
+      }));
+
+      const monsters = await getArenaMonstersWithDetails(charArenaId);
+      const monsterDtos: MonsterCombatDto[] = monsters.map(m => ({
+        id: m.monster_id,
+        name: m.name ?? 'Unknown',
+        icon_url: m.icon_filename ? `${config.adminBaseUrl}/monster-icons/${m.icon_filename}` : null,
+        max_hp: m.hp ?? 0,
+        attack: m.attack ?? 0,
+        defence: m.defense ?? 0,
+      }));
+
+      sendToSession(session, 'arena:entered', {
+        arena: {
+          id: arena.id,
+          name: arena.name,
+          building_id: arena.building_id,
+          min_stay_seconds: arena.min_stay_seconds,
+          reentry_cooldown_seconds: arena.reentry_cooldown_seconds,
+          level_bracket: arena.level_bracket,
+        },
+        participants: participantDtos,
+        monsters: monsterDtos,
+        can_leave_at: dbParticipant.can_leave_at.toISOString(),
+        current_hp: dbParticipant.current_hp,
+        max_hp: character.max_hp,
+      });
+
+      log('info', 'world-state', 'arena_restored', {
+        characterId: character.id,
+        arenaId: charArenaId,
+        currentHp: dbParticipant.current_hp,
+      });
+
+      // Fall through to send world.state normally (so stats bar, map, inventory
+      // all initialize), but we'll skip zone registry add below. The arena:entered
+      // message will overlay the arena panel on top of the canvas.
+    } else {
+      // Arena no longer exists — clear the stale arena_id
+      await query('UPDATE characters SET arena_id = NULL WHERE id = $1', [character.id]);
+      log('warn', 'world-state', 'stale_arena_id_cleared', { characterId: character.id, arenaId: charArenaId });
+    }
   }
 
   const cls = await findClassById(character.class_id);
@@ -100,6 +190,7 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
   }
 
   // Register the player in the zone registry and notify others in the zone
+  // (skip if player is inside an arena — they should not appear on the map)
   const playerState = {
     characterId: character.id,
     name: character.name,
@@ -110,9 +201,11 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
     currentNodeId: currentNodeId,
     socket: session.socket,
   };
-  addPlayer(character.zone_id, playerState);
   onClientReconnect(character.id); // cancel any pending disconnect grace timer
-  broadcastPlayerEntered(character.zone_id, playerState);
+  if (character.arena_id == null) {
+    addPlayer(character.zone_id, playerState);
+    broadcastPlayerEntered(character.zone_id, playerState);
+  }
 
   const players = getZonePlayers
     ? getZonePlayers(character.zone_id)

@@ -11,6 +11,7 @@ import {
   deleteAbility,
   type AbilityRow,
 } from '../../../../backend/src/db/queries/abilities';
+import { resizeUpload } from '../middleware/resize-upload';
 
 export const abilitiesRouter = Router();
 
@@ -46,7 +47,7 @@ function log(level: string, msg: string, extra: Record<string, unknown> = {}) {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024, fieldSize: 4 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024, fieldSize: 10 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
     if (file.mimetype === 'image/png') {
       cb(null, true);
@@ -94,7 +95,7 @@ abilitiesRouter.get('/:id', async (req: Request, res: Response) => {
 
 // ── POST /api/abilities ─────────────────────────────────────────────────────
 
-abilitiesRouter.post('/', upload.single('icon'), async (req: Request, res: Response) => {
+abilitiesRouter.post('/', upload.single('icon'), resizeUpload(), async (req: Request, res: Response) => {
   const { name, description, effect_type, mana_cost, effect_value, duration_turns, cooldown_turns, priority_default, slot_type } =
     req.body as Record<string, string>;
 
@@ -161,7 +162,7 @@ abilitiesRouter.post('/', upload.single('icon'), async (req: Request, res: Respo
 
 // ── PUT /api/abilities/:id ──────────────────────────────────────────────────
 
-abilitiesRouter.put('/:id', upload.single('icon'), async (req: Request, res: Response) => {
+abilitiesRouter.put('/:id', upload.single('icon'), resizeUpload(), async (req: Request, res: Response) => {
   const id = parseInt(req.params.id!, 10);
   if (isNaN(id)) return res.status(400).json({ error: 'Invalid ability id' });
 

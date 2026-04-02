@@ -277,6 +277,9 @@ export class PropertiesPanel {
       const cfg = action.config as Record<string, unknown>;
       const minTier = cfg['min_rod_tier'] ? `T${cfg['min_rod_tier']}+` : 'any rod';
       labelEl.textContent = `Fishing (${minTier})`;
+    } else if (action.action_type === 'arena') {
+      const cfg = action.config as Record<string, unknown>;
+      labelEl.textContent = `Arena (${cfg['arena_name'] ?? 'Arena'})`;
     } else {
       const cfg = action.config as ExploreActionConfig;
       labelEl.textContent = `Explore (${cfg.encounter_chance}% chance, ${cfg.monsters.length} monster${cfg.monsters.length !== 1 ? 's' : ''})`;
@@ -701,7 +704,7 @@ export class PropertiesPanel {
 
     const typeSelect = document.createElement('select');
     typeSelect.id = 'action-type-select';
-    const actionTypes: [string, string][] = [['travel', 'Travel'], ['explore', 'Explore'], ['expedition', 'Expedition'], ['gather', 'Gather'], ['marketplace', 'Marketplace'], ['fishing', 'Fishing']];
+    const actionTypes: [string, string][] = [['travel', 'Travel'], ['explore', 'Explore'], ['expedition', 'Expedition'], ['gather', 'Gather'], ['marketplace', 'Marketplace'], ['fishing', 'Fishing'], ['arena', 'Arena']];
     for (const [val, text] of actionTypes) {
       const opt = document.createElement('option');
       opt.value = val;
@@ -1336,6 +1339,31 @@ export class PropertiesPanel {
 
     container.appendChild(fishingFields);
 
+    // ── Arena fields ──────────────────────────────────────────────────
+    const arenaFields = document.createElement('div');
+    arenaFields.id = 'arena-fields';
+    arenaFields.style.display = 'none';
+
+    arenaFields.appendChild(this.label('Arena ID', 'arena-id-input'));
+    const arenaIdInput = document.createElement('input');
+    arenaIdInput.id = 'arena-id-input';
+    arenaIdInput.type = 'number';
+    arenaIdInput.min = '1';
+    arenaIdInput.value = '';
+    arenaIdInput.placeholder = 'ID of the arena';
+    arenaIdInput.style.width = '80px';
+    arenaFields.appendChild(arenaIdInput);
+
+    arenaFields.appendChild(this.label('Arena Name', 'arena-name-input'));
+    const arenaNameInput = document.createElement('input');
+    arenaNameInput.id = 'arena-name-input';
+    arenaNameInput.type = 'text';
+    arenaNameInput.value = '';
+    arenaNameInput.placeholder = 'Display name';
+    arenaFields.appendChild(arenaNameInput);
+
+    container.appendChild(arenaFields);
+
     // ── Show/hide on type change ─────────────────────────────────────
     typeSelect.addEventListener('change', () => {
       travelFields.style.display = typeSelect.value === 'travel' ? '' : 'none';
@@ -1344,6 +1372,7 @@ export class PropertiesPanel {
       gatherFields.style.display = typeSelect.value === 'gather' ? '' : 'none';
       marketplaceFields.style.display = typeSelect.value === 'marketplace' ? '' : 'none';
       fishingFields.style.display = typeSelect.value === 'fishing' ? '' : 'none';
+      arenaFields.style.display = typeSelect.value === 'arena' ? '' : 'none';
     });
 
     // ── Buttons ──────────────────────────────────────────────────────
@@ -1431,6 +1460,18 @@ export class PropertiesPanel {
           await createBuildingAction(mapId, buildingId, {
             action_type: 'fishing',
             config,
+          });
+        } else if (typeSelect.value === 'arena') {
+          const arenaId = parseInt(arenaIdInput.value, 10);
+          if (isNaN(arenaId) || arenaId < 1) {
+            alert('Arena ID must be a positive integer.');
+            saveBtn.disabled = false;
+            return;
+          }
+          const arenaName = arenaNameInput.value.trim() || 'Arena';
+          await createBuildingAction(mapId, buildingId, {
+            action_type: 'arena',
+            config: { arena_id: arenaId, arena_name: arenaName },
           });
         } else {
           const baseGold = parseInt(baseGoldInput.value, 10);

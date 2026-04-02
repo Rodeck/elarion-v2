@@ -31,6 +31,9 @@ export interface Character {
   in_gathering: boolean;
   crowns: number;
   rod_upgrade_points: number;
+  arena_id: number | null;
+  arena_cooldown_until: Date | null;
+  arena_pvp_wins: number;
   updated_at: Date;
 }
 

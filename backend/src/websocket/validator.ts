@@ -112,6 +112,21 @@ const schemas: Record<string, Schema> = {
   'squire.dismiss_confirm': {
     squire_id: { type: 'number', required: true },
   },
+  'arena:enter': {
+    action_id: { type: 'number', required: true },
+  },
+  'arena:leave': {
+    arena_id: { type: 'number', required: true },
+  },
+  'arena:challenge_player': {
+    target_character_id: { type: 'string', required: true, minLength: 36, maxLength: 36 },
+  },
+  'arena:challenge_npc': {
+    monster_id: { type: 'number', required: true },
+  },
+  'arena:combat_trigger_active': {
+    combat_id: { type: 'string', required: true, minLength: 36, maxLength: 36 },
+  },
 };
 
 export interface ValidationResult {

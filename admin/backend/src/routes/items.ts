@@ -15,6 +15,7 @@ import {
   getRecipesWithOutputsForAdmin,
   saveRecipesForItem,
 } from '../../../../backend/src/db/queries/disassembly';
+import { resizeUpload } from '../middleware/resize-upload';
 
 export const itemsRouter = Router();
 
@@ -24,7 +25,7 @@ const ICONS_DIR = path.resolve(__dirname, '../../../../backend/assets/items/icon
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024, fieldSize: 4 * 1024 * 1024 }, // 2 MB file, 4 MB fields (for icon_base64)
+  limits: { fileSize: 10 * 1024 * 1024, fieldSize: 10 * 1024 * 1024 }, // 10 MB — resized downstream
   fileFilter: (_req, file, cb) => {
     if (file.mimetype === 'image/png') cb(null, true);
     else cb(null, false);
@@ -311,7 +312,7 @@ itemsRouter.get('/:id', async (req: Request, res: Response) => {
 
 // ─── POST /api/items ─────────────────────────────────────────────────────────
 
-itemsRouter.post('/', upload.single('icon'), async (req: Request, res: Response) => {
+itemsRouter.post('/', upload.single('icon'), resizeUpload(), async (req: Request, res: Response) => {
   const body = req.body as Record<string, unknown>;
 
   const validationError = validateItemFields(body, true);
@@ -376,7 +377,7 @@ itemsRouter.post('/', upload.single('icon'), async (req: Request, res: Response)
 
 // ─── PUT /api/items/:id ──────────────────────────────────────────────────────
 
-itemsRouter.put('/:id', upload.single('icon'), async (req: Request, res: Response) => {
+itemsRouter.put('/:id', upload.single('icon'), resizeUpload(), async (req: Request, res: Response) => {
   const id = parseInt(req.params.id!, 10);
   if (isNaN(id)) return res.status(400).json({ error: 'Invalid item id' });
 

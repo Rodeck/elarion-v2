@@ -115,6 +115,17 @@ export async function handleBuildingAction(
     return;
   }
 
+  if (action.action_type === 'arena') {
+    const cfg = action.config as Record<string, unknown>;
+    sendToSession(session, 'arena.open', {
+      building_id,
+      action_id,
+      arena_id: Number(cfg['arena_id'] ?? 0),
+    });
+    log('debug', 'building-action', 'arena_opened', { characterId, building_id, action_id });
+    return;
+  }
+
   if (action.action_type === 'explore') {
     const exploreConfig = action.config as ExploreActionConfig;
 

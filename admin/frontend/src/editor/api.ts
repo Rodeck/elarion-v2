@@ -81,7 +81,7 @@ export type BuildingActionConfig = TravelActionConfig | ExploreActionConfig | Ex
 export interface BuildingAction {
   id: number;
   building_id: number;
-  action_type: 'travel' | 'explore' | 'expedition' | 'gather' | 'marketplace' | 'fishing';
+  action_type: 'travel' | 'explore' | 'expedition' | 'gather' | 'marketplace' | 'fishing' | 'arena';
   sort_order: number;
   config: BuildingActionConfig | Record<string, unknown>;
   created_at: string;
@@ -381,7 +381,7 @@ export async function createBuildingAction(
   mapId: number,
   buildingId: number,
   data: {
-    action_type: 'travel' | 'explore' | 'expedition' | 'gather' | 'marketplace' | 'fishing';
+    action_type: 'travel' | 'explore' | 'expedition' | 'gather' | 'marketplace' | 'fishing' | 'arena';
     sort_order?: number;
     config: BuildingActionConfig | Record<string, unknown>;
   },
@@ -1486,4 +1486,128 @@ export async function uploadBossSprite(bossId: number, file: File): Promise<{ sp
     method: 'POST',
     body: form,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Arenas
+// ---------------------------------------------------------------------------
+
+const ARENAS_BASE = '/api/arenas';
+
+export interface ArenaResponse {
+  id: number;
+  name: string;
+  building_id: number;
+  building_name: string | null;
+  min_stay_seconds: number;
+  reentry_cooldown_seconds: number;
+  winner_xp: number;
+  loser_xp: number;
+  winner_crowns: number;
+  loser_crowns: number;
+  level_bracket: number;
+  is_active: boolean;
+  created_at: string;
+  monsters?: ArenaMonsterEntry[];
+  participants?: ArenaParticipantEntry[];
+}
+
+export interface ArenaMonsterEntry {
+  id: number;
+  monster_id: number;
+  sort_order: number;
+  name: string;
+  icon_url: string | null;
+  hp: number;
+  attack: number;
+  defense: number;
+  xp_reward: number;
+}
+
+export interface ArenaParticipantEntry {
+  id: number;
+  character_id: string;
+  name: string;
+  level: number;
+  entered_at: string;
+  current_hp: number;
+  in_combat: boolean;
+  fighting_character_id: string | null;
+  can_leave_at: string;
+}
+
+export interface MonsterSummary {
+  id: number;
+  name: string;
+  icon_url: string | null;
+  hp: number;
+  attack: number;
+  defense: number;
+}
+
+export async function listArenaBuildings(): Promise<BuildingSummary[]> {
+  return request<BuildingSummary[]>(`${ARENAS_BASE}/buildings`);
+}
+
+export async function listArenaMonsters(): Promise<MonsterSummary[]> {
+  return request<MonsterSummary[]>(`${ARENAS_BASE}/monsters-list`);
+}
+
+export async function listArenas(): Promise<ArenaResponse[]> {
+  return request<ArenaResponse[]>(ARENAS_BASE);
+}
+
+export async function getArena(id: number): Promise<ArenaResponse> {
+  return request<ArenaResponse>(`${ARENAS_BASE}/${id}`);
+}
+
+export async function createArenaApi(data: {
+  name: string;
+  building_id: number;
+  min_stay_seconds?: number;
+  reentry_cooldown_seconds?: number;
+  winner_xp?: number;
+  loser_xp?: number;
+  winner_crowns?: number;
+  loser_crowns?: number;
+  level_bracket?: number;
+  is_active?: boolean;
+}): Promise<ArenaResponse> {
+  return request<ArenaResponse>(ARENAS_BASE, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateArenaApi(id: number, data: Record<string, unknown>): Promise<ArenaResponse> {
+  return request<ArenaResponse>(`${ARENAS_BASE}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteArenaApi(id: number): Promise<void> {
+  return request<void>(`${ARENAS_BASE}/${id}`, { method: 'DELETE' });
+}
+
+export async function addArenaMonsterApi(
+  arenaId: number,
+  data: { monster_id: number; sort_order: number },
+): Promise<ArenaMonsterEntry> {
+  return request<ArenaMonsterEntry>(`${ARENAS_BASE}/${arenaId}/monsters`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeArenaMonsterApi(arenaId: number, monsterId: number): Promise<void> {
+  return request<void>(`${ARENAS_BASE}/${arenaId}/monsters/${monsterId}`, { method: 'DELETE' });
+}
+
+export async function listArenaParticipants(arenaId: number): Promise<ArenaParticipantEntry[]> {
+  return request<ArenaParticipantEntry[]>(`${ARENAS_BASE}/${arenaId}/participants`);
+}
+
+export async function kickArenaParticipant(arenaId: number, characterId: string): Promise<{ success: boolean; message: string }> {
+  return request<{ success: boolean; message: string }>(`${ARENAS_BASE}/${arenaId}/kick/${characterId}`, { method: 'POST' });
 }

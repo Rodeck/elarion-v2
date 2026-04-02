@@ -22,12 +22,14 @@ export async function handleRankingsGet(session: AuthenticatedSession, _payload:
       top_fighters: [],
       top_crafters: [],
       top_questers: [],
+      top_arena: [],
       map_population: [],
       my_ranks: {
         level: { rank: 0, value: 0 },
         fighters: { rank: 0, value: 0 },
         crafters: { rank: 0, value: 0 },
         questers: { rank: 0, value: 0 },
+        arena: { rank: 0, value: 0 },
       },
     });
     return;
@@ -42,6 +44,7 @@ export async function handleRankingsGet(session: AuthenticatedSession, _payload:
     top_fighters: snap.top_fighters,
     top_crafters: snap.top_crafters,
     top_questers: snap.top_questers,
+    top_arena: snap.top_arena,
     map_population: snap.map_population,
     my_ranks: myRanks,
   });

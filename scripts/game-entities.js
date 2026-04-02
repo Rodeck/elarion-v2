@@ -19,7 +19,7 @@ const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food']);
 const DEFENCE_CATEGORIES = new Set(['boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate', 'ring', 'amulet']);
 const VALID_EFFECT_TYPES = ['damage', 'heal', 'buff', 'debuff', 'dot', 'reflect', 'drain'];
 const VALID_SLOT_TYPES = ['auto', 'active', 'both'];
-const VALID_ACTION_TYPES = ['travel', 'explore', 'expedition', 'gather', 'fishing'];
+const VALID_ACTION_TYPES = ['travel', 'explore', 'expedition', 'gather', 'fishing', 'arena'];
 const VALID_TOOL_TYPES = ['pickaxe', 'axe', 'fishing_rod', 'kiln'];
 const VALID_GATHER_EVENT_TYPES = ['resource', 'gold', 'monster', 'accident', 'nothing', 'squire'];
 
@@ -320,6 +320,10 @@ function validateBuildingAction(data) {
           if (!Number.isInteger(sqLvl) || sqLvl < 1 || sqLvl > 20) errors.push(`config.events[${i}].squire_level must be 1–20`);
         }
       }
+    }
+  } else if (data.action_type === 'arena') {
+    if (!Number.isInteger(data.config.arena_id) || data.config.arena_id < 1) {
+      errors.push('config.arena_id must be a positive integer');
     }
   }
 

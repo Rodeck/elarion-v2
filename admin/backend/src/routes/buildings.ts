@@ -262,8 +262,8 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
     config: Record<string, unknown>;
   };
 
-  if (action_type !== 'travel' && action_type !== 'explore' && action_type !== 'expedition' && action_type !== 'gather' && action_type !== 'marketplace' && action_type !== 'fishing') {
-    return res.status(400).json({ error: 'action_type must be "travel", "explore", "expedition", "gather", "marketplace", or "fishing"' });
+  if (action_type !== 'travel' && action_type !== 'explore' && action_type !== 'expedition' && action_type !== 'gather' && action_type !== 'marketplace' && action_type !== 'fishing' && action_type !== 'arena') {
+    return res.status(400).json({ error: 'action_type must be "travel", "explore", "expedition", "gather", "marketplace", "fishing", or "arena"' });
   }
 
   try {
@@ -415,6 +415,17 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
       const fishingConfig = config ?? {};
       const action = await createBuildingAction(buildingId, 'fishing' as 'travel', fishingConfig as unknown as TravelActionConfig, sort_order ?? 0);
       log('info', 'Created fishing action', { building_id: buildingId, action_id: action.id, admin: req.username });
+      return res.status(201).json({ action });
+    } else if (action_type === 'arena') {
+      const cfg = config as { arena_id?: unknown; arena_name?: unknown };
+      const arenaId = Number(cfg.arena_id);
+      if (!Number.isInteger(arenaId) || arenaId < 1) {
+        return res.status(400).json({ error: 'arena_id must be a positive integer' });
+      }
+      const arenaName = typeof cfg.arena_name === 'string' ? cfg.arena_name : 'Arena';
+      const arenaConfig = { arena_id: arenaId, arena_name: arenaName };
+      const action = await createBuildingAction(buildingId, 'arena' as 'travel', arenaConfig as unknown as TravelActionConfig, sort_order ?? 0);
+      log('info', 'Created arena action', { building_id: buildingId, action_id: action.id, arena_id: arenaId, admin: req.username });
       return res.status(201).json({ action });
     } else {
       // expedition

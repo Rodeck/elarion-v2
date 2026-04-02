@@ -15,6 +15,14 @@ import { getActiveExpeditionsForCharacter } from '../../db/queries/squires';
 import { getMapsByType } from '../../db/queries/city-maps';
 import { query } from '../../db/connection';
 import { log } from '../../logger';
+import { kickFromArena } from '../arena/arena-handler';
+import { getParticipant, updateHp as updateArenaHp } from '../arena/arena-state-manager';
+import {
+  getParticipantByCharacterId,
+  setCharacterArenaId,
+  setCharacterArenaCooldown,
+  updateParticipantHp as dbUpdateParticipantHp,
+} from '../../db/queries/arenas';
 
 // ---------------------------------------------------------------------------
 // Helper
@@ -48,9 +56,11 @@ export async function handleAdminCommand(session: AuthenticatedSession, rawMessa
     case '/heal':            return handleHeal(session, args, reply);
     case '/squire':          return handleGiveSquire(session, args, reply);
     case '/expedition_finish': return handleExpeditionFinish(session, args, reply);
-    case '/reset_player':      return handleResetPlayer(session, args, reply);
+    case '/reset_player':        return handleResetPlayer(session, args, reply);
+    case '/arena.kick':          return handleArenaKick(session, args, reply);
+    case '/arena.timers.reset':  return handleArenaTimersReset(session, args, reply);
     default:
-      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown, /skill_all, /crafting_finish, /heal, /squire, /expedition_finish, /reset_player`);
+      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown, /skill_all, /crafting_finish, /heal, /squire, /expedition_finish, /reset_player, /arena.kick, /arena.timers.reset`);
   }
 }
 
@@ -693,4 +703,109 @@ async function handleResetPlayer(session: AuthenticatedSession, args: string[], 
   });
 
   reply(true, `Reset ${playerName} to initial state (level 1, empty inventory, no squires/quests/abilities).`);
+}
+
+// ---------------------------------------------------------------------------
+// /arena.kick <player>
+// ---------------------------------------------------------------------------
+
+async function handleArenaKick(session: AuthenticatedSession, args: string[], reply: ReplyFn): Promise<void> {
+  const playerName = args[0];
+  if (!playerName) {
+    reply(false, 'Usage: /arena.kick <player>');
+    return;
+  }
+
+  const character = await findByName(playerName);
+  if (!character) {
+    reply(false, `Player '${playerName}' not found.`);
+    return;
+  }
+
+  if (character.arena_id == null) {
+    reply(false, `${playerName} is not in an arena.`);
+    return;
+  }
+
+  await kickFromArena(character.id, 'admin', false);
+
+  log('info', 'admin', 'admin_command', {
+    event: 'admin_command',
+    admin_account_id: session.accountId,
+    admin_character_id: session.characterId,
+    command: '/arena.kick',
+    target_player: playerName,
+    target_character_id: character.id,
+    arena_id: character.arena_id,
+    success: true,
+  });
+
+  reply(true, `Kicked ${playerName} from the arena (no cooldown applied).`);
+}
+
+// ---------------------------------------------------------------------------
+// /arena.timers.reset <player>
+// Resets both the leave-arena timer (can_leave_at → now) and the
+// re-entry cooldown (arena_cooldown_until → null).
+// ---------------------------------------------------------------------------
+
+async function handleArenaTimersReset(session: AuthenticatedSession, args: string[], reply: ReplyFn): Promise<void> {
+  const playerName = args[0];
+  if (!playerName) {
+    reply(false, 'Usage: /arena.timers.reset <player>');
+    return;
+  }
+
+  const character = await findByName(playerName);
+  if (!character) {
+    reply(false, `Player '${playerName}' not found.`);
+    return;
+  }
+
+  const messages: string[] = [];
+
+  // Reset re-entry cooldown (always, even if not in arena)
+  if (character.arena_cooldown_until) {
+    await setCharacterArenaCooldown(character.id, null);
+    messages.push('re-entry cooldown cleared');
+  }
+
+  // Reset leave timer if currently in arena
+  const participant = await getParticipantByCharacterId(character.id);
+  if (participant) {
+    const now = new Date();
+    await query('UPDATE arena_participants SET can_leave_at = $1 WHERE character_id = $2', [now, character.id]);
+
+    // Update in-memory state
+    const inMemory = getParticipant(character.id);
+    if (inMemory) {
+      inMemory.participant.canLeaveAt = now;
+    }
+
+    messages.push('leave timer reset (can leave now)');
+
+    // Notify the target player if online so their UI updates
+    const targetSession = getSessionByCharacterId(character.id);
+    if (targetSession) {
+      sendToSession(targetSession, 'arena:timers_reset', { can_leave_at: now.toISOString() });
+    }
+  }
+
+  if (messages.length === 0) {
+    reply(true, `${playerName} has no active arena timers to reset.`);
+    return;
+  }
+
+  log('info', 'admin', 'admin_command', {
+    event: 'admin_command',
+    admin_account_id: session.accountId,
+    admin_character_id: session.characterId,
+    command: '/arena.timers.reset',
+    target_player: playerName,
+    target_character_id: character.id,
+    actions: messages,
+    success: true,
+  });
+
+  reply(true, `Arena timers reset for ${playerName}: ${messages.join(', ')}.`);
 }

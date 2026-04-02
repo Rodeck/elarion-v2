@@ -40,8 +40,9 @@ async function overview() {
     pool.query(`SELECT COUNT(*) as n FROM characters`),
     pool.query(`SELECT COUNT(*) as n FROM accounts`),
     pool.query(`SELECT COUNT(*) as n FROM bosses`).catch(() => ({ rows: [{ n: 0 }] })),
+    pool.query(`SELECT COUNT(*) as n FROM arenas`).catch(() => ({ rows: [{ n: 0 }] })),
   ]);
-  const labels = ['Items', 'Monsters', 'Map Zones', 'Buildings', 'NPCs', 'Crafting Recipes', 'Abilities', 'Quests', 'Characters', 'Accounts', 'Bosses'];
+  const labels = ['Items', 'Monsters', 'Map Zones', 'Buildings', 'NPCs', 'Crafting Recipes', 'Abilities', 'Quests', 'Characters', 'Accounts', 'Bosses', 'Arenas'];
   section('Game Overview');
   table(labels.map((l, i) => ({ entity: l, count: counts[i].rows[0].n })));
 
@@ -839,6 +840,68 @@ async function bossInstances() {
   table(result.rows);
 }
 
+async function arenas() {
+  section('All Arenas');
+  const result = await pool.query(`
+    SELECT a.id, a.name, bld.name AS building, a.min_stay_seconds, a.reentry_cooldown_seconds,
+           a.winner_xp, a.loser_xp, a.winner_crowns, a.loser_crowns,
+           a.level_bracket, a.is_active,
+           (SELECT COUNT(*) FROM arena_monsters am WHERE am.arena_id = a.id) AS monster_count,
+           (SELECT COUNT(*) FROM arena_participants ap WHERE ap.arena_id = a.id) AS participant_count
+    FROM arenas a
+    LEFT JOIN buildings bld ON bld.id = a.building_id
+    ORDER BY a.id
+  `);
+  table(result.rows);
+}
+
+async function arenaDetail(id) {
+  if (!id) { console.error('Usage: game-data arena <id>'); process.exit(1); }
+  const res = await pool.query(`
+    SELECT a.id, a.name, bld.name AS building, a.building_id,
+           a.min_stay_seconds, a.reentry_cooldown_seconds,
+           a.winner_xp, a.loser_xp, a.winner_crowns, a.loser_crowns,
+           a.level_bracket, a.is_active
+    FROM arenas a
+    LEFT JOIN buildings bld ON bld.id = a.building_id
+    WHERE a.id = $1
+  `, [id]);
+  if (!res.rows.length) { console.error(`Arena ${id} not found`); process.exit(1); }
+  const arena = res.rows[0];
+  section(`Arena: ${arena.name} (id ${arena.id})`);
+  table([arena]);
+
+  // Assigned monsters
+  const monsters = await pool.query(`
+    SELECT m.id, m.name, m.attack, m.defense, m.hp, m.xp_reward, am.sort_order
+    FROM arena_monsters am
+    JOIN monsters m ON m.id = am.monster_id
+    WHERE am.arena_id = $1
+    ORDER BY am.sort_order, m.id
+  `, [id]);
+  if (monsters.rows.length) {
+    console.log(`\n  Assigned Monsters:`);
+    table(monsters.rows);
+  } else {
+    console.log(`\n  (no monsters assigned)`);
+  }
+
+  // Current participants
+  const participants = await pool.query(`
+    SELECT c.name, c.level, c.class_id, ap.current_hp, ap.in_combat, ap.entered_at, ap.can_leave_at
+    FROM arena_participants ap
+    JOIN characters c ON c.id = ap.character_id
+    WHERE ap.arena_id = $1
+    ORDER BY ap.entered_at
+  `, [id]);
+  if (participants.rows.length) {
+    console.log(`\n  Current Participants:`);
+    table(participants.rows);
+  } else {
+    console.log(`\n  (no participants)`);
+  }
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 const HELP = `
@@ -858,6 +921,8 @@ Commands:
   quests [type]            List quests (optional: main|side|daily|weekly|monthly|repeatable)
   quest <id>               Quest detail with objectives, prerequisites, rewards, NPC givers
   gathering                All gathering actions with events, tool requirements, and tool items
+  arenas                   List all arenas with rewards, brackets, and participant/monster counts
+  arena <id>               Arena detail with assigned monsters and current participants
   bosses                   List all boss definitions with abilities and loot
   boss-instances           Live boss instances with HP, status, and respawn timers
   disassembly [item_id]    Disassembly recipes with chance entries and outputs
@@ -892,6 +957,8 @@ async function main() {
       case 'disassembly': await disassembly(args[0]); break;
       case 'economy':     await economy(); break;
       case 'search':    await search(args.join(' ')); break;
+      case 'arenas':       await arenas(); break;
+      case 'arena':        await arenaDetail(args[0]); break;
       case 'bosses':       await bosses(); break;
       case 'boss-instances': await bossInstances(); break;
       case 'sql':       await rawSql(args.join(' ')); break;

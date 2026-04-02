@@ -21,7 +21,7 @@ import { getXpIconUrl, getCrownsIconUrl } from './ui-icons';
 import { CraftingModal } from './CraftingModal';
 import { GatheringModal } from './GatheringModal';
 import { MarketplaceModal } from './MarketplaceModal';
-import type { MarketplaceBuildingActionDto, FishingBuildingActionDto } from '@elarion/protocol';
+import type { MarketplaceBuildingActionDto, FishingBuildingActionDto, ArenaBuildingActionDto } from '@elarion/protocol';
 import type { GatheringCombatLoot } from './GatheringModal';
 
 type ActionCallback = (payload: CityBuildingActionPayload) => void;
@@ -576,6 +576,41 @@ export class BuildingPanel {
             this.onFishingCast?.(building.id, fAction.id);
           });
           actionsSection.appendChild(fBtn);
+          continue;
+        }
+
+        if (action.action_type === 'arena') {
+          const aAction = action as ArenaBuildingActionDto;
+          const aBtn = document.createElement('button');
+          aBtn.textContent = `⚔️ Enter ${aAction.arena_name || 'Arena'}`;
+          aBtn.style.cssText = [
+            'width:100%',
+            'padding:8px',
+            'margin:4px 0',
+            'background:rgba(120,30,30,0.3)',
+            'border:1px solid #8a3a3a',
+            'border-radius:4px',
+            'color:#e06060',
+            'font-family:Cinzel,serif',
+            'font-size:13px',
+            'cursor:pointer',
+            'transition:background 0.15s',
+          ].join(';');
+          aBtn.addEventListener('mouseenter', () => {
+            aBtn.style.background = 'rgba(120,30,30,0.6)';
+          });
+          aBtn.addEventListener('mouseleave', () => {
+            aBtn.style.background = 'rgba(120,30,30,0.3)';
+          });
+          aBtn.addEventListener('click', () => {
+            this.disableButtons();
+            this.onAction?.({
+              building_id: building.id,
+              action_id: aAction.id,
+              action_type: 'arena',
+            });
+          });
+          actionsSection.appendChild(aBtn);
           continue;
         }
 

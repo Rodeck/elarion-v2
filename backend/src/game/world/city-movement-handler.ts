@@ -149,6 +149,16 @@ export async function handleCityMove(session: AuthenticatedSession, payload: unk
     return;
   }
 
+  // ── In-arena check ──────────────────────────────────────────────────
+  if (character.arena_id != null) {
+    sendToSession(session, 'city.move_rejected', {
+      current_node_id: (character as unknown as { current_node_id: number | null }).current_node_id ?? 0,
+      reason: 'IN_ARENA',
+    });
+    log('debug', 'city-movement', 'rejected_in_arena', { characterId });
+    return;
+  }
+
   // ── In-combat check ────────────────────────────────────────────────────
   if (character.in_combat) {
     sendToSession(session, 'city.move_rejected', {

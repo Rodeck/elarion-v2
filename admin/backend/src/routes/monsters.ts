@@ -23,6 +23,7 @@ import {
   deleteSquireLootEntry,
 } from '../../../../backend/src/db/queries/monster-squire-loot';
 import { query } from '../../../../backend/src/db/connection';
+import { resizeUpload } from '../middleware/resize-upload';
 
 export const monstersRouter = Router();
 
@@ -54,7 +55,7 @@ function log(level: string, msg: string, extra: Record<string, unknown> = {}) {
 // Multer setup — memory storage, PNG only, max 2 MB
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024, fieldSize: 4 * 1024 * 1024 }, // 4 MB fields for icon_base64
+  limits: { fileSize: 10 * 1024 * 1024, fieldSize: 10 * 1024 * 1024 }, // 10 MB — resized downstream
   fileFilter(_req, file, cb) {
     if (file.mimetype === 'image/png') {
       cb(null, true);
@@ -215,7 +216,7 @@ monstersRouter.get('/:id', async (req: Request, res: Response) => {
 
 // ── POST /api/monsters ─────────────────────────────────────────────────────
 
-monstersRouter.post('/', upload.single('icon'), async (req: Request, res: Response) => {
+monstersRouter.post('/', upload.single('icon'), resizeUpload(), async (req: Request, res: Response) => {
   const { name, attack, defense, hp, xp_reward, min_crowns, max_crowns } = req.body as Record<string, string>;
 
   if (!name || !name.trim()) return res.status(400).json({ error: 'name is required' });
@@ -281,7 +282,7 @@ monstersRouter.post('/', upload.single('icon'), async (req: Request, res: Respon
 
 // ── PUT /api/monsters/:id ──────────────────────────────────────────────────
 
-monstersRouter.put('/:id', upload.single('icon'), async (req: Request, res: Response) => {
+monstersRouter.put('/:id', upload.single('icon'), resizeUpload(), async (req: Request, res: Response) => {
   const id = parseInt(req.params.id!, 10);
   if (isNaN(id)) return res.status(400).json({ error: 'Invalid monster id' });
 

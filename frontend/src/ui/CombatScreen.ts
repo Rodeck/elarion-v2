@@ -977,8 +977,9 @@ export class CombatScreen {
     }
     this.enemyIconEl = enemyIcon;
 
+    const initialEnemyHp = (payload as { initial_enemy_hp?: number }).initial_enemy_hp ?? payload.monster.max_hp;
     const { bar: enemyHpBarWrap, fill: enemyHpFill, text: enemyHpText } =
-      this.buildBar('#c0392b', payload.monster.max_hp, payload.monster.max_hp);
+      this.buildBar('#c0392b', payload.monster.max_hp, initialEnemyHp);
     this.enemyHpBar  = enemyHpFill;
     this.enemyHpText = enemyHpText;
 

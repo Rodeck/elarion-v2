@@ -6,6 +6,7 @@ import {
   BuildingActionDto,
   type ExpeditionBuildingActionDto,
   type GatherBuildingActionDto,
+  type ArenaBuildingActionDto,
 } from '@elarion/protocol';
 import {
   getMapsByType,
@@ -114,6 +115,17 @@ function toProtocolBuilding(
             min_rod_tier: cfg['min_rod_tier'] ?? undefined,
           },
         } as unknown as BuildingActionDto;
+      }
+      if ((a.action_type as string) === 'arena') {
+        const cfg = a.config as Record<string, unknown>;
+        const dto: ArenaBuildingActionDto = {
+          id: a.id,
+          action_type: 'arena',
+          sort_order: a.sort_order,
+          arena_id: Number(cfg['arena_id'] ?? 0),
+          arena_name: String(cfg['arena_name'] ?? 'Arena'),
+        };
+        return dto;
       }
       // travel
       const cfg = a.config as TravelActionConfig;

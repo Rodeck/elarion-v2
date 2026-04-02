@@ -22,6 +22,7 @@ import {
   type Boss,
 } from '../../../../backend/src/db/queries/bosses';
 import { query } from '../../../../backend/src/db/connection';
+import { resizeUpload } from '../middleware/resize-upload';
 
 export const bossesRouter = Router();
 
@@ -70,7 +71,7 @@ function log(level: string, msg: string, extra: Record<string, unknown> = {}) {
 // Multer setup — memory storage, PNG only, max 2 MB
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
     if (file.mimetype === 'image/png') {
       cb(null, true);
@@ -605,7 +606,7 @@ bossesRouter.post('/:id/respawn', async (req: Request, res: Response) => {
 
 // ── POST /api/bosses/:id/upload-icon ──────────────────────────────────────
 
-bossesRouter.post('/:id/upload-icon', upload.single('icon'), async (req: Request, res: Response) => {
+bossesRouter.post('/:id/upload-icon', upload.single('icon'), resizeUpload(), async (req: Request, res: Response) => {
   const bossId = parseInt(req.params.id!, 10);
   if (isNaN(bossId)) return res.status(400).json({ error: 'Invalid boss id' });
 
@@ -642,7 +643,7 @@ bossesRouter.post('/:id/upload-icon', upload.single('icon'), async (req: Request
 
 // ── POST /api/bosses/:id/upload-sprite ────────────────────────────────────
 
-bossesRouter.post('/:id/upload-sprite', upload.single('sprite'), async (req: Request, res: Response) => {
+bossesRouter.post('/:id/upload-sprite', upload.single('sprite'), resizeUpload(), async (req: Request, res: Response) => {
   const bossId = parseInt(req.params.id!, 10);
   if (isNaN(bossId)) return res.status(400).json({ error: 'Invalid boss id' });
 

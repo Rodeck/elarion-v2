@@ -12,7 +12,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Outline
 
-Generate AI art prompts for all visual assets in a design, following established Elarion art style conventions.
+Generate ready-to-use AI art prompts for all visual assets in a design. Each prompt should be a complete, self-contained text that can be pasted directly into an image generation model (Midjourney, DALL-E, Stable Diffusion, etc.) with no editing needed.
 
 ### Workflow
 
@@ -20,142 +20,92 @@ Generate AI art prompts for all visual assets in a design, following established
    - If `$ARGUMENTS` is a design name: look for `game_design/<name>/design.md`
    - If empty: list `game_design/*/design.md` and ask the user which design to generate prompts for
    - Read `design.md` to find all items, monsters, and NPCs
-   - Also read `execution-log.md` if it exists (to include entity IDs in reference tables)
+   - Also read `execution-log.md` if it exists (to include entity IDs)
 
 2. **Generate item prompts** → `game_design/<name>/item_prompts.md` (if design has items):
 
 ```markdown
-# Item Icon Spritesheet — Generation Prompt
+# Item Prompts
 
-## Spritesheet Specifications
+## [Item Name] (ID: [id])
 
-- **Grid cell size**: 256 x 256 pixels
-- **Layout**: [C] columns x [R] rows ([total] cells, [W] x [H] total image)
-- **Background**: Fully transparent (PNG with alpha channel)
-- **Format**: PNG, RGBA
+[Complete image generation prompt — one self-contained paragraph. Include: art style, subject description, materials, colors, lighting, composition, background, output format. Ready to paste into any image model.]
 
-## Art Style Reference
+---
 
-Semi-realistic painted style, muted earthy and metallic tones, soft shadows and highlights, medieval fantasy RPG aesthetic. Each icon is a single object centered in its cell with no background — just the item floating on transparency. Consistent lighting from upper-left. Subtle texture detail (grain, scratches, patina). No outlines, no cel-shading, no pixel art.
-
-## Generation Prompt
-
-[Single combined prompt describing the full grid layout, row by row, cell by cell. Each cell gets a short visual description focusing on material, color, shape, and texture.]
-
-## Post-Processing
-
-1. Open the generated spritesheet in the admin panel's Sprite Sheet Tool
-2. The tool auto-detects the 256x256 grid
-3. Click each cell and assign to the corresponding item definition
-4. Click "Cut" to extract and upload all icons at once
-
-## Item ID Reference
-
-| Cell | Item Name | Item ID |
-|------|-----------|---------|
-| R1C1 | [name] | [id or "pending"] |
+[Repeat for each item]
 ```
 
-   **Grid layout rules**:
-   - Use 4 columns (1024px wide)
-   - Group by category: resources in top rows, equipment in middle, tools/misc in bottom
-   - Fill remaining cells with "(empty)" or "(spare cell)"
-   - If more than 16 items: split into multiple spritesheets (item_prompts_1.md, item_prompts_2.md)
+   **Item prompt structure** (all in one paragraph):
+   - Style prefix: "Semi-realistic digital painting, medieval fantasy RPG item icon"
+   - Subject: what the item is, its shape, materials, textures, wear/age
+   - Colors: specific palette (e.g., "tarnished brass with dark brown patina")
+   - Lighting: "soft upper-left lighting with subtle metallic highlights"
+   - Composition: "single object centered, floating on fully transparent background"
+   - Format: "256x256 pixels, PNG with alpha channel, no background"
+   - Negative: "no outlines, no cel-shading, no pixel art, no text"
 
 3. **Generate monster prompts** → `game_design/<name>/monster_prompts.md` (if design has monsters):
 
 ```markdown
-# Monster Icons — Generation Prompts
+# Monster Prompts
 
-## Icon Specifications
+## [Monster Name] (ID: [id])
 
-- **Size**: ~350 x 350 pixels per icon (roughly 300-400px, not pixel-exact)
-- **Background**: Dark ambient vignette — dark brown/black gradient fading from center, creature in center with soft ambient glow. NOT transparent — monsters use a dark moody background.
-- **Format**: PNG, RGBA
-- **Generate each monster as a separate image** (not a spritesheet)
-
-## Art Style Reference
-
-Semi-realistic digital painting, dark fantasy RPG aesthetic. Creatures are painted with detailed textures (scales, fur, stone, chitin). Warm-to-neutral muted color palette with the creature's defining color as accent. Soft dramatic lighting from slightly above, creature facing roughly 3/4 view. Dark vignette background with subtle ambient glow around the creature. No outlines, no cel-shading, no pixel art. Similar to classic CRPG bestiary illustrations.
-
-## Monster [N]: [Name]
-
-[Detailed visual prompt describing the creature: body type, size impression, defining features, color palette, texture details, mood/feeling, pose. 3-5 sentences.]
-
-**Monster ID**: [id or "pending"]
-**Stats context**: ATK [N], DEF [N], HP [N] — [brief role description]
+[Complete image generation prompt — one self-contained paragraph. Ready to paste.]
 
 ---
 
 [Repeat for each monster]
-
-## Post-Processing
-
-1. Generate each monster icon separately
-2. Upload via admin panel: `POST /api/monsters/batch-icons` with base64 PNG data
-3. Or manually upload through the admin monster editor
-
-## Monster ID Reference
-
-| Monster | ID | Location |
-|---------|-----|----------|
-| [name] | [id or "pending"] | [where this monster appears] |
 ```
 
-   **Monster prompt guidelines**:
-   - Describe the creature's physicality, not just its name
-   - Include size impression relative to a human (smaller, human-sized, larger)
-   - Use sensory language: textures, colors, light effects
-   - Reference the monster's stat context — a weak pest looks different from a dangerous predator
-   - Mention the environment it lives in for atmospheric consistency
+   **Monster prompt structure** (all in one paragraph):
+   - Style prefix: "Semi-realistic digital painting, dark fantasy RPG creature portrait"
+   - Subject: body type, size, defining features, pose, expression
+   - Textures: skin/scales/fur/armor detail
+   - Colors: specific palette with accent colors
+   - Lighting: "dramatic lighting from slightly above, 3/4 view"
+   - Background: "dark brown-black vignette with subtle ambient glow"
+   - Format: "350x350 pixels, PNG"
+   - Negative: "no outlines, no cel-shading, no pixel art, no text"
 
 4. **Generate NPC prompts** → `game_design/<name>/npc_prompts.md` (if design has NPCs):
 
 ```markdown
-# NPC Portraits — Generation Prompts
+# NPC Prompts
 
-## Portrait Specifications
+## [NPC Name] (ID: [id])
 
-- **Size**: 256 x 256 pixels
-- **Background**: Dark gradient vignette (similar to monster icons but warmer tones)
-- **Format**: PNG, RGBA
-- **Generate each NPC as a separate image**
-
-## Art Style Reference
-
-Semi-realistic digital painting, medieval fantasy RPG aesthetic. Characters are painted with detailed facial features and clothing textures. Warm lighting, portrait framing (head and upper shoulders). Character's personality and role should be visible in expression and attire. Dark warm vignette background. No outlines, no cel-shading. Similar to classic CRPG character portraits.
-
-## NPC [N]: [Name]
-
-[Detailed visual prompt: age, build, facial features, expression, clothing/armor, defining accessories or tools of their trade, color palette, lighting mood. 3-5 sentences. The prompt should convey the NPC's personality and role.]
-
-**NPC ID**: [id or "pending"]
-**Role**: [crafter/quest giver/merchant/etc.]
-**Location**: [building name]
+[Complete image generation prompt — one self-contained paragraph. Ready to paste.]
 
 ---
 
 [Repeat for each NPC]
-
-## Post-Processing
-
-1. Generate each NPC portrait separately
-2. Upload via admin panel: use `game-entities upload-npc-icon` with the PNG file path
-3. Then assign the returned icon_filename to the NPC
-
-## NPC ID Reference
-
-| NPC | ID | Role | Location |
-|-----|-----|------|----------|
-| [name] | [id or "pending"] | [role] | [building] |
 ```
 
-5. **Report**: List generated prompt files and remind user to generate images with their preferred AI art tool, then upload via admin panel.
+   **NPC prompt structure** (all in one paragraph):
+   - Style prefix: "Semi-realistic digital painting, medieval fantasy RPG character portrait"
+   - Subject: age, build, facial features, expression, clothing/armor, accessories
+   - Colors: specific palette
+   - Lighting: "warm amber lighting, portrait framing showing head and upper shoulders"
+   - Background: "dark warm brown vignette"
+   - Format: "256x256 pixels, PNG"
+   - Negative: "no outlines, no cel-shading, no pixel art, no text"
 
-## Guidelines
+5. **Report**: List generated prompt files.
 
-- **Visual consistency**: All prompts should maintain the established Elarion art style (semi-realistic, muted tones, medieval fantasy, no pixel art)
+## Output Rules
+
+- **Each prompt must be a single, complete, copy-pasteable paragraph** — no bullet points, no sections within a prompt, no metadata mixed in
+- **No post-processing instructions** — no upload steps, no admin panel references, no technical workflow
+- **No specification headers** (size, format, background) as separate sections — bake these into each prompt directly
+- **Entity ID only as a heading reference** — `## Monster Name (ID: 16)` so the user knows which entity the prompt is for
+- **No reference tables, no stat context blocks** — just the prompt text under each heading
+
+## Art Style Guidelines
+
+- **Visual consistency**: Semi-realistic, muted earthy/metallic tones, medieval fantasy, painted look
 - **Descriptive over prescriptive**: Describe what the thing looks like, not how to draw it
-- **Material focus**: For items, emphasize material properties (metal sheen, wood grain, leather texture, gemstone clarity)
-- **Character through appearance**: For NPCs, let their clothing, tools, and expression tell their story
-- **Creature design logic**: Monsters should look like they belong in their environment — cave creatures are pale/dark, forest creatures have green/brown tones
+- **Material focus**: For items — metal sheen, wood grain, leather texture, gemstone clarity
+- **Character through appearance**: For NPCs — clothing, tools, expression tell their story
+- **Creature design logic**: Monsters should look like they belong in their environment

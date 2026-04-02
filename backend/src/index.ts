@@ -33,6 +33,8 @@ import { getZonePlayers } from './game/world/zone-registry';
 import { loadCityMaps } from './game/world/city-map-loader';
 import * as bossInstanceManager from './game/boss/boss-instance-manager';
 import { handleBossChallenge, handleBossCombatTriggerActive } from './game/boss/boss-combat-handler';
+import { registerArenaHandlers } from './game/arena/arena-handler';
+import { loadFromDb as loadArenaState } from './game/arena/arena-state-manager';
 
 async function bootstrap(): Promise<void> {
   log('info', 'bootstrap', 'starting', { env: config.nodeEnv, port: config.wsPort });
@@ -70,6 +72,9 @@ async function bootstrap(): Promise<void> {
   await bossInstanceManager.initialize();
   setInterval(() => bossInstanceManager.checkRespawns(), 30_000);
 
+  // Initialize arena state from DB (recover participants after restart)
+  await loadArenaState();
+
   // Start periodic rankings computation
   startRankingsService();
 
@@ -102,6 +107,7 @@ async function bootstrap(): Promise<void> {
   registerHandler('squire.dismiss_confirm', handleSquireDismissConfirm);
   registerHandler('boss:challenge', handleBossChallenge);
   registerHandler('boss:combat_trigger_active', handleBossCombatTriggerActive);
+  registerArenaHandlers();
 
   // Start WebSocket server (also sends world.state on connect)
   startWebSocketServer();

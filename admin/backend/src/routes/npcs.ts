@@ -11,6 +11,7 @@ import {
   deleteNpc,
   type Npc,
 } from '../../../../backend/src/db/queries/npcs';
+import { resizeUpload } from '../middleware/resize-upload';
 
 export const npcsRouter = Router();
 
@@ -39,7 +40,7 @@ function log(level: string, msg: string, extra: Record<string, unknown> = {}) {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
     if (file.mimetype === 'image/png') {
       cb(null, true);
@@ -60,7 +61,7 @@ function validatePngMagicBytes(buf: Buffer): boolean {
 // ── POST /api/npcs/upload ───────────────────────────────────────────────────
 // Must be defined before /:id routes to avoid "upload" being treated as an id
 
-npcsRouter.post('/upload', upload.single('icon'), async (req: Request, res: Response) => {
+npcsRouter.post('/upload', upload.single('icon'), resizeUpload(), async (req: Request, res: Response) => {
   if (!req.file) {
     return res.status(400).json({ error: 'icon file is required' });
   }

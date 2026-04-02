@@ -114,6 +114,19 @@ import type {
   BossCombatTurnResultPayload,
   BossCombatActiveWindowPayload,
   BossCombatEndPayload,
+  ArenaEnteredPayload,
+  ArenaEnterRejectedPayload,
+  ArenaLeftPayload,
+  ArenaLeaveRejectedPayload,
+  ArenaPlayerEnteredPayload,
+  ArenaPlayerLeftPayload,
+  ArenaParticipantUpdatedPayload,
+  ArenaKickedPayload,
+  ArenaChallengeRejectedPayload,
+  ArenaCombatStartPayload,
+  ArenaCombatTurnResultPayload,
+  ArenaCombatActiveWindowPayload,
+  ArenaCombatEndPayload,
 } from '@elarion/protocol';
 import { FishingMinigame } from '../ui/fishing-minigame';
 import { DisassemblyModal } from '../ui/DisassemblyModal';
@@ -121,6 +134,7 @@ import { RankingsPanel } from '../ui/RankingsPanel';
 import { BossSprite } from '../entities/BossSprite';
 import { BossInfoPanel } from '../ui/BossInfoPanel';
 import { BossAnnouncementBanner } from '../ui/BossAnnouncementBanner';
+import { ArenaPanel } from '../ui/ArenaPanel';
 
 const TILE_SIZE = 32;
 const XP_THRESHOLDS = [100, 250, 500, 900, 1400];
@@ -184,6 +198,11 @@ export class GameScene extends Phaser.Scene {
   private cityHotspotGraphics: Phaser.GameObjects.Graphics | null = null;
   private cityNodeMarkers: Phaser.GameObjects.Arc[] = [];
   private cityBgSprite: Phaser.GameObjects.Sprite | null = null;
+
+  // Arena system
+  private arenaPanel: ArenaPanel | null = null;
+  private inArenaCombat = false;
+  private pendingArenaPayload: ArenaEnteredPayload | null = null;
 
   // Boss system
   private bossSprites = new Map<number, BossSprite>();
@@ -339,13 +358,24 @@ export class GameScene extends Phaser.Scene {
     this.combatScreen = new CombatScreen(() => {
       const combatId = this.combatScreen?.getCombatId();
       if (combatId) {
-        const msgType = this.combatScreen?.getVariant() === 'boss'
-          ? 'boss:combat_trigger_active'
-          : 'combat:trigger_active';
+        let msgType: string;
+        if (this.combatScreen?.getVariant() === 'boss') {
+          msgType = 'boss:combat_trigger_active';
+        } else if (this.inArenaCombat) {
+          msgType = 'arena:combat_trigger_active';
+        } else {
+          msgType = 'combat:trigger_active';
+        }
         this.client.send(msgType, { combat_id: combatId });
       }
     });
     this.combatScreen.setOnClose(() => {
+      if (this.inArenaCombat || this.arenaPanel?.isOpen()) {
+        // Arena combat — don't reopen building panel.
+        // If player lost, arena:kicked already hid the panel.
+        // If player won, they return to arena lobby.
+        return;
+      }
       if (this.buildingBeforeCombat) {
         this.buildingPanel.show(
           this.buildingBeforeCombat,
@@ -418,6 +448,13 @@ export class GameScene extends Phaser.Scene {
 
       this.placeMyCharacter();
       this.buildStatsBar();
+
+      // If an arena:entered payload was deferred (reconnect), show it now
+      if (this.pendingArenaPayload) {
+        const p = this.pendingArenaPayload;
+        this.pendingArenaPayload = null;
+        this.openArenaPanel(p);
+      }
 
       // Place other players
       for (const p of payload.players) {
@@ -648,6 +685,13 @@ export class GameScene extends Phaser.Scene {
     // Inventory handlers
     this.client.on<InventoryStatePayload>('inventory.state', (payload) => {
       this.leftPanel.onInventoryState(payload);
+
+      // Update arena token count if arena panel is open
+      if (this.arenaPanel?.isOpen()) {
+        const tokenSlot = payload.slots.find(s => s.definition.name === 'Arena Challenge Token');
+        this.arenaPanel.updateTokenCount(tokenSlot?.quantity ?? 0);
+      }
+
       // Re-render building panel if open so gather sections pick up the updated inventory
       const bld = this.buildingPanel.getCurrentBuilding();
       if (bld && !this.buildingPanel.isGatheringActive()) {
@@ -1082,6 +1126,124 @@ export class GameScene extends Phaser.Scene {
     this.client.on<import('../../../shared/protocol/index').BossAnnouncementPayload>('boss:announcement', (payload) => {
       this.bossAnnouncementBanner.show(payload);
     });
+
+    // Arena handlers
+    this.client.on<{ action_id: number }>('arena.open', (payload) => {
+      this.client.send('arena:enter', { action_id: payload.action_id });
+    });
+
+    this.client.on<ArenaEnteredPayload>('arena:entered', (payload) => {
+      if (!this.myCharacter) {
+        // world.state hasn't arrived yet (reconnect into arena) — defer
+        this.pendingArenaPayload = payload;
+        return;
+      }
+      this.openArenaPanel(payload);
+    });
+
+    this.client.on<ArenaLeftPayload>('arena:left', (_payload) => {
+      this.arenaPanel?.hide();
+    });
+
+    this.client.on<ArenaEnterRejectedPayload>('arena:enter_rejected', (payload) => {
+      this.chatBox.addSystemMessage(payload.message);
+    });
+
+    this.client.on<ArenaLeaveRejectedPayload>('arena:leave_rejected', (payload) => {
+      this.chatBox.addSystemMessage(payload.message);
+    });
+
+    this.client.on<ArenaPlayerEnteredPayload>('arena:player_entered', (payload) => {
+      this.arenaPanel?.addParticipant(payload.participant);
+    });
+
+    this.client.on<ArenaPlayerLeftPayload>('arena:player_left', (payload) => {
+      this.arenaPanel?.removeParticipant(payload.character_id);
+    });
+
+    this.client.on<ArenaParticipantUpdatedPayload>('arena:participant_updated', (payload) => {
+      this.arenaPanel?.updateParticipant(payload.character_id, payload.in_combat, payload.current_streak, payload.arena_pvp_wins);
+    });
+
+    this.client.on<ArenaKickedPayload>('arena:kicked', (payload) => {
+      this.arenaPanel?.hide();
+      this.chatBox.addSystemMessage(payload.message);
+    });
+
+    this.client.on<{ can_leave_at: string }>('arena:timers_reset', (payload) => {
+      this.arenaPanel?.resetLeaveTimer(new Date(payload.can_leave_at));
+      this.chatBox.addSystemMessage('Arena timers have been reset by an admin.');
+    });
+
+    this.client.on<ArenaChallengeRejectedPayload>('arena:challenge_rejected', (payload) => {
+      this.chatBox.addSystemMessage(payload.message);
+    });
+
+    // Arena combat uses the same CombatScreen — reuse existing combat handlers
+    this.client.on<ArenaCombatStartPayload>('arena:combat_start', (payload) => {
+      this.inArenaCombat = true;
+      this.leftPanel.setLoadoutLocked(true);
+      // Map arena combat payload to CombatStartPayload shape for the combat screen
+      const opponentName = payload.is_pvp
+        ? `${payload.opponent.name} (Lv.${payload.opponent.level})`
+        : payload.opponent.name;
+      this.combatScreen?.open({
+        combat_id: payload.combat_id,
+        monster: {
+          id: 0,
+          name: opponentName,
+          icon_url: payload.opponent.icon_url,
+          max_hp: payload.opponent.max_hp,
+          attack: payload.opponent.attack,
+          defence: payload.opponent.defence,
+        },
+        player: payload.player,
+        loadout: payload.loadout,
+        turn_timer_ms: payload.turn_timer_ms,
+        active_effects: [],
+        initial_enemy_hp: payload.opponent.current_hp,
+      });
+    });
+
+    this.client.on<ArenaCombatTurnResultPayload>('arena:combat_turn_result', (payload) => {
+      // Map opponent_hp → enemy_hp for the shared CombatScreen
+      this.combatScreen?.applyTurnResult({
+        combat_id: payload.combat_id,
+        turn: payload.turn,
+        phase: payload.phase,
+        events: payload.events,
+        player_hp: payload.player_hp,
+        player_mana: payload.player_mana,
+        enemy_hp: payload.opponent_hp,
+        ability_states: payload.ability_states,
+        active_effects: payload.active_effects,
+      });
+    });
+
+    this.client.on<ArenaCombatActiveWindowPayload>('arena:combat_active_window', (payload) => {
+      this.combatScreen?.openActiveWindow(payload);
+    });
+
+    this.client.on<ArenaCombatEndPayload>('arena:combat_end', (payload) => {
+      if (this.myCharacter) this.myCharacter.current_hp = payload.current_hp;
+      this.statsBar?.setHp(payload.current_hp, this.myCharacter?.max_hp ?? 0);
+      this.arenaPanel?.updateHp(payload.current_hp, this.myCharacter?.max_hp ?? 0);
+
+      this.inArenaCombat = false;
+      // Map arena outcome values to CombatEndPayload shape
+      this.combatScreen?.showOutcome({
+        combat_id: payload.combat_id,
+        outcome: payload.outcome === 'victory' ? 'win' : 'loss',
+        current_hp: payload.current_hp,
+        xp_gained: payload.xp_gained,
+        crowns_gained: payload.crowns_gained,
+        items_dropped: [],
+        ability_drops: [],
+        monster_name: payload.opponent_name,
+        monster_icon_url: null,
+      });
+      this.leftPanel.setLoadoutLocked(false);
+    });
   }
 
   // ── Tile map rendering ──────────────────────────────────────────
@@ -1497,6 +1659,32 @@ export class GameScene extends Phaser.Scene {
     const c = this.myCharacter;
     const xpThreshold = XP_THRESHOLDS[c.level - 1] ?? 9999;
     this.statsBar.setCharacterData(c, xpThreshold);
+  }
+
+  private openArenaPanel(payload: ArenaEnteredPayload): void {
+    this.buildingPanel.hide();
+
+    if (!this.arenaPanel) {
+      const gameEl = document.getElementById('game')!;
+      this.arenaPanel = new ArenaPanel(gameEl, (type, p) => {
+        this.client.send(type, p);
+      });
+      this.arenaPanel.setOnChallengePlayer((targetId) => {
+        this.client.send('arena:challenge_player', { target_character_id: targetId });
+      });
+      this.arenaPanel.setOnChallengeNpc((monsterId) => {
+        this.client.send('arena:challenge_npc', { monster_id: monsterId });
+      });
+      this.arenaPanel.setOnLeave((arenaId) => {
+        this.client.send('arena:leave', { arena_id: arenaId });
+      });
+    }
+    this.arenaPanel.show(payload, this.myCharacter?.id ?? '');
+
+    // Set initial token count from current inventory
+    const slots = this.leftPanel.getInventorySlots();
+    const tokenSlot = slots.find(s => s.definition.name === 'Arena Challenge Token');
+    this.arenaPanel.updateTokenCount(tokenSlot?.quantity ?? 0);
   }
 
   private buildStatsBar(): void {
