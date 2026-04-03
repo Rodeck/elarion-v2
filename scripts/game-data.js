@@ -902,6 +902,18 @@ async function arenaDetail(id) {
   }
 }
 
+async function statTraining() {
+  section('Stat Training Items');
+  const res = await pool.query(`
+    SELECT st.id, d.name AS item_name, st.stat_name, st.tier, st.base_chance, st.decay_per_level, n.name AS npc_name
+    FROM stat_training_items st
+    JOIN item_definitions d ON d.id = st.item_def_id
+    JOIN npcs n ON n.id = st.npc_id
+    ORDER BY st.stat_name, st.tier
+  `);
+  table(res.rows, ['id', 'item_name', 'stat_name', 'tier', 'base_chance', 'decay_per_level', 'npc_name']);
+}
+
 async function characterStats(name) {
   if (!name) { console.error('Usage: character-stats <name>'); return; }
   const res = await pool.query(`
@@ -947,6 +959,7 @@ Commands:
   boss-instances           Live boss instances with HP, status, and respawn timers
   disassembly [item_id]    Disassembly recipes with chance entries and outputs
   economy                  Crown sources/sinks, equipment stats, expedition rewards
+  stat-training            Stat training item mappings with tiers and success rates
   character-stats <name>   Character attributes, unspent points, derived stats
   search <term>            Search across all entity types by name
   sql "<query>"            Run a raw SELECT query
@@ -983,6 +996,7 @@ async function main() {
       case 'arena':        await arenaDetail(args[0]); break;
       case 'bosses':       await bosses(); break;
       case 'boss-instances': await bossInstances(); break;
+      case 'stat-training':  await statTraining(); break;
       case 'sql':       await rawSql(args.join(' ')); break;
       default:
         console.error(`Unknown command: ${cmd}`);

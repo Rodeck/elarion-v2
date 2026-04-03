@@ -729,6 +729,41 @@ async function deleteQuestCmd(data) {
   }
 }
 
+// ─── Stat Training Commands ──────────────────────────────────────────────────
+
+const VALID_STAT_NAMES = ['constitution', 'strength', 'intelligence', 'dexterity', 'toughness'];
+
+async function createStatTrainingItemCmd(data) {
+  const { item_def_id, stat_name, tier, base_chance, decay_per_level, npc_id } = data;
+  if (!item_def_id || !Number.isInteger(item_def_id)) return output('create-stat-training-item', false, ['item_def_id must be a positive integer']);
+  if (!stat_name || !VALID_STAT_NAMES.includes(stat_name)) return output('create-stat-training-item', false, [`stat_name must be one of: ${VALID_STAT_NAMES.join(', ')}`]);
+  if (!tier || ![1, 2, 3].includes(tier)) return output('create-stat-training-item', false, ['tier must be 1, 2, or 3']);
+  if (!base_chance || base_chance < 1 || base_chance > 100) return output('create-stat-training-item', false, ['base_chance must be 1-100']);
+  if (!decay_per_level || decay_per_level <= 0) return output('create-stat-training-item', false, ['decay_per_level must be positive']);
+  if (!npc_id || !Number.isInteger(npc_id)) return output('create-stat-training-item', false, ['npc_id must be a positive integer']);
+
+  const token = await authenticate();
+  const res = await apiPost('/api/stat-training', data, token);
+  if (res.status === 201 || res.status === 200) {
+    output('create-stat-training-item', true, res.data);
+  } else {
+    output('create-stat-training-item', false, [res.data.error || `HTTP ${res.status}`]);
+  }
+}
+
+async function setNpcTrainerStatCmd(data) {
+  if (data.npc_id == null || !Number.isInteger(data.npc_id)) return output('set-npc-trainer-stat', false, ['npc_id is required (integer)']);
+  if (data.stat !== null && data.stat !== undefined && !VALID_STAT_NAMES.includes(data.stat)) return output('set-npc-trainer-stat', false, [`stat must be null or one of: ${VALID_STAT_NAMES.join(', ')}`]);
+
+  const token = await authenticate();
+  const res = await apiPut(`/api/npcs/${data.npc_id}/trainer-stat`, { stat: data.stat ?? null }, token);
+  if (res.status === 200) {
+    output('set-npc-trainer-stat', true, res.data);
+  } else {
+    output('set-npc-trainer-stat', false, [res.data.error || `HTTP ${res.status}`]);
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 const HELP = `
@@ -753,6 +788,8 @@ Commands:
   upload-squire-icon      Upload a PNG icon for a squire definition
   create-monster-squire-loot  Add a squire loot entry to a monster
   set-npc-dismisser       Set/unset an NPC's squire dismisser flag
+  set-npc-trainer-stat    Set/clear an NPC's trainer_stat (which stat they train)
+  create-stat-training-item  Map an item as a stat training consumable
   create-fishing-loot     Add a fishing loot entry (min_rod_tier, item_def_id, drop_weight)
   update-fishing-loot     Update a fishing loot entry (id, min_rod_tier, drop_weight)
   delete-fishing-loot     Delete a fishing loot entry (id)
@@ -785,6 +822,8 @@ Examples:
   node scripts/game-entities.js upload-squire-icon '{"squire_def_id":1,"file_path":"/absolute/path/to/icon.png"}'
   node scripts/game-entities.js create-monster-squire-loot '{"monster_id":1,"squire_def_id":1,"drop_chance":10,"squire_level":1}'
   node scripts/game-entities.js set-npc-dismisser '{"npc_id":1,"is_squire_dismisser":true}'
+  node scripts/game-entities.js set-npc-trainer-stat '{"npc_id":1,"stat":"strength"}'
+  node scripts/game-entities.js create-stat-training-item '{"item_def_id":99,"stat_name":"strength","tier":1,"base_chance":95,"decay_per_level":3.0,"npc_id":1}'
 `;
 
 async function main() {
@@ -829,6 +868,8 @@ async function main() {
       case 'upload-squire-icon':    await uploadSquireIconCmd(data); break;
       case 'create-monster-squire-loot': await createMonsterSquireLootCmd(data); break;
       case 'set-npc-dismisser':     await setNpcDismisserCmd(data); break;
+      case 'set-npc-trainer-stat':  await setNpcTrainerStatCmd(data); break;
+      case 'create-stat-training-item': await createStatTrainingItemCmd(data); break;
       case 'create-fishing-loot':   await createFishingLootCmd(data); break;
       case 'update-fishing-loot':   await updateFishingLootCmd(data); break;
       case 'delete-fishing-loot':   await deleteFishingLootCmd(data); break;

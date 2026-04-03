@@ -130,8 +130,12 @@ import type {
   TrainingStatePayload,
   TrainingResultPayload,
   TrainingErrorPayload,
+  StatTrainingStatePayload,
+  StatTrainingResultPayload,
+  StatTrainingErrorPayload,
 } from '@elarion/protocol';
 import { TrainingModal } from '../ui/TrainingModal';
+import { StatTrainingModal } from '../ui/StatTrainingModal';
 import { FishingMinigame } from '../ui/fishing-minigame';
 import { DisassemblyModal } from '../ui/DisassemblyModal';
 import { RankingsPanel } from '../ui/RankingsPanel';
@@ -206,6 +210,7 @@ export class GameScene extends Phaser.Scene {
   // Arena system
   private arenaPanel: ArenaPanel | null = null;
   private trainingModal!: TrainingModal;
+  private statTrainingModal!: StatTrainingModal;
   private inArenaCombat = false;
   private pendingArenaPayload: ArenaEnteredPayload | null = null;
 
@@ -314,6 +319,14 @@ export class GameScene extends Phaser.Scene {
     this.buildingPanel.setOnTrainingOpen((npcId) => {
       this.trainingModal.open(npcId);
       this.client.send('training.open', { npc_id: npcId });
+    });
+    this.statTrainingModal = new StatTrainingModal(document.getElementById('game')!);
+    this.statTrainingModal.setSendFn((type, payload) => {
+      this.client.send(type, payload);
+    });
+    this.buildingPanel.setOnStatTrainingOpen((npcId, _stat) => {
+      this.statTrainingModal.open(npcId);
+      this.client.send('stat-training.open', { npc_id: npcId });
     });
     this.buildingPanel.setOnBossChallenge((boss) => {
       this.bossInfoPanel.show(boss, this.getBossTokenCount());
@@ -1055,6 +1068,25 @@ export class GameScene extends Phaser.Scene {
     });
     this.client.on<TrainingErrorPayload>('training.error', (payload) => {
       this.trainingModal.handleError(payload.message);
+    });
+
+    // Stat training (consumable item) handlers
+    this.client.on<StatTrainingStatePayload>('stat-training.state', (payload) => {
+      this.statTrainingModal.handleState(payload);
+    });
+    this.client.on<StatTrainingResultPayload>('stat-training.result', (payload) => {
+      this.statTrainingModal.handleResult(payload);
+      if (payload.success && this.myCharacter) {
+        // Update the trained attribute on myCharacter
+        const attrKey = `attr_${payload.stat_name}` as keyof typeof this.myCharacter;
+        if (attrKey in this.myCharacter) {
+          (this.myCharacter as unknown as Record<string, unknown>)[attrKey] = payload.new_value;
+        }
+        this.syncExpandedStats();
+      }
+    });
+    this.client.on<StatTrainingErrorPayload>('stat-training.error', (payload) => {
+      this.statTrainingModal.handleError(payload.message);
     });
 
     // Rankings handler

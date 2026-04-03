@@ -1,6 +1,7 @@
 import {
   getImagePrompts,
   generateImageFromPrompt,
+  generateImageFromRawPrompt,
   type ImagePromptTemplate,
 } from '../editor/api';
 
@@ -30,6 +31,7 @@ export class ImageGenDialog {
     `;
 
     const promptOptions = prompts.map((p) => `<option value="${p.id}">${this.esc(p.name)}</option>`).join('');
+    const hasTemplates = prompts.length > 0;
     const firstPromptBody = prompts[0]?.body ?? '';
     const resolved = firstPromptBody.replace(/<[A-Z_]+>/g, (m) => {
       const key = m.slice(1, -1);
@@ -49,17 +51,31 @@ export class ImageGenDialog {
           Prompt Template
         </label>
         <select id="ai-prompt-select" style="width:100%;margin-bottom:0.75rem;">
+          <option value="custom">Custom Prompt (paste your own)</option>
           ${promptOptions}
         </select>
 
-        <label style="display:block;margin-bottom:0.25rem;font-size:0.7rem;color:#404666;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">
-          Resolved Prompt Preview
-        </label>
-        <div id="ai-prompt-preview" style="
-          background:#141726;border:1px solid #2d3347;border-radius:0.375rem;
-          padding:0.625rem 0.75rem;font-size:0.8rem;color:#8a94b0;
-          font-family:monospace;min-height:3rem;margin-bottom:0.75rem;white-space:pre-wrap;
-        ">${this.esc(resolved)}</div>
+        <div id="ai-custom-prompt-area" style="margin-bottom:0.75rem;">
+          <label style="display:block;margin-bottom:0.25rem;font-size:0.7rem;color:#404666;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">
+            Prompt Text
+          </label>
+          <textarea id="ai-custom-prompt" style="
+            width:100%;min-height:6rem;background:#141726;border:1px solid #2d3347;border-radius:0.375rem;
+            padding:0.625rem 0.75rem;font-size:0.8rem;color:#c8cddf;
+            font-family:monospace;resize:vertical;
+          " placeholder="Paste your full prompt here..."></textarea>
+        </div>
+
+        <div id="ai-template-preview-area" style="display:none;margin-bottom:0.75rem;">
+          <label style="display:block;margin-bottom:0.25rem;font-size:0.7rem;color:#404666;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">
+            Resolved Prompt Preview
+          </label>
+          <div id="ai-prompt-preview" style="
+            background:#141726;border:1px solid #2d3347;border-radius:0.375rem;
+            padding:0.625rem 0.75rem;font-size:0.8rem;color:#8a94b0;
+            font-family:monospace;min-height:3rem;white-space:pre-wrap;
+          ">${this.esc(resolved)}</div>
+        </div>
 
         <p id="ai-error" style="display:none;color:#f87171;font-size:0.8rem;margin-bottom:0.75rem;"></p>
 
@@ -80,6 +96,9 @@ export class ImageGenDialog {
 
     const select = this.overlay.querySelector<HTMLSelectElement>('#ai-prompt-select')!;
     const previewDiv = this.overlay.querySelector<HTMLElement>('#ai-prompt-preview')!;
+    const customArea = this.overlay.querySelector<HTMLElement>('#ai-custom-prompt-area')!;
+    const templateArea = this.overlay.querySelector<HTMLElement>('#ai-template-preview-area')!;
+    const customTextarea = this.overlay.querySelector<HTMLTextAreaElement>('#ai-custom-prompt')!;
     const generateBtn = this.overlay.querySelector<HTMLButtonElement>('#ai-generate-btn')!;
     const acceptBtn = this.overlay.querySelector<HTMLButtonElement>('#ai-accept-btn')!;
     const cancelBtn = this.overlay.querySelector<HTMLButtonElement>('#ai-cancel-btn')!;
@@ -89,37 +108,38 @@ export class ImageGenDialog {
 
     let currentBase64 = '';
 
+    const isCustom = () => select.value === 'custom';
+
     const updatePreview = () => {
-      const selectedId = parseInt(select.value, 10);
-      const prompt = prompts.find((p) => p.id === selectedId);
-      if (prompt) {
-        const res = prompt.body.replace(/<[A-Z_]+>/g, (m) => {
-          const key = m.slice(1, -1);
-          if (key.includes('NAME')) return entityName;
-          if (extraVariables && key in extraVariables) return extraVariables[key]!;
-          return m;
-        });
-        previewDiv.textContent = res;
+      if (isCustom()) {
+        customArea.style.display = '';
+        templateArea.style.display = 'none';
+      } else {
+        customArea.style.display = 'none';
+        templateArea.style.display = '';
+        const selectedId = parseInt(select.value, 10);
+        const prompt = prompts.find((p) => p.id === selectedId);
+        if (prompt) {
+          const res = prompt.body.replace(/<[A-Z_]+>/g, (m) => {
+            const key = m.slice(1, -1);
+            if (key.includes('NAME')) return entityName;
+            if (extraVariables && key in extraVariables) return extraVariables[key]!;
+            return m;
+          });
+          previewDiv.textContent = res;
+        }
       }
     };
+
+    // Set initial state: if no templates, default to custom
+    if (!hasTemplates) {
+      select.value = 'custom';
+    }
+    updatePreview();
 
     select.addEventListener('change', updatePreview);
 
     generateBtn.addEventListener('click', async () => {
-      const selectedId = parseInt(select.value, 10);
-      const prompt = prompts.find((p) => p.id === selectedId);
-      if (!prompt) return;
-
-      // Extract variables: find all <PLACEHOLDER> in body and map to values
-      const variables: Record<string, string> = {};
-      const placeholders = prompt.body.match(/<[A-Z_]+>/g) ?? [];
-      for (const ph of placeholders) {
-        const key = ph.slice(1, -1);
-        if (key.includes('NAME')) variables[key] = entityName;
-        else if (extraVariables && key in extraVariables) variables[key] = extraVariables[key]!;
-        else variables[key] = entityName; // fallback: use entity name
-      }
-
       errorEl.style.display = 'none';
       generateBtn.disabled = true;
       generateBtn.textContent = 'Generating…';
@@ -128,7 +148,31 @@ export class ImageGenDialog {
       currentBase64 = '';
 
       try {
-        const result = await generateImageFromPrompt(selectedId, variables);
+        let result;
+        if (isCustom()) {
+          const rawPrompt = customTextarea.value.trim();
+          if (!rawPrompt) {
+            errorEl.textContent = 'Please enter a prompt.';
+            errorEl.style.display = '';
+            return;
+          }
+          result = await generateImageFromRawPrompt(rawPrompt);
+        } else {
+          const selectedId = parseInt(select.value, 10);
+          const prompt = prompts.find((p) => p.id === selectedId);
+          if (!prompt) return;
+
+          const variables: Record<string, string> = {};
+          const placeholders = prompt.body.match(/<[A-Z_]+>/g) ?? [];
+          for (const ph of placeholders) {
+            const key = ph.slice(1, -1);
+            if (key.includes('NAME')) variables[key] = entityName;
+            else if (extraVariables && key in extraVariables) variables[key] = extraVariables[key]!;
+            else variables[key] = entityName;
+          }
+          result = await generateImageFromPrompt(selectedId, variables);
+        }
+
         currentBase64 = result.base64;
         genImg.src = `data:image/png;base64,${result.base64}`;
         imagePreview.style.display = '';

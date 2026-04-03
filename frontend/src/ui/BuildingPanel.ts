@@ -73,6 +73,7 @@ export class BuildingPanel {
   private onFishingRepair: FishingRepairCallback | null = null;
   private onDisassemblyOpen: DisassemblyOpenCallback | null = null;
   private onTrainingOpen: ((npcId: number) => void) | null = null;
+  private onStatTrainingOpen: ((npcId: number, stat: string) => void) | null = null;
   private getInventorySlots: InventorySlotsGetter | null = null;
   private progressIntervals: number[] = [];
   private currentBuilding: CityMapBuilding | null = null;
@@ -296,6 +297,10 @@ export class BuildingPanel {
 
   setOnTrainingOpen(cb: (npcId: number) => void): void {
     this.onTrainingOpen = cb;
+  }
+
+  setOnStatTrainingOpen(cb: (npcId: number, stat: string) => void): void {
+    this.onStatTrainingOpen = cb;
   }
 
   setInventorySlotsGetter(getter: InventorySlotsGetter): void {
@@ -963,6 +968,15 @@ export class BuildingPanel {
         this.onTrainingOpen?.(npc.id);
       });
       optionsEl.appendChild(trainOption);
+    }
+
+    const trainerStat = (npc as { trainer_stat?: string | null }).trainer_stat;
+    if (trainerStat) {
+      const statLabel = trainerStat.charAt(0).toUpperCase() + trainerStat.slice(1);
+      const statTrainOption = this.buildDialogOption(`Train ${statLabel}`, () => {
+        this.onStatTrainingOpen?.(npc.id, trainerStat);
+      });
+      optionsEl.appendChild(statTrainOption);
     }
 
     // Fishing rod upgrade/repair options — shown when the building has a fishing action

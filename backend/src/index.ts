@@ -36,6 +36,7 @@ import * as bossInstanceManager from './game/boss/boss-instance-manager';
 import { handleBossChallenge, handleBossCombatTriggerActive } from './game/boss/boss-combat-handler';
 import { registerArenaHandlers } from './game/arena/arena-handler';
 import { registerTrainingHandlers } from './game/training/training-handler';
+import { registerStatTrainingHandlers } from './game/training/stat-training-handler';
 import { loadFromDb as loadArenaState } from './game/arena/arena-state-manager';
 
 async function bootstrap(): Promise<void> {
@@ -114,6 +115,7 @@ async function bootstrap(): Promise<void> {
   registerHandler('boss:combat_trigger_active', handleBossCombatTriggerActive);
   registerArenaHandlers();
   registerTrainingHandlers();
+  registerStatTrainingHandlers();
 
   // Start WebSocket server (also sends world.state on connect)
   startWebSocketServer();

@@ -21,6 +21,7 @@ export class ItemManager {
   private container!: HTMLElement;
   private items: ItemDefinitionResponse[] = [];
   private currentCategory: string = 'all';
+  private nameFilter: string = '';
   private modal: ItemModal;
 
   constructor() {
@@ -56,7 +57,8 @@ export class ItemManager {
           <button class="btn btn--primary" id="item-add-btn">+ Add Item</button>
           <button class="btn btn--active" data-cat="all">All</button>
           ${VALID_CATEGORIES.map((c) => `<button class="btn" data-cat="${c}">${this.labelFor(c)}</button>`).join('')}
-          <button class="btn btn--secondary" id="sprite-sheet-btn" title="Cut icons from a sprite sheet" style="margin-left:auto;">&#x2702; Sprite Sheet</button>
+          <input type="text" id="item-name-filter" placeholder="Search by name\u2026" style="margin-left:auto;padding:4px 8px;background:#1a1a2e;border:1px solid #2a2a40;border-radius:4px;color:#c0c0d0;font-size:0.85rem;width:180px;" />
+          <button class="btn btn--secondary" id="sprite-sheet-btn" title="Cut icons from a sprite sheet">&#x2702; Sprite Sheet</button>
           <button class="btn" id="item-refresh-btn" title="Refresh items list">&#x21bb; Refresh</button>
         </div>
         <div id="item-list-container">
@@ -88,6 +90,14 @@ export class ItemManager {
       btn.classList.add('btn--active');
       await this.load();
     });
+
+    const nameInput = this.container.querySelector<HTMLInputElement>('#item-name-filter');
+    if (nameInput) {
+      nameInput.addEventListener('input', () => {
+        this.nameFilter = nameInput.value.toLowerCase();
+        this.renderList();
+      });
+    }
 
     const refreshBtn = this.container.querySelector<HTMLButtonElement>('#item-refresh-btn');
     if (refreshBtn) {
@@ -134,7 +144,16 @@ export class ItemManager {
     `;
 
     const tbody = table.querySelector('tbody')!;
-    for (const item of this.items) {
+    const filtered = this.nameFilter
+      ? this.items.filter((i) => i.name.toLowerCase().includes(this.nameFilter))
+      : this.items;
+
+    if (filtered.length === 0) {
+      container.innerHTML = `<p>No items matching "${this.escHtml(this.nameFilter)}".</p>`;
+      return;
+    }
+
+    for (const item of filtered) {
       const tr = document.createElement('tr');
       tr.dataset['id'] = String(item.id);
 

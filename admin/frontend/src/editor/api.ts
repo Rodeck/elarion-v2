@@ -786,6 +786,15 @@ export async function generateImageFromPrompt(
   });
 }
 
+export async function generateImageFromRawPrompt(
+  prompt: string,
+): Promise<GenerateImageResult> {
+  return request<GenerateImageResult>(`${AI_BASE}/generate-image-raw`, {
+    method: 'POST',
+    body: JSON.stringify({ prompt }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // NPCs
 // ---------------------------------------------------------------------------

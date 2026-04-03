@@ -152,6 +152,7 @@ function toProtocolBuilding(
     is_squire_dismisser: n.is_squire_dismisser ?? false,
     is_disassembler: n.is_disassembler ?? false,
     is_trainer: n.is_trainer ?? false,
+    trainer_stat: n.trainer_stat ?? null,
   }));
 
   const result: CityMapBuilding = {

@@ -571,11 +571,27 @@ export class StatsBar {
 
       <div style="border-top:1px solid #3a2e1a;margin:2px 0;"></div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;">
-        ${this.renderInfo('Base ATK', String(c.attack_power))}
-        ${this.renderInfo('Base DEF', String(c.defence))}
-        ${gearAtk > 0 ? this.renderInfo('Gear ATK', '+' + gearAtk) : ''}
-        ${gearDef > 0 ? this.renderInfo('Gear DEF', '+' + gearDef) : ''}
+      <div style="font-family:var(--font-display);font-size:9px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:2px;">Attributes</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">
+        ${this.renderAttr('CON', c.attr_constitution, '+4 HP, +1 ATK')}
+        ${this.renderAttr('STR', c.attr_strength, '+2 ATK, +0.3% CrD')}
+        ${this.renderAttr('INT', c.attr_intelligence, '+8 Mana')}
+        ${this.renderAttr('DEX', c.attr_dexterity, '+0.1% Cr, +0.1% Dg')}
+        ${this.renderAttr('TOU', c.attr_toughness, '+1 DEF')}
+      </div>
+      ${c.stat_points_unspent > 0 ? `<div style="font-family:var(--font-number);font-size:11px;color:#f0c060;text-align:center;">${c.stat_points_unspent} unspent point${c.stat_points_unspent !== 1 ? 's' : ''}</div>` : ''}
+
+      <div style="border-top:1px solid #3a2e1a;margin:2px 0;"></div>
+
+      <div style="font-family:var(--font-display);font-size:9px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:2px;">Derived Stats</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">
+        ${this.renderDerived('Max HP', c.max_hp, '#6dc86d')}
+        ${this.renderDerived('Mana', 100 + c.attr_intelligence * 8, '#78a8e8')}
+        ${this.renderDerived('Attack', effAtk, '#e8c878', c.attack_power, gearAtk)}
+        ${this.renderDerived('Defence', effDef, '#78a8e8', c.defence, gearDef)}
+        ${this.renderDerived('Crit %', parseFloat((c.attr_dexterity * 0.1).toFixed(1)), '#e8a878')}
+        ${this.renderDerived('Dodge %', parseFloat((c.attr_dexterity * 0.1).toFixed(1)), '#a8e878')}
+        ${this.renderDerived('Crit Dmg', parseFloat((150 + c.attr_strength * 0.3).toFixed(1)), '#e87878')}
       </div>
     `;
     this.expandedPanel.appendChild(statsContent);
@@ -630,6 +646,31 @@ export class StatsBar {
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <span style="font-family:var(--font-display);font-size:9px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.5px;">${label}</span>
         <span style="font-family:var(--font-number);font-size:12px;color:var(--color-text-secondary);">${value}</span>
+      </div>
+    `;
+  }
+
+  private renderAttr(label: string, value: number, desc: string): string {
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:1px 0;">
+        <div style="display:flex;align-items:baseline;gap:4px;">
+          <span style="font-family:var(--font-display);font-size:11px;color:#e8c870;font-weight:600;min-width:28px;">${label}</span>
+          <span style="font-family:var(--font-body);font-size:8px;color:#5a5040;">${desc}</span>
+        </div>
+        <span style="font-family:var(--font-number);font-size:13px;color:var(--color-text-secondary);font-weight:600;">${value}</span>
+      </div>
+    `;
+  }
+
+  private renderDerived(label: string, total: number, color: string, base?: number, gear?: number): string {
+    let breakdown = '';
+    if (base !== undefined && gear !== undefined && gear > 0) {
+      breakdown = `<span style="font-family:var(--font-number);font-size:9px;color:#5a5040;margin-left:4px;">(${base}+${gear})</span>`;
+    }
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:1px 0;">
+        <span style="font-family:var(--font-display);font-size:9px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.5px;">${label}</span>
+        <span style="font-family:var(--font-number);font-size:13px;color:${color};font-weight:600;">${total}${breakdown}</span>
       </div>
     `;
   }

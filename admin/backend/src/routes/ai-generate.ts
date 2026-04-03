@@ -56,3 +56,35 @@ aiGenerateRouter.post('/generate-image', async (req: Request, res: Response) => 
     return res.status(502).json({ error: `Image generation failed: ${(err as Error).message}` });
   }
 });
+
+// POST /api/ai/generate-image-raw — accepts a raw prompt string, no template
+aiGenerateRouter.post('/generate-image-raw', async (req: Request, res: Response) => {
+  const { prompt } = req.body as { prompt?: unknown };
+
+  if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+    return res.status(400).json({ error: 'prompt is required and must be a non-empty string' });
+  }
+
+  const apiKey = process.env['OPENROUTER_API_KEY'];
+  if (!apiKey) {
+    log('warn', 'image_gen_raw_no_api_key', { admin: req.username });
+    return res.status(503).json({ error: 'OpenRouter API key not configured' });
+  }
+
+  try {
+    const model = await getConfigValue('image_gen_model');
+    log('info', 'image_gen_raw_started', { admin: req.username, model, promptLength: (prompt as string).length });
+
+    const base64 = await generateImage(prompt as string, model);
+
+    log('info', 'image_gen_raw_completed', { admin: req.username, model });
+    return res.json({ base64, resolved_prompt: prompt, model_used: model });
+  } catch (err) {
+    const errStr = String(err);
+    if (errStr.includes('NO_API_KEY') || errStr.includes('not configured')) {
+      return res.status(503).json({ error: 'OpenRouter API key not configured' });
+    }
+    log('error', 'image_gen_raw_failed', { admin: req.username, error: errStr });
+    return res.status(502).json({ error: `Image generation failed: ${(err as Error).message}` });
+  }
+});

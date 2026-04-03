@@ -1,4 +1,4 @@
-﻿# elarion-v2 Development Guidelines
+# elarion-v2 Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-03-02
 
@@ -52,6 +52,7 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - TypeScript 5.x (all packages) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT) (029-arena-system)
 - PostgreSQL 16 — 3 new tables (`arenas`, `arena_monsters`, `arena_participants`), 1 ALTER (`characters.arena_id`); in-memory `Map<string, PvpCombatSession>` for active fights (029-arena-system)
 - PostgreSQL 16 — ALTER `characters` table (6 new columns), ALTER `npcs` table (1 new column); migration `033_stat_allocation.sql` (030-stat-allocation)
+- PostgreSQL 16 — migration `034_stat_training.sql` (new table + ALTER) (031-stat-training)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -77,9 +78,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 031-stat-training: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 030-stat-allocation: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 029-arena-system: Added TypeScript 5.x (all packages) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
-- 027-boss-encounters: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (game backend), Phaser 3.60 + Vite 5 (game frontend), Express 4 + `multer` (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 
 
 
@@ -186,6 +187,26 @@ When adding a new NPC boolean flag (e.g., `is_disassembler`, `is_merchant`), upd
 10. **gd.design skill** — `.claude/commands/gd.design.md`: Add column to NPC table template
 
 Existing NPC roles: `is_crafter`, `is_quest_giver`, `is_squire_dismisser`, `is_disassembler`, `is_trainer`.
+
+## Adding a New Stat Training Item
+
+When adding a new training item (maps a consumable item to a stat for NPC training), use the admin API or game-entities script:
+
+1. **Create the item** via `create-item` (category: resource, stackable)
+2. **Map as training item** via `create-stat-training-item` with `item_def_id`, `stat_name`, `tier` (1-3), `base_chance` (1-100), `decay_per_level`, `npc_id`
+3. **Ensure NPC has `trainer_stat` set** via `set-npc-trainer-stat` with the stat name
+
+Key files for the stat training system:
+- **DB table** — `stat_training_items` (migration 034)
+- **DB queries** — `backend/src/db/queries/stat-training.ts`
+- **Backend handler** — `backend/src/game/training/stat-training-handler.ts` (WS: `stat-training.open`, `stat-training.attempt`)
+- **Shared protocol** — `shared/protocol/index.ts`: `StatTrainingOpenPayload`, `StatTrainingAttemptPayload`, `StatTrainingStatePayload`, `StatTrainingResultPayload`, `StatTrainingItemDto`
+- **NPC field** — `npcs.trainer_stat` (which stat the NPC trains; null = not a stat trainer)
+- **Frontend modal** — `frontend/src/ui/StatTrainingModal.ts`
+- **Admin route** — `admin/backend/src/routes/stat-training.ts` (CRUD)
+- **Scripts** — `scripts/game-data.js stat-training`, `scripts/game-entities.js create-stat-training-item`
+
+Success formula: `max(5, base_chance - character_level * decay_per_level)`. Cap: `10 * (level - 1)` per stat (shared with manual allocation).
 
 ## Adding a New Tool Type
 

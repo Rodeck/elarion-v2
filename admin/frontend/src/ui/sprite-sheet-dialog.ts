@@ -26,7 +26,7 @@ interface Region {
   key: string; // unique id: "row:col" for grid, "free:N" for free-cut
 }
 
-type CutMode = 'grid' | 'free';
+type CutMode = 'grid' | 'free' | 'stamp';
 
 // ─── Item categories (for item picker filter) ────────────────────────────────
 
@@ -67,6 +67,11 @@ export class SpriteSheetDialog {
   private drawStart: { x: number; y: number } | null = null;
   private drawCurrent: { x: number; y: number } | null = null;
   private forceSquare = true;
+
+  // Stamp mode state
+  private stampWidth = 256;
+  private stampHeight = 256;
+  private stampCursor: { x: number; y: number } | null = null;
 
   // Assignment state
   private assignments = new Map<string, number>();   // region key → entity id
@@ -124,6 +129,7 @@ export class SpriteSheetDialog {
             <div style="display:flex;border:1px solid #2d3347;border-radius:0.375rem;overflow:hidden;">
               <button id="ss-mode-grid" class="btn btn--sm btn--active" style="border-radius:0;border:none;font-size:0.75rem;">Grid</button>
               <button id="ss-mode-free" class="btn btn--sm" style="border-radius:0;border:none;border-left:1px solid #2d3347;font-size:0.75rem;">Free Cut</button>
+              <button id="ss-mode-stamp" class="btn btn--sm" style="border-radius:0;border:none;border-left:1px solid #2d3347;font-size:0.75rem;">Stamp</button>
             </div>
 
             <!-- Grid controls -->
@@ -139,6 +145,14 @@ export class SpriteSheetDialog {
               <input id="ss-force-square" type="checkbox" checked style="margin-right:4px;vertical-align:middle;" />
               Force square
             </label>
+
+            <!-- Stamp controls -->
+            <span id="ss-stamp-controls" style="display:none;">
+              <span style="font-size:0.75rem;color:#5a6280;">Stamp W:</span>
+              <input id="ss-stamp-w" type="number" min="16" value="256" style="width:70px;" />
+              <span style="font-size:0.75rem;color:#5a6280;">Stamp H:</span>
+              <input id="ss-stamp-h" type="number" min="16" value="256" style="width:70px;" />
+            </span>
 
             <span id="ss-grid-info" style="font-size:0.75rem;color:#5a6280;"></span>
             <span id="ss-assign-count" style="font-size:0.75rem;color:#9ba8d0;margin-left:auto;"></span>
@@ -185,6 +199,9 @@ export class SpriteSheetDialog {
     this.drawStart = null;
     this.drawCurrent = null;
     this.forceSquare = true;
+    this.stampWidth = 256;
+    this.stampHeight = 256;
+    this.stampCursor = null;
     this.assignments.clear();
     this.reverseMap.clear();
     this.entityNames.clear();
@@ -234,11 +251,27 @@ export class SpriteSheetDialog {
     // Mode toggle
     o.querySelector<HTMLButtonElement>('#ss-mode-grid')!.addEventListener('click', () => this.setMode('grid'));
     o.querySelector<HTMLButtonElement>('#ss-mode-free')!.addEventListener('click', () => this.setMode('free'));
+    o.querySelector<HTMLButtonElement>('#ss-mode-stamp')!.addEventListener('click', () => {
+      // Toggle: clicking stamp again goes back to free-cut
+      this.setMode(this.cutMode === 'stamp' ? 'free' : 'stamp');
+    });
 
     // Force square checkbox
     o.querySelector<HTMLInputElement>('#ss-force-square')!.addEventListener('change', (e) => {
       this.forceSquare = (e.target as HTMLInputElement).checked;
     });
+
+    // Stamp size inputs
+    const stampWInput = o.querySelector<HTMLInputElement>('#ss-stamp-w')!;
+    const stampHInput = o.querySelector<HTMLInputElement>('#ss-stamp-h')!;
+    const handleStampSizeChange = () => {
+      const w = parseInt(stampWInput.value, 10);
+      const h = parseInt(stampHInput.value, 10);
+      if (!isNaN(w) && w >= 16) this.stampWidth = w;
+      if (!isNaN(h) && h >= 16) this.stampHeight = h;
+    };
+    stampWInput.addEventListener('input', handleStampSizeChange);
+    stampHInput.addEventListener('input', handleStampSizeChange);
 
     // Cut button
     o.querySelector<HTMLButtonElement>('#ss-cut-btn')!.addEventListener('click', () => this.handleCut());
@@ -247,26 +280,39 @@ export class SpriteSheetDialog {
   private setMode(mode: CutMode): void {
     if (mode === this.cutMode) return;
 
-    // Warn about clearing assignments
-    if (this.assignments.size > 0) {
+    const wasGrid = this.cutMode === 'grid';
+    const toGrid = mode === 'grid';
+
+    // Only clear when switching to/from grid (free and stamp share regions)
+    if (wasGrid !== toGrid && this.assignments.size > 0) {
       if (!confirm(`Switching mode will clear all ${this.assignments.size} assignment(s). Continue?`)) return;
     }
 
+    if (wasGrid !== toGrid) {
+      this.assignments.clear();
+      this.reverseMap.clear();
+      this.freeRegions = [];
+      this.freeCounter = 0;
+    }
+
     this.cutMode = mode;
-    this.assignments.clear();
-    this.reverseMap.clear();
-    this.freeRegions = [];
-    this.freeCounter = 0;
 
     const o = this.overlay!;
     o.querySelector('#ss-mode-grid')!.classList.toggle('btn--active', mode === 'grid');
     o.querySelector('#ss-mode-free')!.classList.toggle('btn--active', mode === 'free');
+    o.querySelector('#ss-mode-stamp')!.classList.toggle('btn--active', mode === 'stamp');
 
     const gridControls = o.querySelector<HTMLElement>('#ss-grid-controls')!;
     gridControls.style.display = mode === 'grid' ? 'contents' : 'none';
 
+    const isFreeFamily = mode === 'free' || mode === 'stamp';
     const freeControls = o.querySelector<HTMLElement>('#ss-free-controls')!;
-    freeControls.style.display = mode === 'free' ? '' : 'none';
+    freeControls.style.display = isFreeFamily ? '' : 'none';
+
+    const stampControls = o.querySelector<HTMLElement>('#ss-stamp-controls')!;
+    stampControls.style.display = isFreeFamily ? 'contents' : 'none';
+
+    this.stampCursor = null;
 
     // Rebind canvas events
     if (this.gridCanvas) {
@@ -277,6 +323,15 @@ export class SpriteSheetDialog {
       if (mode === 'grid') {
         this.gridCanvas.style.cursor = 'crosshair';
         this.gridCanvas.addEventListener('click', (e) => this.onGridClick(e));
+      } else if (mode === 'stamp') {
+        this.gridCanvas.style.cursor = 'none';
+        this.gridCanvas.addEventListener('mousemove', (e) => this.onStampMouseMove(e));
+        this.gridCanvas.addEventListener('mouseleave', () => this.onStampMouseLeave());
+        this.gridCanvas.addEventListener('click', (e) => this.onStampClick(e));
+        this.gridCanvas.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          this.onFreeRightClick(e);
+        });
       } else {
         this.gridCanvas.style.cursor = 'crosshair';
         this.gridCanvas.addEventListener('mousedown', (e) => this.onFreeMouseDown(e));
@@ -378,6 +433,16 @@ export class SpriteSheetDialog {
       this.drawGridOverlay(ctx, w, h);
     } else {
       this.drawFreeOverlay(ctx, w, h);
+      // Stamp cursor preview
+      if (this.cutMode === 'stamp' && this.stampCursor) {
+        const sx = Math.max(0, Math.min(w - this.stampWidth, this.stampCursor.x));
+        const sy = Math.max(0, Math.min(h - this.stampHeight, this.stampCursor.y));
+        ctx.strokeStyle = 'rgba(80, 255, 150, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 3]);
+        ctx.strokeRect(sx + 0.5, sy + 0.5, this.stampWidth - 1, this.stampHeight - 1);
+        ctx.setLineDash([]);
+      }
     }
   }
 
@@ -792,8 +857,56 @@ export class SpriteSheetDialog {
     this.updateInfo();
   }
 
+  // ─── Stamp mode handlers ───────────────────────────────────────────────────
+
+  private onStampMouseMove(e: MouseEvent): void {
+    if (!this.gridCanvas || !this.image) return;
+    const pt = this.canvasToImageCoords(e);
+    // Center the stamp on cursor
+    this.stampCursor = {
+      x: Math.round(pt.x - this.stampWidth / 2),
+      y: Math.round(pt.y - this.stampHeight / 2),
+    };
+    this.drawOverlay();
+  }
+
+  private onStampMouseLeave(): void {
+    this.stampCursor = null;
+    this.drawOverlay();
+  }
+
+  private onStampClick(e: MouseEvent): void {
+    if (!this.gridCanvas || !this.image || this.cutMode !== 'stamp') return;
+    if (e.button !== 0) return;
+
+    const pt = this.canvasToImageCoords(e);
+
+    // Check if clicking on existing region → open popover
+    const hitRegion = this.findRegionAt(pt.x, pt.y);
+    if (hitRegion) {
+      this.openPopover(hitRegion.key, e.clientX, e.clientY);
+      return;
+    }
+
+    // Place stamp centered on click
+    let x = Math.round(pt.x - this.stampWidth / 2);
+    let y = Math.round(pt.y - this.stampHeight / 2);
+
+    // Clamp to image bounds
+    x = Math.max(0, Math.min(this.image.width - this.stampWidth, x));
+    y = Math.max(0, Math.min(this.image.height - this.stampHeight, y));
+
+    const key = `free:${++this.freeCounter}`;
+    this.freeRegions.push({ x, y, w: this.stampWidth, h: this.stampHeight, key });
+
+    this.drawOverlay();
+    this.updateInfo();
+  }
+
+  // ─── Shared free/stamp right-click ─────────────────────────────────────────
+
   private onFreeRightClick(e: MouseEvent): void {
-    if (this.cutMode !== 'free' || !this.gridCanvas || !this.image) return;
+    if ((this.cutMode !== 'free' && this.cutMode !== 'stamp') || !this.gridCanvas || !this.image) return;
 
     const pt = this.canvasToImageCoords(e);
     const hitRegion = this.findRegionAt(pt.x, pt.y);

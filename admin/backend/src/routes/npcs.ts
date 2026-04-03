@@ -31,6 +31,7 @@ function npcToResponse(n: Npc) {
     is_crafter: n.is_crafter,
     is_disassembler: n.is_disassembler,
     is_trainer: n.is_trainer,
+    trainer_stat: n.trainer_stat,
     created_at: n.created_at,
   };
 }
@@ -262,6 +263,35 @@ npcsRouter.put('/:id/trainer', async (req: Request, res: Response) => {
     return res.json(npcToResponse(updated!));
   } catch (err) {
     log('error', 'Failed to update NPC trainer status', { id, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── PUT /api/npcs/:id/trainer-stat ─────────────────────────────────────────
+
+const VALID_STATS = ['constitution', 'strength', 'intelligence', 'dexterity', 'toughness'];
+
+npcsRouter.put('/:id/trainer-stat', async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id!, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid NPC id' });
+
+  const { stat } = req.body as Record<string, unknown>;
+  if (stat !== null && (typeof stat !== 'string' || !VALID_STATS.includes(stat))) {
+    return res.status(400).json({ error: `stat must be null or one of: ${VALID_STATS.join(', ')}` });
+  }
+
+  try {
+    const existing = await getNpcById(id);
+    if (!existing) return res.status(404).json({ error: 'NPC not found' });
+
+    const { query } = await import('../../../../backend/src/db/connection');
+    await query('UPDATE npcs SET trainer_stat = $1 WHERE id = $2', [stat, id]);
+
+    const updated = await getNpcById(id);
+    log('info', 'Updated NPC trainer_stat', { id, stat, admin: req.username });
+    return res.json(npcToResponse(updated!));
+  } catch (err) {
+    log('error', 'Failed to update NPC trainer_stat', { id, error: String(err) });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

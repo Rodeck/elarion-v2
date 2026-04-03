@@ -177,6 +177,7 @@ export interface NpcDto {
   is_squire_dismisser: boolean;
   is_disassembler: boolean;
   is_trainer: boolean;
+  trainer_stat: string | null;
 }
 
 export interface CityMapBuilding {
@@ -590,7 +591,9 @@ export type AnyClientMessage =
   | MarketplaceCancelListingMessage
   | MarketplaceMyListingsMessage
   | MarketplaceCollectCrownsMessage
-  | MarketplaceCollectItemsMessage;
+  | MarketplaceCollectItemsMessage
+  | StatTrainingOpenMessage
+  | StatTrainingAttemptMessage;
 
 // ---------------------------------------------------------------------------
 // Inventory: shared sub-types
@@ -2433,3 +2436,51 @@ export type TrainingStateMessage    = WsMessage<TrainingStatePayload>;
 export type TrainingAllocateMessage = WsMessage<TrainingAllocatePayload>;
 export type TrainingResultMessage   = WsMessage<TrainingResultPayload>;
 export type TrainingErrorMessage    = WsMessage<TrainingErrorPayload>;
+
+// ---------------------------------------------------------------------------
+// Stat Training (consumable-item-based stat training via NPCs)
+// ---------------------------------------------------------------------------
+
+export interface StatTrainingOpenPayload {
+  npc_id: number;
+}
+
+export interface StatTrainingAttemptPayload {
+  npc_id: number;
+  item_def_id: number;
+}
+
+export interface StatTrainingItemDto {
+  item_def_id: number;
+  name: string;
+  icon_url: string | null;
+  tier: number;
+  success_chance: number;
+  owned_quantity: number;
+}
+
+export interface StatTrainingStatePayload {
+  stat_name: string;
+  current_value: number;
+  per_stat_cap: number;
+  level: number;
+  items: StatTrainingItemDto[];
+}
+
+export interface StatTrainingResultPayload {
+  success: boolean;
+  stat_name: string;
+  new_value: number;
+  message: string;
+}
+
+export interface StatTrainingErrorPayload {
+  message: string;
+}
+
+// Stat Training: message types
+export type StatTrainingOpenMessage    = WsMessage<StatTrainingOpenPayload>;
+export type StatTrainingAttemptMessage = WsMessage<StatTrainingAttemptPayload>;
+export type StatTrainingStateMessage   = WsMessage<StatTrainingStatePayload>;
+export type StatTrainingResultMessage  = WsMessage<StatTrainingResultPayload>;
+export type StatTrainingErrorMessage   = WsMessage<StatTrainingErrorPayload>;
