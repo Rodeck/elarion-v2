@@ -603,7 +603,8 @@ export type ItemCategory =
   | 'resource' | 'food' | 'heal' | 'weapon'
   | 'boots' | 'shield' | 'greaves' | 'bracer' | 'tool'
   | 'helmet' | 'chestplate'
-  | 'ring' | 'amulet';
+  | 'ring' | 'amulet'
+  | 'skill_book';
 
 export type WeaponSubtype =
   | 'one_handed' | 'two_handed' | 'dagger' | 'wand' | 'staff' | 'bow';
@@ -633,6 +634,8 @@ export interface ItemDefinitionDto {
   tool_type: string | null;
   max_durability: number | null;
   power: number | null;
+  // Skill book link (null for non-skill-books)
+  ability_id: number | null;
 }
 
 /** A single occupied inventory slot as sent to the client. */
@@ -942,6 +945,14 @@ export interface AbilityDroppedDto {
   icon_url: string | null;
 }
 
+export interface AbilityLevelStatsDto {
+  level: number;
+  effect_value: number;
+  mana_cost: number;
+  duration_turns: number;
+  cooldown_turns: number;
+}
+
 export interface OwnedAbilityDto {
   id: number;
   name: string;
@@ -954,6 +965,13 @@ export interface OwnedAbilityDto {
   cooldown_turns: number;
   priority_default: number;
   slot_type: 'auto' | 'active' | 'both';
+  // Skill progress fields (populated when skill system is active)
+  level: number;                                   // current skill level (1-5), default 1
+  points: number;                                  // points toward next level (0-99), default 0
+  points_to_next: number | null;                   // always 100 when not at max, null at level 5
+  cooldown_until: string | null;                   // ISO 8601 timestamp or null if no cooldown
+  current_level_stats: AbilityLevelStatsDto | null; // stats at current level, null if no level data
+  next_level_stats: AbilityLevelStatsDto | null;   // stats at next level, null if at max or undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -2484,3 +2502,32 @@ export type StatTrainingAttemptMessage = WsMessage<StatTrainingAttemptPayload>;
 export type StatTrainingStateMessage   = WsMessage<StatTrainingStatePayload>;
 export type StatTrainingResultMessage  = WsMessage<StatTrainingResultPayload>;
 export type StatTrainingErrorMessage   = WsMessage<StatTrainingErrorPayload>;
+
+// ---------------------------------------------------------------------------
+// Skill Book System
+// ---------------------------------------------------------------------------
+
+// Client → Server
+export interface SkillBookUsePayload {
+  slot_id: number;
+}
+
+// Server → Client
+export interface SkillBookResultPayload {
+  ability_id: number;
+  ability_name: string;
+  points_gained: number;
+  new_points: number;
+  new_level: number;
+  leveled_up: boolean;
+  cooldown_until: string;
+}
+
+export interface SkillBookErrorPayload {
+  message: string;
+}
+
+// Skill Book: message types
+export type SkillBookUseMessage    = WsMessage<SkillBookUsePayload>;
+export type SkillBookResultMessage = WsMessage<SkillBookResultPayload>;
+export type SkillBookErrorMessage  = WsMessage<SkillBookErrorPayload>;

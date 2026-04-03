@@ -58,6 +58,7 @@ export async function sendInventoryState(session: AuthenticatedSession): Promise
       tool_type: row.def_tool_type ?? null,
       max_durability: row.def_max_durability ?? null,
       power: row.def_power ?? null,
+      ability_id: row.def_ability_id ?? null,
     },
   }));
 

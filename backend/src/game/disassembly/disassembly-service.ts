@@ -72,6 +72,7 @@ function buildSlotDto(r: InventoryItemWithDefinition): InventorySlotDto {
       tool_type: r.def_tool_type ?? null,
       max_durability: r.def_max_durability ?? null,
       power: r.def_power ?? null,
+      ability_id: r.def_ability_id ?? null,
     },
   };
 }

@@ -40,6 +40,8 @@ Run via Bash: `node scripts/game-entities.js <command> '<json-data>'`
 | `create-monster-squire-loot` | Add squire loot entry to a monster | POST `/api/monsters/:id/squire-loot` |
 | `set-npc-dismisser` | Set/unset NPC squire dismisser flag | PUT `/api/npcs/:id/squire-dismisser` |
 | `set-npc-trainer` | Set/unset NPC trainer flag (stat allocation) | PUT `/api/npcs/:id/trainer` |
+| `create-skill-book` | Create a skill book item linked to an ability | POST `/api/items` (with category: skill_book) |
+| `set-ability-levels` | Define level scaling stats for an ability | PUT `/api/abilities/:id/levels` |
 | `create-fishing-loot` | Add a fishing loot entry | POST `/api/fishing-loot` |
 | `update-fishing-loot` | Update a fishing loot entry | PUT `/api/fishing-loot/:id` |
 | `delete-fishing-loot` | Delete a fishing loot entry | DELETE `/api/fishing-loot/:id` |
@@ -53,7 +55,7 @@ Run via Bash: `node scripts/game-entities.js <command> '<json-data>'`
 ```json
 {
   "name": "Iron Ore",           // required, max 64 chars
-  "category": "resource",       // required: resource|food|heal|weapon|boots|shield|greaves|bracer|tool|helmet|chestplate|ring|amulet
+  "category": "resource",       // required: resource|food|heal|weapon|boots|shield|greaves|bracer|tool|helmet|chestplate|ring|amulet|skill_book
   "description": "Raw iron",    // optional
   "stack_size": 20,             // required for resource/food/heal, forbidden otherwise
   "weapon_subtype": null,       // required for weapon: one_handed|two_handed|dagger|wand|staff|bow
@@ -328,6 +330,32 @@ Returns `{ "icon_filename": "uuid.png" }` — use this in create-npc.
   "is_trainer": true                          // required, boolean — enables stat allocation dialog
 }
 ```
+
+### create-skill-book
+```json
+{
+  "name": "Drain Life Skill Book",          // required, max 64 chars
+  "description": "Forbidden text on siphoning vitality.", // optional
+  "stack_size": 50,                          // required, positive integer
+  "ability_id": 9                            // required, positive integer — ID of the ability this book trains
+}
+```
+Creates an item with `category: skill_book` and links it to the specified ability. The ability must already exist.
+
+### set-ability-levels
+```json
+{
+  "ability_id": 9,                           // required, positive integer — references existing ability
+  "levels": [                                // required, array of 1-5 level definitions
+    { "level": 1, "effect_value": 10, "mana_cost": 8, "duration_turns": 0, "cooldown_turns": 2 },
+    { "level": 2, "effect_value": 15, "mana_cost": 10, "duration_turns": 0, "cooldown_turns": 2 },
+    { "level": 3, "effect_value": 22, "mana_cost": 12, "duration_turns": 0, "cooldown_turns": 1 },
+    { "level": 4, "effect_value": 30, "mana_cost": 14, "duration_turns": 0, "cooldown_turns": 1 },
+    { "level": 5, "effect_value": 40, "mana_cost": 16, "duration_turns": 0, "cooldown_turns": 0 }
+  ]
+}
+```
+Replaces all existing level definitions for the ability. Each level object requires: `level` (1-5), `effect_value` (integer >= 0), `mana_cost` (integer >= 0), `duration_turns` (integer >= 0), `cooldown_turns` (integer >= 0).
 
 ### create-fishing-loot
 ```json

@@ -12,10 +12,10 @@ const fs = require('fs');
 const VALID_CATEGORIES = [
   'resource', 'food', 'heal', 'weapon', 'boots', 'shield',
   'greaves', 'bracer', 'tool', 'helmet', 'chestplate',
-  'ring', 'amulet',
+  'ring', 'amulet', 'skill_book',
 ];
 const VALID_WEAPON_SUBTYPES = ['one_handed', 'two_handed', 'dagger', 'wand', 'staff', 'bow'];
-const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food']);
+const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book']);
 const DEFENCE_CATEGORIES = new Set(['boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate', 'ring', 'amulet']);
 const VALID_EFFECT_TYPES = ['damage', 'heal', 'buff', 'debuff', 'dot', 'reflect', 'drain'];
 const VALID_SLOT_TYPES = ['auto', 'active', 'both'];
@@ -165,6 +165,16 @@ function validateItem(data) {
     if (data.food_power != null && data.category !== 'food') errors.push('food_power is only allowed for food items');
     if (data.food_power != null && (!Number.isInteger(data.food_power) || data.food_power < 0)) errors.push('food_power must be a non-negative integer');
 
+    if (data.category === 'skill_book') {
+      if (data.ability_id == null) errors.push('ability_id is required for skill_book items');
+      else if (!Number.isInteger(data.ability_id) || data.ability_id < 1) errors.push('ability_id must be a positive integer');
+      if (data.attack != null) errors.push('attack is not allowed for skill_book items');
+      if (data.defence != null) errors.push('defence is not allowed for skill_book items');
+      if (data.tool_type != null) errors.push('tool_type is not allowed for skill_book items');
+    } else {
+      if (data.ability_id != null) errors.push('ability_id is only allowed for skill_book items');
+    }
+
     if (STACKABLE_CATEGORIES.has(data.category)) {
       if (data.stack_size == null) errors.push(`stack_size is required for ${data.category} items`);
       else if (!Number.isInteger(data.stack_size) || data.stack_size < 1) errors.push('stack_size must be a positive integer');
@@ -196,7 +206,10 @@ function validateMonster(data) {
 function validateMonsterLoot(data) {
   const errors = [];
   if (!data.monster_id || !Number.isInteger(data.monster_id) || data.monster_id < 1) errors.push('monster_id must be a positive integer');
-  if (!data.item_def_id || !Number.isInteger(data.item_def_id) || data.item_def_id < 1) errors.push('item_def_id must be a positive integer');
+  const hasItemId = data.item_def_id != null;
+  const hasCategory = typeof data.item_category === 'string' && data.item_category.length > 0;
+  if (hasItemId === hasCategory) errors.push('Provide exactly one of item_def_id or item_category');
+  if (hasItemId && (!Number.isInteger(data.item_def_id) || data.item_def_id < 1)) errors.push('item_def_id must be a positive integer');
   if (!data.drop_chance || !Number.isInteger(data.drop_chance) || data.drop_chance < 1 || data.drop_chance > 100) errors.push('drop_chance must be 1–100');
   const qty = data.quantity ?? 1;
   if (!Number.isInteger(qty) || qty < 1) errors.push('quantity must be a positive integer');
@@ -383,6 +396,33 @@ function validateMonsterSquireLoot(data) {
   return errors;
 }
 
+function validateSkillBook(data) {
+  const errors = [];
+  if (!data.name || typeof data.name !== 'string' || !data.name.trim()) errors.push('name is required');
+  if (data.description != null && typeof data.description !== 'string') errors.push('description must be a string');
+  if (data.stack_size == null || !Number.isInteger(data.stack_size) || data.stack_size < 1) errors.push('stack_size must be a positive integer');
+  if (data.ability_id == null || !Number.isInteger(data.ability_id) || data.ability_id < 1) errors.push('ability_id must be a positive integer');
+  return errors;
+}
+
+function validateAbilityLevels(data) {
+  const errors = [];
+  if (data.ability_id == null || !Number.isInteger(data.ability_id) || data.ability_id < 1) errors.push('ability_id must be a positive integer');
+  if (!Array.isArray(data.levels) || data.levels.length === 0) {
+    errors.push('levels must be a non-empty array');
+  } else {
+    for (let i = 0; i < data.levels.length; i++) {
+      const l = data.levels[i];
+      if (!Number.isInteger(l.level) || l.level < 1 || l.level > 5) errors.push(`levels[${i}].level must be 1–5`);
+      if (!Number.isInteger(l.effect_value) || l.effect_value < 0) errors.push(`levels[${i}].effect_value must be a non-negative integer`);
+      if (!Number.isInteger(l.mana_cost) || l.mana_cost < 0) errors.push(`levels[${i}].mana_cost must be a non-negative integer`);
+      if (!Number.isInteger(l.duration_turns) || l.duration_turns < 0) errors.push(`levels[${i}].duration_turns must be a non-negative integer`);
+      if (!Number.isInteger(l.cooldown_turns) || l.cooldown_turns < 0) errors.push(`levels[${i}].cooldown_turns must be a non-negative integer`);
+    }
+  }
+  return errors;
+}
+
 // ─── Command Handlers ─────────────────────────────────────────────────────────
 
 async function createItem(data) {
@@ -416,11 +456,10 @@ async function createMonsterLootCmd(data) {
   if (errors.length) return output('create-monster-loot', false, errors);
 
   const token = await authenticate();
-  const res = await apiPost(`/api/monsters/${data.monster_id}/loot`, {
-    item_def_id: data.item_def_id,
-    drop_chance: data.drop_chance,
-    quantity: data.quantity ?? 1,
-  }, token);
+  const payload = { drop_chance: data.drop_chance, quantity: data.quantity ?? 1 };
+  if (data.item_def_id != null) payload.item_def_id = data.item_def_id;
+  if (data.item_category) payload.item_category = data.item_category;
+  const res = await apiPost(`/api/monsters/${data.monster_id}/loot`, payload, token);
   if (res.status === 201) {
     output('create-monster-loot', true, res.data);
   } else {
@@ -764,6 +803,32 @@ async function setNpcTrainerStatCmd(data) {
   }
 }
 
+async function createSkillBookCmd(data) {
+  const errors = validateSkillBook(data);
+  if (errors.length) return output('create-skill-book', false, errors);
+
+  const token = await authenticate();
+  const res = await apiPost('/api/items', { ...data, category: 'skill_book' }, token);
+  if (res.status === 201) {
+    output('create-skill-book', true, res.data);
+  } else {
+    output('create-skill-book', false, [res.data.error || `HTTP ${res.status}`]);
+  }
+}
+
+async function setAbilityLevelsCmd(data) {
+  const errors = validateAbilityLevels(data);
+  if (errors.length) return output('set-ability-levels', false, errors);
+
+  const token = await authenticate();
+  const res = await apiPut(`/api/abilities/${data.ability_id}/levels`, { levels: data.levels }, token);
+  if (res.status === 200) {
+    output('set-ability-levels', true, res.data);
+  } else {
+    output('set-ability-levels', false, [res.data.error || `HTTP ${res.status}`]);
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 const HELP = `
@@ -790,6 +855,8 @@ Commands:
   set-npc-dismisser       Set/unset an NPC's squire dismisser flag
   set-npc-trainer-stat    Set/clear an NPC's trainer_stat (which stat they train)
   create-stat-training-item  Map an item as a stat training consumable
+  create-skill-book       Create a skill book item linked to an ability
+  set-ability-levels      Set per-level stats for an ability
   create-fishing-loot     Add a fishing loot entry (min_rod_tier, item_def_id, drop_weight)
   update-fishing-loot     Update a fishing loot entry (id, min_rod_tier, drop_weight)
   delete-fishing-loot     Delete a fishing loot entry (id)
@@ -870,6 +937,8 @@ async function main() {
       case 'set-npc-dismisser':     await setNpcDismisserCmd(data); break;
       case 'set-npc-trainer-stat':  await setNpcTrainerStatCmd(data); break;
       case 'create-stat-training-item': await createStatTrainingItemCmd(data); break;
+      case 'create-skill-book':     await createSkillBookCmd(data); break;
+      case 'set-ability-levels':    await setAbilityLevelsCmd(data); break;
       case 'create-fishing-loot':   await createFishingLootCmd(data); break;
       case 'update-fishing-loot':   await updateFishingLootCmd(data); break;
       case 'delete-fishing-loot':   await deleteFishingLootCmd(data); break;
@@ -1001,16 +1070,18 @@ async function createBossCmd(data) {
 async function createBossLootCmd(data) {
   const errors = [];
   if (data.boss_id == null || typeof data.boss_id !== 'number') errors.push('boss_id required (number)');
-  if (data.item_def_id == null || typeof data.item_def_id !== 'number') errors.push('item_def_id required (number)');
+  const hasItemId = data.item_def_id != null;
+  const hasCategory = typeof data.item_category === 'string' && data.item_category.length > 0;
+  if (hasItemId === hasCategory) errors.push('Provide exactly one of item_def_id or item_category');
+  if (hasItemId && typeof data.item_def_id !== 'number') errors.push('item_def_id must be a number');
   if (data.drop_chance == null || typeof data.drop_chance !== 'number') errors.push('drop_chance required (number 0-100)');
   if (errors.length) return output('create-boss-loot', false, errors);
 
   const token = await authenticate();
-  const res = await apiPost(`/api/bosses/${data.boss_id}/loot`, {
-    item_def_id: data.item_def_id,
-    drop_chance: data.drop_chance,
-    quantity: data.quantity || 1,
-  }, token);
+  const payload = { drop_chance: data.drop_chance, quantity: data.quantity || 1 };
+  if (hasItemId) payload.item_def_id = data.item_def_id;
+  if (hasCategory) payload.item_category = data.item_category;
+  const res = await apiPost(`/api/bosses/${data.boss_id}/loot`, payload, token);
   output('create-boss-loot', true, res);
 }
 

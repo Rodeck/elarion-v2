@@ -601,8 +601,9 @@ const MONSTERS_BASE = '/api/monsters';
 
 export interface MonsterLootEntry {
   id: number;
-  item_def_id: number;
-  item_name: string;
+  item_def_id: number | null;
+  item_category: string | null;
+  item_name: string | null;
   drop_chance: number;
   quantity: number;
   icon_url: string | null;
@@ -644,7 +645,7 @@ export async function deleteMonster(id: number): Promise<void> {
 
 export async function addMonsterLoot(
   monsterId: number,
-  data: { item_def_id: number; drop_chance: number; quantity: number },
+  data: { item_def_id?: number; item_category?: string; drop_chance: number; quantity: number },
 ): Promise<MonsterLootEntry> {
   return request<MonsterLootEntry>(`${MONSTERS_BASE}/${monsterId}/loot`, {
     method: 'POST',
@@ -917,6 +918,25 @@ export async function updateAbility(id: number, formData: FormData): Promise<Abi
 
 export async function deleteAbility(id: number): Promise<void> {
   return request<void>(`${ABILITIES_BASE}/${id}`, { method: 'DELETE' });
+}
+
+export interface AbilityLevelRow {
+  level: number;
+  effect_value: number;
+  mana_cost: number;
+  duration_turns: number;
+  cooldown_turns: number;
+}
+
+export async function getAbilityLevels(abilityId: number): Promise<AbilityLevelRow[]> {
+  return request<AbilityLevelRow[]>(`${ABILITIES_BASE}/${abilityId}/levels`);
+}
+
+export async function updateAbilityLevels(abilityId: number, levels: AbilityLevelRow[]): Promise<AbilityLevelRow[]> {
+  return request<AbilityLevelRow[]>(`${ABILITIES_BASE}/${abilityId}/levels`, {
+    method: 'PUT',
+    body: JSON.stringify({ levels }),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1370,8 +1390,9 @@ export interface BossAbilityEntry {
 
 export interface BossLootEntry {
   id: number;
-  item_def_id: number;
-  item_name: string;
+  item_def_id: number | null;
+  item_category: string | null;
+  item_name: string | null;
   drop_chance: number;
   quantity: number;
   icon_url: string | null;
@@ -1466,7 +1487,7 @@ export async function listBossLoot(bossId: number): Promise<BossLootEntry[]> {
 
 export async function addBossLootApi(
   bossId: number,
-  data: { item_def_id: number; drop_chance: number; quantity: number },
+  data: { item_def_id?: number; item_category?: string; drop_chance: number; quantity: number },
 ): Promise<BossLootEntry> {
   return request<BossLootEntry>(`${BOSSES_BASE}/${bossId}/loot`, {
     method: 'POST',

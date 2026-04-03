@@ -327,6 +327,10 @@ export class LeftPanel {
     this.inventoryPanel.setDragEnabled(enabled);
   }
 
+  setOnUseSkillBook(cb: (slotId: number) => void): void {
+    this.inventoryPanel.setOnUseSkillBook(cb);
+  }
+
   /** Returns the bottom edge of the tab bar (for positioning the expanded stats panel). */
   getTabsBottom(): number {
     return this.tabsEl.getBoundingClientRect().bottom;

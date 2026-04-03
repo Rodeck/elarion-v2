@@ -516,9 +516,16 @@ bossesRouter.post('/:id/loot', async (req: Request, res: Response) => {
   const bossId = parseInt(req.params.id!, 10);
   if (isNaN(bossId)) return res.status(400).json({ error: 'Invalid boss id' });
 
-  const { item_def_id, drop_chance, quantity } = req.body as Record<string, unknown>;
+  const { item_def_id, item_category, drop_chance, quantity } = req.body as Record<string, unknown>;
 
-  if (!Number.isInteger(item_def_id) || (item_def_id as number) <= 0) {
+  // Exactly one of item_def_id or item_category must be provided
+  const hasItemId = item_def_id != null;
+  const hasCategory = typeof item_category === 'string' && item_category.length > 0;
+  if (hasItemId === hasCategory) {
+    return res.status(400).json({ error: 'Provide exactly one of item_def_id or item_category' });
+  }
+
+  if (hasItemId && (!Number.isInteger(item_def_id) || (item_def_id as number) <= 0)) {
     return res.status(400).json({ error: 'item_def_id must be a positive integer' });
   }
   const dropChance = Number(drop_chance);
@@ -530,10 +537,12 @@ bossesRouter.post('/:id/loot', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'quantity must be a positive integer' });
   }
 
-  // Validate item exists
-  const itemRow = await query<{ id: number }>('SELECT id FROM item_definitions WHERE id = $1', [item_def_id]);
-  if (itemRow.rows.length === 0) {
-    return res.status(400).json({ error: 'item_def_id references a non-existent item' });
+  // Validate item exists (only when specific item)
+  if (hasItemId) {
+    const itemRow = await query<{ id: number }>('SELECT id FROM item_definitions WHERE id = $1', [item_def_id]);
+    if (itemRow.rows.length === 0) {
+      return res.status(400).json({ error: 'item_def_id references a non-existent item' });
+    }
   }
 
   // Validate boss exists
@@ -541,19 +550,23 @@ bossesRouter.post('/:id/loot', async (req: Request, res: Response) => {
   if (!boss) return res.status(404).json({ error: 'Boss not found' });
 
   try {
-    await addBossLoot(bossId, item_def_id as number, dropChance, qty);
-    // Re-fetch with join data
-    const loot = await getBossLoot(bossId);
-    const added = loot.find((l) => l.item_def_id === (item_def_id as number));
-    log('info', 'Added boss loot', { bossId, item_def_id, admin: req.username });
-    return res.status(201).json(added ? {
-      id: added.id,
-      item_def_id: added.item_def_id,
-      item_name: added.item_name,
-      drop_chance: added.drop_chance,
-      quantity: added.quantity,
-      icon_url: added.icon_filename ? `/item-icons/${added.icon_filename}` : null,
-    } : { item_def_id, drop_chance: dropChance, quantity: qty });
+    const entry = await addBossLoot(
+      bossId,
+      hasItemId ? (item_def_id as number) : null,
+      dropChance,
+      qty,
+      hasCategory ? (item_category as string) : null,
+    );
+    log('info', 'Added boss loot', { bossId, item_def_id: entry.item_def_id, item_category: entry.item_category, admin: req.username });
+    return res.status(201).json({
+      id: entry.id,
+      item_def_id: entry.item_def_id,
+      item_category: entry.item_category,
+      item_name: entry.item_name,
+      drop_chance: entry.drop_chance,
+      quantity: entry.quantity,
+      icon_url: entry.icon_filename ? `/item-icons/${entry.icon_filename}` : null,
+    });
   } catch (err) {
     log('error', 'Failed to add boss loot', { bossId, error: String(err) });
     return res.status(500).json({ error: 'Internal server error' });

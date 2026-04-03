@@ -303,12 +303,12 @@ export class MonsterManager {
           <div class="loot-entry-icon">
             ${l.icon_url ? `<img src="${l.icon_url}" alt="" />` : ''}
           </div>
-          <span class="loot-entry-name">${this.esc(l.item_name)}</span>
+          <span class="loot-entry-name">${l.item_category ? `Random ${l.item_category.replace(/_/g, ' ').replace(/\b\w/g, (ch: string) => ch.toUpperCase())}` :this.esc(l.item_name ?? 'Unknown')}</span>
           <span class="loot-entry-meta">${l.drop_chance}% × ${l.quantity}</span>
           <button class="btn btn--sm btn--danger" data-loot-id="${l.id}" style="padding:0.15rem 0.45rem;">✕</button>
         `;
         row.querySelector('button')!.addEventListener('click', async () => {
-          if (!confirm(`Remove "${l.item_name}" from loot?`)) return;
+          if (!confirm(`Remove "${l.item_category ? `Random ${l.item_category.replace(/_/g, ' ').replace(/\b\w/g, (ch: string) => ch.toUpperCase())}` :l.item_name}" from loot?`)) return;
           try {
             await deleteMonsterLoot(monsterId, l.id);
             const full = await getMonster(monsterId);
@@ -321,17 +321,38 @@ export class MonsterManager {
       }
     }
 
-    // Add loot entry (card-level inline form)
+    // Add loot entry (card-level inline form) with item/category toggle
+    const LOOT_CATEGORIES: [string, string][] = [
+      ['resource', 'Resource'], ['food', 'Food'], ['heal', 'Heal'], ['weapon', 'Weapon'],
+      ['boots', 'Boots'], ['shield', 'Shield'], ['greaves', 'Greaves'], ['bracer', 'Bracer'],
+      ['tool', 'Tool'], ['helmet', 'Helmet'], ['chestplate', 'Chestplate'],
+      ['ring', 'Ring'], ['amulet', 'Amulet'], ['skill_book', 'Skill Book'],
+    ];
+    const itemOptions = this.items.map((i) => `<option value="${i.id}">${this.esc(i.name)}</option>`).join('');
+    const catOptions = LOOT_CATEGORIES.map(([val, label]) => `<option value="${val}">${label}</option>`).join('');
+
+    const modeArea = document.createElement('div');
+    modeArea.style.cssText = 'display:flex;gap:6px;align-items:center;margin-top:0.5rem;';
+    modeArea.innerHTML = `<label style="font-size:0.65rem;color:#5a6280;">Drop type:</label>
+      <select class="card-loot-mode" style="font-size:0.75rem;">
+        <option value="item">Specific Item</option>
+        <option value="category">Random from Category</option>
+      </select>`;
+    section.appendChild(modeArea);
+
     const addArea = document.createElement('div');
     addArea.className = 'loot-add-row';
-    const itemOptions = this.items.map((i) => `<option value="${i.id}">${this.esc(i.name)}</option>`).join('');
     addArea.innerHTML = `
-      <div class="loot-field loot-field--item">
+      <div class="loot-field loot-field--item loot-item-wrap">
         <label>Item</label>
         <select class="card-loot-item">
           <option value="">— select —</option>
           ${itemOptions}
         </select>
+      </div>
+      <div class="loot-field loot-field--item loot-cat-wrap" style="display:none;">
+        <label>Category</label>
+        <select class="card-loot-cat">${catOptions}</select>
       </div>
       <div class="loot-field loot-field--num">
         <label>Chance %</label>
@@ -343,18 +364,35 @@ export class MonsterManager {
       </div>
       <button class="btn btn--secondary card-loot-add-btn" style="flex-shrink:0;white-space:nowrap;">Add</button>
     `;
+
+    const modeSel = modeArea.querySelector<HTMLSelectElement>('.card-loot-mode')!;
+    const itemWrap = addArea.querySelector<HTMLElement>('.loot-item-wrap')!;
+    const catWrapEl = addArea.querySelector<HTMLElement>('.loot-cat-wrap')!;
+    modeSel.addEventListener('change', () => {
+      const isCat = modeSel.value === 'category';
+      itemWrap.style.display = isCat ? 'none' : '';
+      catWrapEl.style.display = isCat ? '' : 'none';
+    });
+
     addArea.querySelector<HTMLButtonElement>('.card-loot-add-btn')!.addEventListener('click', async () => {
-      const itemSel = addArea.querySelector<HTMLSelectElement>('.card-loot-item')!;
       const chanceEl = addArea.querySelector<HTMLInputElement>('.card-loot-chance')!;
       const qtyEl = addArea.querySelector<HTMLInputElement>('.card-loot-qty')!;
-      const itemDefId = parseInt(itemSel.value, 10);
       const dropChance = parseInt(chanceEl.value, 10);
       const quantity = parseInt(qtyEl.value, 10);
-      if (isNaN(itemDefId) || itemDefId <= 0) { alert('Please select an item.'); return; }
       if (isNaN(dropChance) || dropChance < 1 || dropChance > 100) { alert('Drop chance must be 1–100.'); return; }
       if (isNaN(quantity) || quantity < 1) { alert('Quantity must be ≥ 1.'); return; }
+
+      const isCat = modeSel.value === 'category';
       try {
-        await addMonsterLoot(monsterId, { item_def_id: itemDefId, drop_chance: dropChance, quantity });
+        if (isCat) {
+          const cat = addArea.querySelector<HTMLSelectElement>('.card-loot-cat')!.value;
+          if (!cat) { alert('Select a category.'); return; }
+          await addMonsterLoot(monsterId, { item_category: cat, drop_chance: dropChance, quantity });
+        } else {
+          const itemDefId = parseInt(addArea.querySelector<HTMLSelectElement>('.card-loot-item')!.value, 10);
+          if (isNaN(itemDefId) || itemDefId <= 0) { alert('Please select an item.'); return; }
+          await addMonsterLoot(monsterId, { item_def_id: itemDefId, drop_chance: dropChance, quantity });
+        }
         const full = await getMonster(monsterId);
         this.renderLootInCard(section, full.loot ?? [], monsterId);
       } catch (err) {
@@ -485,12 +523,12 @@ export class MonsterManager {
             <div class="loot-entry-icon">
               ${l.icon_url ? `<img src="${l.icon_url}" alt="" />` : ''}
             </div>
-            <span class="loot-entry-name">${this.esc(l.item_name)}</span>
+            <span class="loot-entry-name">${l.item_category ? `Random ${l.item_category.replace(/_/g, ' ').replace(/\b\w/g, (ch: string) => ch.toUpperCase())}` :this.esc(l.item_name ?? 'Unknown')}</span>
             <span class="loot-entry-meta">${l.drop_chance}% × ${l.quantity}</span>
             <button class="btn btn--sm btn--danger" data-loot-id="${l.id}" style="padding:0.15rem 0.45rem;">✕</button>
           `;
           row.querySelector('button')!.addEventListener('click', async () => {
-            if (!confirm(`Remove "${l.item_name}" from loot?`)) return;
+            if (!confirm(`Remove "${l.item_category ? `Random ${l.item_category.replace(/_/g, ' ').replace(/\b\w/g, (ch: string) => ch.toUpperCase())}` :l.item_name}" from loot?`)) return;
             try {
               await deleteMonsterLoot(monsterId, l.id);
               this.renderFormLootSection(monsterId);

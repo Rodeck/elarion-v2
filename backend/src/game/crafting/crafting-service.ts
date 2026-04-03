@@ -82,6 +82,7 @@ export async function buildRecipeDto(
       tool_type: outputItem.tool_type ?? null,
       max_durability: outputItem.max_durability ?? null,
       power: outputItem.power ?? null,
+      ability_id: outputItem.ability_id ?? null,
     },
     output_quantity: recipe.output_quantity,
     cost_crowns: recipe.cost_crowns,

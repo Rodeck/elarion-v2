@@ -5,7 +5,7 @@ import type { InventorySlotDto } from '../../../shared/protocol/index';
 const CATEGORY_GROUPS: Record<string, string[]> = {
   weapon:      ['weapon'],
   armor:       ['armor', 'boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate'],
-  consumable:  ['consumable', 'food', 'heal', 'potion'],
+  consumable:  ['consumable', 'food', 'heal', 'potion', 'skill_book'],
   resource:    ['resource'],
   tool:        ['tool'],
 };
@@ -13,6 +13,7 @@ const CATEGORY_GROUPS: Record<string, string[]> = {
 export class InventoryPanel {
   private container: HTMLElement;
   private onDeleteItem: (slotId: number) => void;
+  private onUseSkillBook: ((slotId: number) => void) | null = null;
   private slots: InventorySlotDto[] = [];
   private capacity: number = 20;
   private currentCategory: string = 'all';
@@ -200,13 +201,30 @@ export class InventoryPanel {
       'cursor:pointer;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:2px;' +
       'transition:border-color 0.15s,background 0.15s;';
 
+    let tip: HTMLElement | null = null;
     cell.addEventListener('mouseenter', () => {
       cell.style.borderColor = '#a07830';
       cell.style.background = '#2f2820';
+      tip = document.createElement('div');
+      tip.className = 'inv-tooltip';
+      tip.textContent = slot.definition.name;
+      tip.style.cssText =
+        'position:fixed;z-index:999;pointer-events:none;' +
+        'background:linear-gradient(180deg,#1e1a14 0%,#151210 100%);' +
+        'border:1px solid #5a4a2a;border-radius:3px;' +
+        'padding:3px 8px;' +
+        "font-family:'Cinzel',serif;font-size:11px;color:#d4a84b;" +
+        'white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.6);';
+      document.body.appendChild(tip);
+      const rect = cell.getBoundingClientRect();
+      tip.style.left = `${rect.left + rect.width / 2 - tip.offsetWidth / 2}px`;
+      tip.style.top = `${rect.top - tip.offsetHeight - 4}px`;
     });
     cell.addEventListener('mouseleave', () => {
       cell.style.borderColor = '#5a4a2a';
       cell.style.background = '#252119';
+      tip?.remove();
+      tip = null;
     });
 
     if (slot.definition.icon_url) {
@@ -318,6 +336,30 @@ export class InventoryPanel {
       this.onDeleteItem(slot.slot_id);
     });
 
+    // "Use" button for skill books
+    if (def.category === 'skill_book' && this.onUseSkillBook) {
+      const useBtn = document.createElement('button');
+      useBtn.textContent = 'Read';
+      useBtn.style.cssText =
+        'width:100%;padding:6px 0;margin-top:6px;font-family:Cinzel,serif;font-size:13px;' +
+        'background:#2a2210;border:1px solid #d4a84b;color:#d4a84b;cursor:pointer;border-radius:2px;' +
+        'letter-spacing:0.04em;transition:background 0.15s,color 0.15s;';
+      useBtn.addEventListener('mouseenter', () => {
+        useBtn.style.background = '#3a3218';
+        useBtn.style.color = '#f0c060';
+      });
+      useBtn.addEventListener('mouseleave', () => {
+        useBtn.style.background = '#2a2210';
+        useBtn.style.color = '#d4a84b';
+      });
+      useBtn.addEventListener('click', () => {
+        useBtn.disabled = true;
+        useBtn.style.opacity = '0.5';
+        this.onUseSkillBook!(slot.slot_id);
+      });
+      this.detailEl.appendChild(useBtn);
+    }
+
     this.detailEl.style.display = '';
   }
 
@@ -347,6 +389,9 @@ export class InventoryPanel {
   }
 
   private resolveDisplayCategory(dbCategory: string): string {
+    // Specific display labels for categories that have underscores or need custom names
+    const customLabels: Record<string, string> = { skill_book: 'Skill Book' };
+    if (customLabels[dbCategory]) return customLabels[dbCategory];
     for (const [display, values] of Object.entries(CATEGORY_GROUPS)) {
       if (values.includes(dbCategory)) {
         return display.charAt(0).toUpperCase() + display.slice(1);
@@ -366,6 +411,10 @@ export class InventoryPanel {
   setDragEnabled(enabled: boolean): void {
     this.dragEnabled = enabled;
     this.renderInventory(this.slots, this.capacity);
+  }
+
+  setOnUseSkillBook(cb: (slotId: number) => void): void {
+    this.onUseSkillBook = cb;
   }
 
   getSlots(): InventorySlotDto[] {

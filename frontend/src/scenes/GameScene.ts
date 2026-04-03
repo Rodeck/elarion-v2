@@ -253,6 +253,9 @@ export class GameScene extends Phaser.Scene {
         this.client.send('loadout:update', { slot_name: slotName, ability_id: abilityId, priority });
       },
     );
+    this.leftPanel.setOnUseSkillBook((slotId) => {
+      this.client.send('skill-book.use', { slot_id: slotId });
+    });
 
     const buildingSlot = document.getElementById('building-panel-slot')!;
     this.buildingPanel = new BuildingPanel(buildingSlot, (payload) => {
@@ -1087,6 +1090,18 @@ export class GameScene extends Phaser.Scene {
     });
     this.client.on<StatTrainingErrorPayload>('stat-training.error', (payload) => {
       this.statTrainingModal.handleError(payload.message);
+    });
+
+    // Skill book handlers
+    this.client.on<{ ability_name: string; points_gained: number; leveled_up: boolean; new_level: number }>('skill-book.result', (payload) => {
+      let msg = `${payload.ability_name}: +${payload.points_gained} points`;
+      if (payload.leveled_up) {
+        msg += ` — LEVEL UP! ${payload.ability_name} is now level ${payload.new_level}`;
+      }
+      this.chatBox.addSystemMessage(msg);
+    });
+    this.client.on<{ message: string }>('skill-book.error', (payload) => {
+      this.chatBox.addSystemMessage(payload.message);
     });
 
     // Rankings handler

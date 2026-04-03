@@ -1,5 +1,6 @@
 import { getMonsterById } from '../../db/queries/monsters';
 import { getLootByMonsterId } from '../../db/queries/monster-loot';
+import { getRandomItemByCategory } from '../../db/queries/inventory';
 import { getEncounterTable } from '../../db/queries/encounter-tables';
 import { findByAccountId } from '../../db/queries/characters';
 import { awardXp } from '../progression/xp-service';
@@ -152,12 +153,25 @@ export async function rollNightEncounter(
     const lootTable = await getLootByMonsterId(monster.id);
     for (const entry of lootTable) {
       if (Math.random() * 100 < entry.drop_chance) {
-        await grantItemToCharacter(session, character.id, entry.item_def_id, entry.quantity);
+        let itemDefId = entry.item_def_id;
+        let itemName = entry.item_name;
+        let iconFilename = entry.icon_filename;
+
+        if (!itemDefId && entry.item_category) {
+          const picked = await getRandomItemByCategory(entry.item_category);
+          if (!picked) continue;
+          itemDefId = picked.id;
+          itemName = picked.name;
+          iconFilename = picked.icon_filename;
+        }
+        if (!itemDefId) continue;
+
+        await grantItemToCharacter(session, character.id, itemDefId, entry.quantity);
         itemsDropped.push({
-          item_def_id: entry.item_def_id,
-          name: entry.item_name,
+          item_def_id: itemDefId,
+          name: itemName ?? 'Unknown',
           quantity: entry.quantity,
-          icon_url: buildItemIconUrl(entry.icon_filename),
+          icon_url: buildItemIconUrl(iconFilename),
         });
       }
     }

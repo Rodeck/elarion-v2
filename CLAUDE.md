@@ -1,4 +1,4 @@
-# elarion-v2 Development Guidelines
+﻿# elarion-v2 Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-03-02
 
@@ -53,6 +53,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - PostgreSQL 16 — 3 new tables (`arenas`, `arena_monsters`, `arena_participants`), 1 ALTER (`characters.arena_id`); in-memory `Map<string, PvpCombatSession>` for active fights (029-arena-system)
 - PostgreSQL 16 — ALTER `characters` table (6 new columns), ALTER `npcs` table (1 new column); migration `033_stat_allocation.sql` (030-stat-allocation)
 - PostgreSQL 16 — migration `034_stat_training.sql` (new table + ALTER) (031-stat-training)
+- TypeScript 5.x (frontend, backend, shared, admin) + Phaser 3.60 (frontend), Node.js 20 LTS + ws (backend), Express 4 (admin backend), pg (PostgreSQL client), jose (JWT), Vite 5 (frontends) (032-skill-development)
+- PostgreSQL 16 — migration `035_skill_development.sql` (new tables + ALTER) (032-skill-development)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -78,9 +80,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 032-skill-development: Added TypeScript 5.x (frontend, backend, shared, admin) + Phaser 3.60 (frontend), Node.js 20 LTS + ws (backend), Express 4 (admin backend), pg (PostgreSQL client), jose (JWT), Vite 5 (frontends)
 - 031-stat-training: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 - 030-stat-allocation: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
-- 029-arena-system: Added TypeScript 5.x (all packages) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 
 
 
@@ -148,6 +150,26 @@ When adding a new equipment slot (e.g., `'ring'`, `'amulet'`), update these loca
 
 Combat stats (`computeCombatStats` in `combat-stats-service.ts`) and effective stats queries aggregate ALL equipped items generically — no changes needed there.
 
+## Adding a New Skill Book
+
+When adding a new skill book (linking a consumable item to an ability for skill leveling):
+
+1. **Create the skill book item** via `create-skill-book` with `name`, `description`, `stack_size`, and `ability_id`
+2. **Define level stats** via `set-ability-levels` with `ability_id` and `levels` array (5 levels with effect_value, mana_cost, duration_turns, cooldown_turns)
+3. **Add to boss loot tables** via admin panel or `game-entities` script
+4. **Add to expedition rewards** in high-tier expedition building action configs
+
+Key files for the skill development system:
+- **DB tables** — `ability_levels`, `character_ability_progress` (migration 035)
+- **DB queries** — `backend/src/db/queries/ability-levels.ts`, `backend/src/db/queries/ability-progress.ts`
+- **Backend handler** — `backend/src/game/skill/skill-book-handler.ts` (WS: `skill-book.use`)
+- **Shared protocol** — `shared/protocol/index.ts`: `SkillBookUsePayload`, `SkillBookResultPayload`, `SkillBookErrorPayload`, `AbilityLevelStatsDto`
+- **Frontend modal** — `frontend/src/ui/SkillDetailModal.ts`
+- **Frontend loadout** — `frontend/src/ui/LoadoutPanel.ts` (level badges, progress bars, cooldown timers)
+- **Admin routes** — `admin/backend/src/routes/abilities.ts` (GET/PUT /:id/levels)
+- **Admin UI** — `admin/frontend/src/ui/ability-manager.ts` (modal with level stats editor)
+- **Scripts** — `scripts/game-data.js ability-levels`, `scripts/game-entities.js create-skill-book`, `scripts/game-entities.js set-ability-levels`
+
 ## Adding a New Item Category
 
 Update these locations:
@@ -157,6 +179,8 @@ Update these locations:
 3. **game-entities script** — `scripts/game-entities.js`: Add to `VALID_CATEGORIES` array
 4. **game-entities skill** — `.claude/commands/game-entities.md`: Update `create-item` docs
 5. **Admin frontend** — If category is stackable, check `STACKABLE_CATEGORIES` in the script
+
+Existing categories: `resource`, `food`, `heal`, `weapon`, `boots`, `shield`, `greaves`, `bracer`, `tool`, `helmet`, `chestplate`, `ring`, `amulet`, `skill_book`.
 
 ## Adding a New Quest Reward Type
 

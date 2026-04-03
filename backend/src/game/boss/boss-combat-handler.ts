@@ -7,9 +7,10 @@
 
 import crypto from 'crypto';
 import { log } from '../../logger';
+import { config } from '../../config';
 import { sendToSession } from '../../websocket/server';
 import { findByAccountId } from '../../db/queries/characters';
-import { getInventoryWithDefinitions, updateInventoryQuantity, deleteInventoryItem } from '../../db/queries/inventory';
+import { getInventoryWithDefinitions, updateInventoryQuantity, deleteInventoryItem, getRandomItemByCategory } from '../../db/queries/inventory';
 import { computeCombatStats } from '../combat/combat-stats-service';
 import { getCharacterLoadout, setCharacterInCombat } from '../../db/queries/loadouts';
 import { awardXp } from '../progression/xp-service';
@@ -465,11 +466,25 @@ async function endCombat(cs: BossCombatSession, outcome: 'win' | 'loss'): Promis
     for (const entry of loot) {
       const roll = Math.random() * 100;
       if (roll < entry.drop_chance) {
-        await grantItemToCharacter(cs.session, cs.characterId, entry.item_def_id, entry.quantity);
+        let itemDefId = entry.item_def_id;
+        let itemName = entry.item_name ?? 'Unknown';
+        let iconFilename = entry.icon_filename;
+
+        // Category-based loot: pick a random item from the category
+        if (!itemDefId && entry.item_category) {
+          const picked = await getRandomItemByCategory(entry.item_category);
+          if (!picked) continue;
+          itemDefId = picked.id;
+          itemName = picked.name;
+          iconFilename = picked.icon_filename;
+        }
+        if (!itemDefId) continue;
+
+        await grantItemToCharacter(cs.session, cs.characterId, itemDefId, entry.quantity);
         itemsDropped.push({
-          item_def_id: entry.item_def_id,
-          name: entry.item_name ?? 'Unknown',
-          icon_url: entry.icon_filename ? `/assets/items/icons/${entry.icon_filename}` : null,
+          item_def_id: itemDefId,
+          name: itemName,
+          icon_url: iconFilename ? `${config.adminBaseUrl}/item-icons/${iconFilename}` : null,
           quantity: entry.quantity,
         });
       }

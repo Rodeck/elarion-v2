@@ -12,14 +12,14 @@ import { openItemPicker, resolveItemName } from './item-picker';
 const VALID_CATEGORIES = [
   'resource', 'food', 'heal', 'weapon',
   'helmet', 'chestplate', 'boots', 'shield', 'greaves', 'bracer', 'tool',
-  'ring', 'amulet',
+  'ring', 'amulet', 'skill_book',
 ] as const;
 
 const VALID_WEAPON_SUBTYPES = [
   'one_handed', 'two_handed', 'dagger', 'wand', 'staff', 'bow',
 ] as const;
 
-const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food']);
+const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book']);
 const DEFENCE_CATEGORIES = new Set(['helmet', 'chestplate', 'boots', 'shield', 'greaves', 'bracer', 'ring', 'amulet']);
 
 type ItemCategory = typeof VALID_CATEGORIES[number];
@@ -205,6 +205,11 @@ export class ItemModal {
         <input id="modal-stack" type="number" min="1" style="width:120px" value="${item?.stack_size ?? ''}" />
       </div>
 
+      <div id="modal-field-ability_id" style="display:none">
+        <label for="modal-ability-id">Ability ID *</label>
+        <input id="modal-ability-id" type="number" min="1" style="width:120px" placeholder="Ability ID" value="${item?.ability_id ?? ''}" />
+      </div>
+
       <div id="modal-field-tool_type" style="display:none">
         <label for="modal-tool-type">Tool Type *</label>
         <select id="modal-tool-type">
@@ -308,6 +313,7 @@ export class ItemModal {
     show('heal_power', category === 'heal');
     show('food_power', category === 'food');
     show('stack_size', category !== '' && STACKABLE_CATEGORIES.has(category));
+    show('ability_id', category === 'skill_book');
     show('tool_type', category === 'tool');
     show('max_durability', category === 'tool');
     show('power', category === 'tool');
@@ -518,6 +524,10 @@ export class ItemModal {
     const toolType = overlay.querySelector<HTMLSelectElement>('#modal-tool-type')?.value;
     if (category === 'tool' && toolType) formData.append('tool_type', toolType);
 
+    if (category === 'skill_book') {
+      appendNum('#modal-ability-id', 'ability_id');
+    }
+
     const disassemblyCost = overlay.querySelector<HTMLInputElement>('#modal-disassembly-cost')?.value;
     formData.append('disassembly_cost', disassemblyCost || '0');
 
@@ -564,6 +574,7 @@ export class ItemModal {
       resource: 'Resource', food: 'Food', heal: 'Heal', weapon: 'Weapon',
       helmet: 'Helmet', chestplate: 'Chestplate', boots: 'Boots', shield: 'Shield',
       greaves: 'Greaves', bracer: 'Bracer', tool: 'Tool', ring: 'Ring', amulet: 'Amulet',
+      skill_book: 'Skill Book',
     };
     return labels[category] ?? category;
   }

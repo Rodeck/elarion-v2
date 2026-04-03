@@ -534,7 +534,11 @@ export class BossManager {
         } else {
           row.innerHTML += `<div style="width:24px;height:24px;background:#1a1e2e;border-radius:3px;display:flex;align-items:center;justify-content:center;color:#3d4262;font-size:0.55rem;">?</div>`;
         }
-        row.innerHTML += `<span>${this.esc(l.item_name ?? 'Unknown')}</span> <span style="color:#5a6280;font-size:0.7rem;">${l.drop_chance}% x${l.quantity}</span>`;
+        const catLabel = (c: string) => c.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
+        const label = l.item_category
+          ? `Random ${catLabel(l.item_category)}`
+          : this.esc(l.item_name ?? 'Unknown');
+        row.innerHTML += `<span>${label}</span> <span style="color:#5a6280;font-size:0.7rem;">${l.drop_chance}% x${l.quantity}</span>`;
         const rmBtn = this.el('button', { class: 'btn btn--sm btn--danger', style: 'margin-left:auto;padding:1px 6px;font-size:0.65rem;' }, 'X');
         rmBtn.addEventListener('click', () => void this.handleRemoveLoot(boss.id, l.id, wrap));
         row.appendChild(rmBtn);
@@ -542,8 +546,26 @@ export class BossManager {
       }
     }
 
-    // Add form
-    const addRow = this.el('div', { style: 'display:flex;gap:6px;margin-top:0.5rem;align-items:end;' });
+    // Add form — toggle between specific item and random category
+    const LOOT_CATEGORIES: [string, string][] = [
+      ['resource', 'Resource'], ['food', 'Food'], ['heal', 'Heal'], ['weapon', 'Weapon'],
+      ['boots', 'Boots'], ['shield', 'Shield'], ['greaves', 'Greaves'], ['bracer', 'Bracer'],
+      ['tool', 'Tool'], ['helmet', 'Helmet'], ['chestplate', 'Chestplate'],
+      ['ring', 'Ring'], ['amulet', 'Amulet'], ['skill_book', 'Skill Book'],
+    ];
+
+    const modeRow = this.el('div', { style: 'display:flex;gap:8px;margin-top:0.75rem;align-items:center;' });
+    const modeLabel = this.el('span', { style: 'font-size:0.65rem;color:#5a6280;' }, 'Drop type:');
+    const modeSelect = document.createElement('select');
+    modeSelect.style.cssText = 'font-size:0.75rem;';
+    modeSelect.innerHTML = `<option value="item">Specific Item</option><option value="category">Random from Category</option>`;
+    modeRow.appendChild(modeLabel);
+    modeRow.appendChild(modeSelect);
+    wrap.appendChild(modeRow);
+
+    const addRow = this.el('div', { style: 'display:flex;gap:6px;margin-top:0.35rem;align-items:end;' });
+
+    // Item select
     const selectWrap = this.el('div', { style: 'flex:1;' });
     selectWrap.innerHTML = `<label style="font-size:0.65rem;color:#5a6280;">Item</label>`;
     const select = document.createElement('select');
@@ -554,6 +576,14 @@ export class BossManager {
       ).join('');
     selectWrap.appendChild(select);
 
+    // Category select (hidden by default)
+    const catWrap = this.el('div', { style: 'flex:1;display:none;' });
+    catWrap.innerHTML = `<label style="font-size:0.65rem;color:#5a6280;">Category</label>`;
+    const catSelect = document.createElement('select');
+    catSelect.style.cssText = 'width:100%;font-size:0.75rem;';
+    catSelect.innerHTML = LOOT_CATEGORIES.map(([val, label]) => `<option value="${val}">${label}</option>`).join('');
+    catWrap.appendChild(catSelect);
+
     const iconPreview = this.el('div', { style: 'width:24px;height:24px;flex-shrink:0;' });
     select.addEventListener('change', () => {
       const opt = select.selectedOptions[0];
@@ -563,6 +593,13 @@ export class BossManager {
         : '';
     });
 
+    modeSelect.addEventListener('change', () => {
+      const isCat = modeSelect.value === 'category';
+      selectWrap.style.display = isCat ? 'none' : '';
+      catWrap.style.display = isCat ? '' : 'none';
+      iconPreview.style.display = isCat ? 'none' : '';
+    });
+
     const chanceWrap = this.el('div', { style: 'width:50px;' });
     chanceWrap.innerHTML = `<label style="font-size:0.65rem;color:#5a6280;">%</label><input type="number" min="1" max="100" value="50" style="width:100%;font-size:0.75rem;" />`;
     const qtyWrap = this.el('div', { style: 'width:40px;' });
@@ -570,17 +607,26 @@ export class BossManager {
 
     const addBtn = this.el('button', { class: 'btn btn--sm btn--primary', style: 'padding:4px 10px;font-size:0.7rem;' }, 'Add');
     addBtn.addEventListener('click', async () => {
-      const itemDefId = parseInt(select.value, 10);
       const dropChance = parseInt((chanceWrap.querySelector('input') as HTMLInputElement).value, 10);
       const quantity = parseInt((qtyWrap.querySelector('input') as HTMLInputElement).value, 10);
-      if (!itemDefId) { alert('Select an item.'); return; }
+      const isCat = modeSelect.value === 'category';
+
       try {
-        await addBossLootApi(boss.id, { item_def_id: itemDefId, drop_chance: isNaN(dropChance) ? 50 : dropChance, quantity: isNaN(quantity) ? 1 : quantity });
+        if (isCat) {
+          const cat = catSelect.value;
+          if (!cat) { alert('Select a category.'); return; }
+          await addBossLootApi(boss.id, { item_category: cat, drop_chance: isNaN(dropChance) ? 50 : dropChance, quantity: isNaN(quantity) ? 1 : quantity });
+        } else {
+          const itemDefId = parseInt(select.value, 10);
+          if (!itemDefId) { alert('Select an item.'); return; }
+          await addBossLootApi(boss.id, { item_def_id: itemDefId, drop_chance: isNaN(dropChance) ? 50 : dropChance, quantity: isNaN(quantity) ? 1 : quantity });
+        }
         await this.refreshDetailFromPanel(wrap);
       } catch (err) { alert((err as Error).message); }
     });
 
     addRow.appendChild(selectWrap);
+    addRow.appendChild(catWrap);
     addRow.appendChild(iconPreview);
     addRow.appendChild(chanceWrap);
     addRow.appendChild(qtyWrap);

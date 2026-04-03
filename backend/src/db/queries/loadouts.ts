@@ -21,10 +21,20 @@ export async function getCharacterLoadout(characterId: string): Promise<LoadoutS
   }>(
     `SELECT cl.slot_name, cl.ability_id, cl.priority,
             a.id, a.name, a.icon_filename, a.description, a.effect_type,
-            a.mana_cost, a.effect_value, a.duration_turns, a.cooldown_turns,
+            COALESCE(al.mana_cost, a.mana_cost) AS mana_cost,
+            COALESCE(al.effect_value, a.effect_value) AS effect_value,
+            COALESCE(al.duration_turns, a.duration_turns) AS duration_turns,
+            COALESCE(al.cooldown_turns, a.cooldown_turns) AS cooldown_turns,
             a.priority_default, a.slot_type
      FROM character_loadouts cl
      LEFT JOIN abilities a ON a.id = cl.ability_id
+     LEFT JOIN character_ability_progress cap ON cap.character_id = cl.character_id AND cap.ability_id = cl.ability_id
+     LEFT JOIN LATERAL (
+       SELECT al2.effect_value, al2.mana_cost, al2.duration_turns, al2.cooldown_turns
+       FROM ability_levels al2
+       WHERE al2.ability_id = a.id AND al2.level <= COALESCE(cap.current_level, 1)
+       ORDER BY al2.level DESC LIMIT 1
+     ) al ON true
      WHERE cl.character_id = $1
      ORDER BY cl.slot_name`,
     [characterId],
@@ -49,6 +59,12 @@ export async function getCharacterLoadout(characterId: string): Promise<LoadoutS
         cooldown_turns: row.cooldown_turns ?? 0,
         priority_default: row.priority_default ?? 1,
         slot_type: (row.slot_type ?? 'both') as 'auto' | 'active' | 'both',
+        level: 1,
+        points: 0,
+        points_to_next: 100,
+        cooldown_until: null,
+        current_level_stats: null,
+        next_level_stats: null,
       };
     }
     return slot;
@@ -68,12 +84,48 @@ export async function getOwnedAbilities(characterId: string): Promise<OwnedAbili
     cooldown_turns: number;
     priority_default: number;
     slot_type: string;
+    skill_level: number | null;
+    skill_points: number | null;
+    last_book_used_at: string | null;
+    al_level: number | null;
+    al_effect_value: number | null;
+    al_mana_cost: number | null;
+    al_duration_turns: number | null;
+    al_cooldown_turns: number | null;
+    next_level: number | null;
+    next_effect_value: number | null;
+    next_mana_cost: number | null;
+    next_duration_turns: number | null;
+    next_cooldown_turns: number | null;
   }>(
     `SELECT a.id, a.name, a.icon_filename, a.description, a.effect_type,
-            a.mana_cost, a.effect_value, a.duration_turns, a.cooldown_turns,
-            a.priority_default, a.slot_type
+            COALESCE(al.mana_cost, a.mana_cost) AS mana_cost,
+            COALESCE(al.effect_value, a.effect_value) AS effect_value,
+            COALESCE(al.duration_turns, a.duration_turns) AS duration_turns,
+            COALESCE(al.cooldown_turns, a.cooldown_turns) AS cooldown_turns,
+            a.priority_default, a.slot_type,
+            COALESCE(cap.current_level, 1) AS skill_level,
+            COALESCE(cap.current_points, 0) AS skill_points,
+            cap.last_book_used_at,
+            al.level AS al_level, al.effect_value AS al_effect_value, al.mana_cost AS al_mana_cost,
+            al.duration_turns AS al_duration_turns, al.cooldown_turns AS al_cooldown_turns,
+            al_next.level AS next_level, al_next.effect_value AS next_effect_value,
+            al_next.mana_cost AS next_mana_cost, al_next.duration_turns AS next_duration_turns,
+            al_next.cooldown_turns AS next_cooldown_turns
      FROM character_owned_abilities coa
      JOIN abilities a ON a.id = coa.ability_id
+     LEFT JOIN character_ability_progress cap ON cap.character_id = coa.character_id AND cap.ability_id = coa.ability_id
+     LEFT JOIN LATERAL (
+       SELECT al2.level, al2.effect_value, al2.mana_cost, al2.duration_turns, al2.cooldown_turns
+       FROM ability_levels al2
+       WHERE al2.ability_id = a.id AND al2.level <= COALESCE(cap.current_level, 1)
+       ORDER BY al2.level DESC LIMIT 1
+     ) al ON true
+     LEFT JOIN LATERAL (
+       SELECT al3.level, al3.effect_value, al3.mana_cost, al3.duration_turns, al3.cooldown_turns
+       FROM ability_levels al3
+       WHERE al3.ability_id = a.id AND al3.level = COALESCE(cap.current_level, 1) + 1
+     ) al_next ON true
      WHERE coa.character_id = $1
      ORDER BY a.name`,
     [characterId],
@@ -91,6 +143,26 @@ export async function getOwnedAbilities(characterId: string): Promise<OwnedAbili
     cooldown_turns: row.cooldown_turns,
     priority_default: row.priority_default,
     slot_type: row.slot_type as 'auto' | 'active' | 'both',
+    level: row.skill_level ?? 1,
+    points: row.skill_points ?? 0,
+    points_to_next: (row.skill_level ?? 1) >= 5 ? null : 100,
+    cooldown_until: row.last_book_used_at
+      ? new Date(new Date(row.last_book_used_at).getTime() + 6 * 60 * 60 * 1000).toISOString()
+      : null,
+    current_level_stats: row.al_level != null ? {
+      level: row.al_level,
+      effect_value: row.al_effect_value ?? 0,
+      mana_cost: row.al_mana_cost ?? 0,
+      duration_turns: row.al_duration_turns ?? 0,
+      cooldown_turns: row.al_cooldown_turns ?? 0,
+    } : null,
+    next_level_stats: row.next_level != null ? {
+      level: row.next_level,
+      effect_value: row.next_effect_value ?? 0,
+      mana_cost: row.next_mana_cost ?? 0,
+      duration_turns: row.next_duration_turns ?? 0,
+      cooldown_turns: row.next_cooldown_turns ?? 0,
+    } : null,
   }));
 }
 

@@ -934,6 +934,30 @@ async function characterStats(name) {
   console.log(`  DB columns → max_hp: ${c.max_hp}  attack_power: ${c.attack_power}  defence: ${c.defence}`);
 }
 
+// ─── Ability Levels ──────────────────────────────────────────────────────────
+
+async function abilityLevels(abilityId) {
+  const q = abilityId
+    ? `SELECT al.*, a.name AS ability_name FROM ability_levels al JOIN abilities a ON a.id = al.ability_id WHERE al.ability_id = $1 ORDER BY al.level`
+    : `SELECT al.*, a.name AS ability_name FROM ability_levels al JOIN abilities a ON a.id = al.ability_id ORDER BY a.name, al.level`;
+  const params = abilityId ? [abilityId] : [];
+  const res = await pool.query(q, params);
+  section(abilityId ? `Ability Levels for Ability #${abilityId}` : 'All Ability Levels');
+  table(res.rows, ['ability_name', 'level', 'effect_value', 'mana_cost', 'duration_turns', 'cooldown_turns']);
+}
+
+// ─── Ability Progress ────────────────────────────────────────────────────────
+
+async function abilityProgress(characterId) {
+  const q = characterId
+    ? `SELECT cap.*, a.name AS ability_name, c.name AS character_name FROM character_ability_progress cap JOIN abilities a ON a.id = cap.ability_id JOIN characters c ON c.id = cap.character_id WHERE cap.character_id = $1 ORDER BY a.name`
+    : `SELECT cap.*, a.name AS ability_name, c.name AS character_name FROM character_ability_progress cap JOIN abilities a ON a.id = cap.ability_id JOIN characters c ON c.id = cap.character_id ORDER BY c.name, a.name`;
+  const params = characterId ? [characterId] : [];
+  const res = await pool.query(q, params);
+  section(characterId ? `Ability Progress for Character #${characterId}` : 'All Character Ability Progress');
+  table(res.rows, ['character_name', 'ability_name', 'current_level', 'current_points', 'last_book_used_at']);
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 const HELP = `
@@ -960,6 +984,8 @@ Commands:
   disassembly [item_id]    Disassembly recipes with chance entries and outputs
   economy                  Crown sources/sinks, equipment stats, expedition rewards
   stat-training            Stat training item mappings with tiers and success rates
+  ability-levels [id]      Ability level scaling (optional: filter by ability ID)
+  ability-progress [id]    Character ability progress (optional: filter by character ID)
   character-stats <name>   Character attributes, unspent points, derived stats
   search <term>            Search across all entity types by name
   sql "<query>"            Run a raw SELECT query
@@ -997,6 +1023,8 @@ async function main() {
       case 'bosses':       await bosses(); break;
       case 'boss-instances': await bossInstances(); break;
       case 'stat-training':  await statTraining(); break;
+      case 'ability-levels':   await abilityLevels(args[0]); break;
+      case 'ability-progress': await abilityProgress(args[0]); break;
       case 'sql':       await rawSql(args.join(' ')); break;
       default:
         console.error(`Unknown command: ${cmd}`);

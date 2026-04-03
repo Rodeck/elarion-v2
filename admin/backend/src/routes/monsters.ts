@@ -411,6 +411,7 @@ monstersRouter.get('/:id/loot', async (req: Request, res: Response) => {
     return res.json(loot.map((l) => ({
       id: l.id,
       item_def_id: l.item_def_id,
+      item_category: l.item_category ?? null,
       item_name: l.item_name,
       drop_chance: l.drop_chance,
       quantity: l.quantity,
@@ -428,9 +429,16 @@ monstersRouter.post('/:id/loot', async (req: Request, res: Response) => {
   const monsterId = parseInt(req.params.id!, 10);
   if (isNaN(monsterId)) return res.status(400).json({ error: 'Invalid monster id' });
 
-  const { item_def_id, drop_chance, quantity } = req.body as Record<string, unknown>;
+  const { item_def_id, item_category, drop_chance, quantity } = req.body as Record<string, unknown>;
 
-  if (!Number.isInteger(item_def_id) || (item_def_id as number) <= 0) {
+  // Exactly one of item_def_id or item_category must be provided
+  const hasItemId = item_def_id != null;
+  const hasCategory = typeof item_category === 'string' && item_category.length > 0;
+  if (hasItemId === hasCategory) {
+    return res.status(400).json({ error: 'Provide exactly one of item_def_id or item_category' });
+  }
+
+  if (hasItemId && (!Number.isInteger(item_def_id) || (item_def_id as number) <= 0)) {
     return res.status(400).json({ error: 'item_def_id must be a positive integer' });
   }
   const dropChance = Number(drop_chance);
@@ -442,23 +450,27 @@ monstersRouter.post('/:id/loot', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'quantity must be a positive integer' });
   }
 
-  // Validate item_def_id exists
-  const itemRow = await query<{ id: number }>('SELECT id FROM item_definitions WHERE id = $1', [item_def_id]);
-  if (itemRow.rows.length === 0) {
-    return res.status(400).json({ error: 'item_def_id references a non-existent item' });
+  // Validate item_def_id exists (only when specific item)
+  if (hasItemId) {
+    const itemRow = await query<{ id: number }>('SELECT id FROM item_definitions WHERE id = $1', [item_def_id]);
+    if (itemRow.rows.length === 0) {
+      return res.status(400).json({ error: 'item_def_id references a non-existent item' });
+    }
   }
 
   try {
     const entry = await addLootEntry({
       monster_id: monsterId,
-      item_def_id: item_def_id as number,
+      item_def_id: hasItemId ? (item_def_id as number) : null,
+      item_category: hasCategory ? (item_category as string) : null,
       drop_chance: dropChance,
       quantity: qty,
     });
-    log('info', 'Added loot entry', { monsterId, item_def_id, admin: req.username });
+    log('info', 'Added loot entry', { monsterId, item_def_id: entry.item_def_id, item_category: entry.item_category, admin: req.username });
     return res.status(201).json({
       id: entry.id,
       item_def_id: entry.item_def_id,
+      item_category: entry.item_category,
       item_name: entry.item_name,
       drop_chance: entry.drop_chance,
       quantity: entry.quantity,

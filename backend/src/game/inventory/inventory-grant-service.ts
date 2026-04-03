@@ -75,6 +75,7 @@ export async function grantItemToCharacter(
           tool_type: def.tool_type ?? null,
           max_durability: def.max_durability ?? null,
           power: def.power ?? null,
+          ability_id: def.ability_id ?? null,
         },
       };
 
@@ -153,6 +154,7 @@ export async function grantItemToCharacter(
         tool_type: newSlotWithDef.def_tool_type ?? null,
         max_durability: newSlotWithDef.def_max_durability ?? null,
         power: newSlotWithDef.def_power ?? null,
+        ability_id: newSlotWithDef.def_ability_id ?? null,
       },
     };
 

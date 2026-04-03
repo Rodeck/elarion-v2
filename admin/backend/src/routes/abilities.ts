@@ -11,6 +11,10 @@ import {
   deleteAbility,
   type AbilityRow,
 } from '../../../../backend/src/db/queries/abilities';
+import {
+  getAbilityLevels,
+  upsertAbilityLevels,
+} from '../../../../backend/src/db/queries/ability-levels';
 import { resizeUpload } from '../middleware/resize-upload';
 
 export const abilitiesRouter = Router();
@@ -244,6 +248,86 @@ abilitiesRouter.put('/:id', upload.single('icon'), resizeUpload(), async (req: R
       try { fs.unlinkSync(path.join(ICONS_DIR, newIconFilename)); } catch { /* ignore */ }
     }
     log('error', 'Failed to update ability', { id, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /api/abilities/:id/levels ────────────────────────────────────────────
+
+abilitiesRouter.get('/:id/levels', async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id!, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid ability id' });
+
+  try {
+    const ability = await getAbilityById(id);
+    if (!ability) return res.status(404).json({ error: 'Ability not found' });
+
+    const levels = await getAbilityLevels(id);
+    return res.json(levels);
+  } catch (err) {
+    log('error', 'Failed to get ability levels', { id, error: String(err) });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── PUT /api/abilities/:id/levels ───────────────────────────────────────────
+
+abilitiesRouter.put('/:id/levels', async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id!, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid ability id' });
+
+  try {
+    const ability = await getAbilityById(id);
+    if (!ability) return res.status(404).json({ error: 'Ability not found' });
+
+    const { levels } = req.body as { levels?: unknown[] };
+    if (!Array.isArray(levels)) {
+      return res.status(400).json({ error: 'levels must be an array' });
+    }
+
+    for (const l of levels) {
+      const row = l as Record<string, unknown>;
+      const level = Number(row.level);
+      const effectValue = Number(row.effect_value);
+      const manaCost = Number(row.mana_cost);
+      const durationTurns = Number(row.duration_turns);
+      const cooldownTurns = Number(row.cooldown_turns);
+
+      if (!Number.isInteger(level) || level < 1 || level > 5) {
+        return res.status(400).json({ error: 'Each level must be an integer 1–5' });
+      }
+      if (!Number.isInteger(effectValue) || effectValue < 0) {
+        return res.status(400).json({ error: 'effect_value must be a non-negative integer' });
+      }
+      if (!Number.isInteger(manaCost) || manaCost < 0) {
+        return res.status(400).json({ error: 'mana_cost must be a non-negative integer' });
+      }
+      if (!Number.isInteger(durationTurns) || durationTurns < 0) {
+        return res.status(400).json({ error: 'duration_turns must be a non-negative integer' });
+      }
+      if (!Number.isInteger(cooldownTurns) || cooldownTurns < 0) {
+        return res.status(400).json({ error: 'cooldown_turns must be a non-negative integer' });
+      }
+    }
+
+    const saved = await upsertAbilityLevels(
+      id,
+      levels.map((l) => {
+        const row = l as Record<string, unknown>;
+        return {
+          level: Number(row.level),
+          effect_value: Number(row.effect_value),
+          mana_cost: Number(row.mana_cost),
+          duration_turns: Number(row.duration_turns),
+          cooldown_turns: Number(row.cooldown_turns),
+        };
+      }),
+    );
+
+    log('info', 'Updated ability levels', { id, count: saved.length, admin: req.username });
+    return res.json(saved);
+  } catch (err) {
+    log('error', 'Failed to update ability levels', { id, error: String(err) });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

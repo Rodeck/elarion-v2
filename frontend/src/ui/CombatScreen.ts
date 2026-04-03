@@ -1279,6 +1279,39 @@ export class CombatScreen {
       dash.textContent = '—';
       chip.appendChild(dash);
     }
+
+    // Cooldown overlay
+    if (slot && slot.status === 'cooldown' && slot.cooldown_turns_remaining > 0) {
+      const overlay = document.createElement('div');
+      overlay.className = 'cs-cd-overlay';
+      overlay.style.cssText =
+        'position:absolute;inset:0;z-index:2;' +
+        'background:rgba(0,0,0,0.65);' +
+        'display:flex;align-items:center;justify-content:center;' +
+        'border-radius:4px;';
+      const label = document.createElement('span');
+      label.style.cssText =
+        "font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;" +
+        'color:#e8c870;text-shadow:0 1px 4px rgba(0,0,0,0.9);';
+      label.textContent = `${slot.cooldown_turns_remaining}`;
+      overlay.appendChild(label);
+      chip.appendChild(overlay);
+    } else if (slot && slot.status === 'insufficient_mana') {
+      const overlay = document.createElement('div');
+      overlay.className = 'cs-cd-overlay';
+      overlay.style.cssText =
+        'position:absolute;inset:0;z-index:2;' +
+        'background:rgba(0,0,20,0.55);' +
+        'display:flex;align-items:center;justify-content:center;' +
+        'border-radius:4px;';
+      const label = document.createElement('span');
+      label.style.cssText =
+        "font-family:'Rajdhani',sans-serif;font-weight:600;font-size:10px;" +
+        'color:#6a8abf;text-shadow:0 1px 3px rgba(0,0,0,0.8);';
+      label.textContent = 'LOW MP';
+      overlay.appendChild(label);
+      chip.appendChild(overlay);
+    }
   }
 
   private fillSlotText(chip: HTMLElement, slot: CombatAbilityStateDto): void {
@@ -1314,6 +1347,40 @@ export class CombatScreen {
     } else {
       this.activeButtonEl.innerHTML = `<span style="font-size:0.6rem;font-weight:600;">${slot.name.slice(0, 5)}</span><span style="font-size:0.5rem;color:#6ab4e8;">${slot.mana_cost}</span>`;
     }
+
+    // Cooldown overlay for active slot
+    if (slot.status === 'cooldown' && slot.cooldown_turns_remaining > 0) {
+      const overlay = document.createElement('div');
+      overlay.className = 'cs-cd-overlay';
+      overlay.style.cssText =
+        'position:absolute;inset:0;z-index:2;' +
+        'background:rgba(0,0,0,0.65);' +
+        'display:flex;align-items:center;justify-content:center;' +
+        'border-radius:4px;';
+      const label = document.createElement('span');
+      label.style.cssText =
+        "font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;" +
+        'color:#e8c870;text-shadow:0 1px 4px rgba(0,0,0,0.9);';
+      label.textContent = `${slot.cooldown_turns_remaining}`;
+      overlay.appendChild(label);
+      this.activeButtonEl.appendChild(overlay);
+    } else if (slot.status === 'insufficient_mana') {
+      const overlay = document.createElement('div');
+      overlay.className = 'cs-cd-overlay';
+      overlay.style.cssText =
+        'position:absolute;inset:0;z-index:2;' +
+        'background:rgba(0,0,20,0.55);' +
+        'display:flex;align-items:center;justify-content:center;' +
+        'border-radius:4px;';
+      const label = document.createElement('span');
+      label.style.cssText =
+        "font-family:'Rajdhani',sans-serif;font-weight:600;font-size:11px;" +
+        'color:#6a8abf;text-shadow:0 1px 3px rgba(0,0,0,0.8);';
+      label.textContent = 'LOW MP';
+      overlay.appendChild(label);
+      this.activeButtonEl.appendChild(overlay);
+    }
+
     this.attachTooltip(this.activeButtonEl, slot);
   }
 

@@ -41,9 +41,9 @@ function isValidPng(buffer: Buffer): boolean {
   return buffer.subarray(0, 8).equals(PNG_MAGIC_BYTES);
 }
 
-const VALID_CATEGORIES = ['resource', 'food', 'heal', 'weapon', 'boots', 'shield', 'greaves', 'bracer', 'tool', 'helmet', 'chestplate', 'ring', 'amulet'] as const;
+const VALID_CATEGORIES = ['resource', 'food', 'heal', 'weapon', 'boots', 'shield', 'greaves', 'bracer', 'tool', 'helmet', 'chestplate', 'ring', 'amulet', 'skill_book'] as const;
 const VALID_WEAPON_SUBTYPES = ['one_handed', 'two_handed', 'dagger', 'wand', 'staff', 'bow'] as const;
-const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food']);
+const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book']);
 const DEFENCE_CATEGORIES = new Set(['boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate', 'ring', 'amulet']);
 
 type ItemCategory = typeof VALID_CATEGORIES[number];
@@ -70,6 +70,7 @@ function formatItem(item: ItemDefinition) {
     max_durability: item.max_durability ?? null,
     power: item.power ?? null,
     disassembly_cost: item.disassembly_cost ?? 0,
+    ability_id: item.ability_id ?? null,
     created_at: item.created_at,
   };
 }
@@ -142,6 +143,20 @@ function validateItemFields(body: Record<string, unknown>, isCreate: boolean): s
       if (body['tool_type']) return 'tool_type is only allowed for category "tool"';
       if (body['max_durability'] != null) return 'max_durability is only allowed for category "tool"';
       if (body['power'] != null) return 'power is only allowed for category "tool"';
+    }
+
+    // Skill book validation
+    if (category === 'skill_book') {
+      const abilityId = body['ability_id'];
+      if (isCreate && (abilityId === undefined || abilityId === null)) {
+        return 'ability_id is required for category "skill_book"';
+      }
+      if (abilityId !== undefined && abilityId !== null) {
+        const n = Number(abilityId);
+        if (!Number.isInteger(n) || n < 1) return 'ability_id must be a positive integer';
+      }
+    } else {
+      if (body['ability_id'] != null) return 'ability_id is only allowed for category "skill_book"';
     }
   }
 
@@ -360,6 +375,7 @@ itemsRouter.post('/', upload.single('icon'), resizeUpload(), async (req: Request
       max_durability: body['max_durability'] != null ? Number(body['max_durability']) : null,
       power: body['power'] != null ? Number(body['power']) : null,
       disassembly_cost: body['disassembly_cost'] != null ? Number(body['disassembly_cost']) : 0,
+      ability_id: body['ability_id'] != null ? Number(body['ability_id']) : null,
     });
     log('info', 'item_definition_created', { admin: req.username, item_id: item.id, name: item.name, category: item.category });
     return res.status(201).json(formatItem(item));
@@ -442,6 +458,7 @@ itemsRouter.put('/:id', upload.single('icon'), resizeUpload(), async (req: Reque
   if (body['max_durability'] !== undefined) updateData['max_durability'] = body['max_durability'] != null ? Number(body['max_durability']) : null;
   if (body['power'] !== undefined)         updateData['power']          = body['power'] != null ? Number(body['power']) : null;
   if (body['disassembly_cost'] !== undefined) updateData['disassembly_cost'] = body['disassembly_cost'] != null ? Number(body['disassembly_cost']) : 0;
+  if (body['ability_id'] !== undefined) updateData['ability_id'] = body['ability_id'] != null ? Number(body['ability_id']) : null;
 
   try {
     const item = await updateItemDefinition(id, updateData as Parameters<typeof updateItemDefinition>[1]);

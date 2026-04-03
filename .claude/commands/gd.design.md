@@ -82,6 +82,11 @@ Explain the logic behind the organization.]
 |---|------|-----------|---------------|-------|-------------|
 | N | [name] | [type] | [int] | [int] | [description] |
 
+### Skill Books (category: skill_book)
+| # | Name | stack_size | ability_id | Description |
+|---|------|-----------|------------|-------------|
+| N | [name] | [int] | [ability id] | [description] |
+
 [Use the appropriate columns for each item category. See game-entities skill for field reference.]
 
 ---
@@ -99,6 +104,12 @@ Explain the logic behind the organization.]
 | Name | effect_type | mana_cost | effect_value | duration_turns | cooldown_turns | slot_type | Description |
 |------|------------|-----------|-------------|---------------|---------------|-----------|-------------|
 | [name] | [type] | [int] | [int] | [int] | [int] | [auto/active/both] | [description] |
+
+### Ability Level Scaling [include only if abilities have skill books]
+
+| Ability | Lv1 effect / mana / dur / cd | Lv2 | Lv3 | Lv4 | Lv5 |
+|---------|------------------------------|-----|-----|-----|-----|
+| [name] | [val]/[mana]/[dur]/[cd] | ... | ... | ... | ... |
 
 ---
 

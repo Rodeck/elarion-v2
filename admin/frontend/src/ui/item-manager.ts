@@ -12,10 +12,10 @@ import { invalidateItemPickerCache } from './item-picker';
 const VALID_CATEGORIES = [
   'resource', 'food', 'heal', 'weapon',
   'helmet', 'chestplate', 'boots', 'shield', 'greaves', 'bracer', 'tool',
-  'ring', 'amulet',
+  'ring', 'amulet', 'skill_book',
 ] as const;
 
-const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food']);
+const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book']);
 
 export class ItemManager {
   private container!: HTMLElement;
@@ -294,6 +294,7 @@ export class ItemManager {
       resource: 'Resource', food: 'Food', heal: 'Heal', weapon: 'Weapon',
       helmet: 'Helmet', chestplate: 'Chestplate', boots: 'Boots', shield: 'Shield',
       greaves: 'Greaves', bracer: 'Bracer', tool: 'Tool', ring: 'Ring', amulet: 'Amulet',
+      skill_book: 'Skill Book',
     };
     return labels[category] ?? category;
   }

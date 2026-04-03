@@ -4,6 +4,7 @@ import type {
   OwnedAbilityDto,
   LoadoutUpdateRejectedPayload,
 } from '../../../shared/protocol/index';
+import { SkillDetailModal } from './SkillDetailModal';
 
 type SlotName = 'auto_1' | 'auto_2' | 'auto_3' | 'active';
 
@@ -26,6 +27,8 @@ export class LoadoutPanel {
   private slots: LoadoutSlotDto[] = [];
   private locked = false;
   private dragType: 'ability' | 'slot' | null = null;
+  private cooldownTimers: ReturnType<typeof setInterval>[] = [];
+  private skillDetailModal: SkillDetailModal;
 
   constructor(
     container: HTMLElement,
@@ -33,6 +36,7 @@ export class LoadoutPanel {
   ) {
     this.container = container;
     this.onUpdateSlot = onUpdateSlot;
+    this.skillDetailModal = new SkillDetailModal(document.body);
     this.build();
   }
 
@@ -41,6 +45,7 @@ export class LoadoutPanel {
   // ---------------------------------------------------------------------------
 
   render(payload: LoadoutStatePayload): void {
+    this.clearCooldownTimers();
     this.slots = payload.slots;
     this.ownedAbilities = payload.owned_abilities;
     this.renderSlots();
@@ -50,6 +55,7 @@ export class LoadoutPanel {
   setLocked(locked: boolean): void {
     this.locked = locked;
     this.lockedBannerEl.style.display = locked ? '' : 'none';
+    this.clearCooldownTimers();
     this.renderSlots();
     this.renderAbilityGrid();
   }
@@ -76,7 +82,7 @@ export class LoadoutPanel {
     // Locked banner
     this.lockedBannerEl = document.createElement('div');
     this.lockedBannerEl.style.cssText =
-      'display:none;background:#3a1010;color:#c06060;font-size:11px;font-family:Cinzel,serif;' +
+      'display:none;background:#3a1010;color:#c06060;font-size:13px;font-family:Cinzel,serif;' +
       'text-align:center;padding:4px 8px;border-bottom:1px solid #5a2020;flex-shrink:0;';
     this.lockedBannerEl.textContent = 'Loadout locked during combat';
     this.container.appendChild(this.lockedBannerEl);
@@ -84,7 +90,7 @@ export class LoadoutPanel {
     // Slots header
     const slotsHeader = document.createElement('div');
     slotsHeader.style.cssText =
-      'padding:6px 8px 4px;font-size:10px;color:#5a4a2a;font-family:Cinzel,serif;letter-spacing:0.06em;flex-shrink:0;';
+      'padding:6px 8px 4px;font-size:12px;color:#5a4a2a;font-family:Cinzel,serif;letter-spacing:0.06em;flex-shrink:0;';
     slotsHeader.textContent = 'SLOTS';
     this.container.appendChild(slotsHeader);
 
@@ -102,7 +108,7 @@ export class LoadoutPanel {
     // Ability list header
     const listHeader = document.createElement('div');
     listHeader.style.cssText =
-      'padding:6px 8px 4px;font-size:10px;color:#5a4a2a;font-family:Cinzel,serif;letter-spacing:0.06em;flex-shrink:0;';
+      'padding:6px 8px 4px;font-size:12px;color:#5a4a2a;font-family:Cinzel,serif;letter-spacing:0.06em;flex-shrink:0;';
     listHeader.textContent = 'OWNED ABILITIES';
     this.container.appendChild(listHeader);
 
@@ -184,12 +190,21 @@ export class LoadoutPanel {
       // Mana cost badge
       const badge = document.createElement('span');
       badge.style.cssText =
-        'position:absolute;bottom:1px;right:2px;font-size:9px;color:#7aabcf;' +
+        'position:absolute;bottom:1px;right:2px;font-size:11px;color:#7aabcf;' +
         'font-family:Rajdhani,sans-serif;font-weight:700;line-height:1;pointer-events:none;';
       badge.textContent = String(ability!.mana_cost);
       cell.appendChild(badge);
 
-      cell.title = `${ability!.name}\n${ability!.mana_cost} MP · ${ability!.effect_type}`;
+      // Level badge overlay (top-left)
+      const lvlOverlay = document.createElement('span');
+      lvlOverlay.style.cssText =
+        'position:absolute;top:1px;left:1px;font-size:9px;color:#d4a84b;' +
+        'font-family:Rajdhani,sans-serif;font-weight:700;line-height:1;' +
+        'background:rgba(0,0,0,0.6);padding:1px 3px;border-radius:2px;pointer-events:none;';
+      lvlOverlay.textContent = `Lv.${ability!.level}`;
+      cell.appendChild(lvlOverlay);
+
+      cell.title = `${ability!.name} (Lv.${ability!.level})\n${ability!.mana_cost} MP · ${ability!.effect_type}`;
       cell.style.cursor = this.locked ? 'default' : 'grab';
       cell.draggable = !this.locked;
 
@@ -237,7 +252,7 @@ export class LoadoutPanel {
     // Slot-type label (always shown, dimmer)
     const slotLabelEl = document.createElement('div');
     slotLabelEl.style.cssText =
-      'font-size:8px;color:#5a4a2a;font-family:Cinzel,serif;letter-spacing:0.04em;text-align:center;line-height:1.2;';
+      'font-size:10px;color:#5a4a2a;font-family:Cinzel,serif;letter-spacing:0.04em;text-align:center;line-height:1.2;';
     slotLabelEl.textContent = label;
     wrapper.appendChild(slotLabelEl);
 
@@ -245,7 +260,7 @@ export class LoadoutPanel {
     if (occupied) {
       const spellNameEl = document.createElement('div');
       spellNameEl.style.cssText =
-        'font-size:9px;color:#c9a55c;font-family:Cinzel,serif;text-align:center;' +
+        'font-size:11px;color:#c9a55c;font-family:Cinzel,serif;text-align:center;' +
         'max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3;';
       spellNameEl.textContent = ability!.name;
       spellNameEl.title = ability!.name;
@@ -265,7 +280,7 @@ export class LoadoutPanel {
     if (this.ownedAbilities.length === 0) {
       const empty = document.createElement('div');
       empty.style.cssText =
-        'color:#5a4a2a;font-size:11px;font-family:Cinzel,serif;padding:12px 0;text-align:center;';
+        'color:#5a4a2a;font-size:13px;font-family:Cinzel,serif;padding:12px 0;text-align:center;';
       empty.textContent = 'No abilities owned yet.';
       this.abilityGridEl.appendChild(empty);
       return;
@@ -280,28 +295,91 @@ export class LoadoutPanel {
     const row = document.createElement('div');
     row.dataset['abilityId'] = String(ability.id);
     row.style.cssText =
-      'display:flex;align-items:center;gap:6px;' +
+      'display:flex;flex-direction:column;gap:2px;' +
       'background:#1a1510;border:1px solid #2a2010;border-radius:2px;' +
       `padding:5px 7px;cursor:${this.locked ? 'default' : 'grab'};` +
       'transition:border-color 0.15s,background 0.15s;';
 
+    // Top line: name + level badge + mana cost + effect type
+    const topLine = document.createElement('div');
+    topLine.style.cssText = 'display:flex;align-items:center;gap:6px;';
+
     const nameEl = document.createElement('div');
-    nameEl.style.cssText = 'flex:1;font-size:0.75rem;color:#c9a55c;font-family:Cinzel,serif;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    nameEl.style.cssText = 'font-size:0.85rem;color:#c9a55c;font-family:Cinzel,serif;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     nameEl.textContent = ability.name;
 
+    const levelBadge = document.createElement('span');
+    levelBadge.style.cssText = 'font-size:11px;color:#d4a84b;font-family:Rajdhani,sans-serif;font-weight:700;flex-shrink:0;';
+    levelBadge.textContent = `Lv.${ability.level}`;
+
+    const spacer = document.createElement('div');
+    spacer.style.cssText = 'flex:1;';
+
     const costEl = document.createElement('div');
-    costEl.style.cssText = 'font-size:0.6rem;color:#6a8ab0;flex-shrink:0;';
+    costEl.style.cssText = 'font-size:0.7rem;color:#6a8ab0;flex-shrink:0;';
     costEl.textContent = `${ability.mana_cost} MP`;
 
     const typeChip = document.createElement('div');
     typeChip.style.cssText =
-      'font-size:0.55rem;padding:1px 4px;border-radius:2px;flex-shrink:0;' +
+      'font-size:0.65rem;padding:1px 5px;border-radius:2px;flex-shrink:0;' +
       `background:${this.getEffectTypeColor(ability.effect_type)};color:#1a1510;`;
     typeChip.textContent = ability.effect_type;
 
-    row.appendChild(nameEl);
-    row.appendChild(costEl);
-    row.appendChild(typeChip);
+    topLine.appendChild(nameEl);
+    topLine.appendChild(levelBadge);
+    topLine.appendChild(spacer);
+    topLine.appendChild(costEl);
+    topLine.appendChild(typeChip);
+    row.appendChild(topLine);
+
+    // Bottom line: progress bar + mastered/cooldown text
+    const bottomLine = document.createElement('div');
+    bottomLine.style.cssText = 'display:flex;align-items:center;gap:6px;';
+
+    const isMaxLevel = ability.level >= 5;
+
+    // Progress bar
+    const barBg = document.createElement('div');
+    barBg.style.cssText = 'width:100px;height:4px;background:#1a1814;border-radius:2px;overflow:hidden;flex-shrink:0;';
+    const barFill = document.createElement('div');
+    const fillPct = isMaxLevel ? 100 : (ability.points_to_next ? (ability.points / ability.points_to_next) * 100 : 0);
+    barFill.style.cssText =
+      `width:${fillPct}%;height:100%;background:${isMaxLevel ? '#27ae60' : '#d4a84b'};border-radius:2px;`;
+    barBg.appendChild(barFill);
+    bottomLine.appendChild(barBg);
+
+    if (isMaxLevel) {
+      const masteredEl = document.createElement('span');
+      masteredEl.style.cssText = 'font-size:10px;color:#27ae60;font-family:Rajdhani,sans-serif;font-weight:700;flex-shrink:0;';
+      masteredEl.textContent = 'MASTERED';
+      bottomLine.appendChild(masteredEl);
+    } else {
+      const pointsEl = document.createElement('span');
+      pointsEl.style.cssText = 'font-size:10px;color:#7a6a4a;font-family:Rajdhani,sans-serif;flex-shrink:0;';
+      pointsEl.textContent = `${ability.points}/${ability.points_to_next ?? 100}`;
+      bottomLine.appendChild(pointsEl);
+    }
+
+    // Cooldown timer
+    if (ability.cooldown_until) {
+      const cdEl = document.createElement('span');
+      cdEl.style.cssText = 'font-size:10px;color:#c06060;font-family:Rajdhani,sans-serif;flex-shrink:0;margin-left:auto;';
+      const updateCd = () => {
+        const text = this.formatCooldownRemaining(ability.cooldown_until!);
+        if (text) {
+          cdEl.textContent = text;
+          cdEl.style.display = '';
+        } else {
+          cdEl.style.display = 'none';
+        }
+      };
+      updateCd();
+      const timer = setInterval(updateCd, 60_000);
+      this.cooldownTimers.push(timer);
+      bottomLine.appendChild(cdEl);
+    }
+
+    row.appendChild(bottomLine);
 
     row.addEventListener('mouseenter', () => {
       if (this.dragType) return;
@@ -314,8 +392,10 @@ export class LoadoutPanel {
     });
 
     row.draggable = !this.locked;
+    let didDrag = false;
     row.addEventListener('dragstart', (e) => {
       if (this.locked) { e.preventDefault(); return; }
+      didDrag = true;
       (e.dataTransfer as DataTransfer).setData(
         'text/plain',
         JSON.stringify({ type: 'ability', id: ability.id }),
@@ -324,6 +404,10 @@ export class LoadoutPanel {
       this.dragType = 'ability';
     });
     row.addEventListener('dragend', () => { this.dragType = null; });
+    row.addEventListener('click', () => {
+      if (didDrag) { didDrag = false; return; }
+      this.skillDetailModal.open(ability);
+    });
 
     return row;
   }
@@ -360,6 +444,21 @@ export class LoadoutPanel {
       const raw = e.dataTransfer?.getData('text/plain');
       return raw ? JSON.parse(raw) as Record<string, unknown> : null;
     } catch { return null; }
+  }
+
+  private clearCooldownTimers(): void {
+    for (const t of this.cooldownTimers) clearInterval(t);
+    this.cooldownTimers = [];
+  }
+
+  private formatCooldownRemaining(isoUntil: string): string | null {
+    const diff = new Date(isoUntil).getTime() - Date.now();
+    if (diff <= 0) return null;
+    const totalMin = Math.ceil(diff / 60_000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
   }
 
   private getEffectTypeColor(effectType: string): string {

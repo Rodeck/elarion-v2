@@ -15,6 +15,7 @@ import { awardXp } from '../progression/xp-service';
 import { grantItemToCharacter } from '../inventory/inventory-grant-service';
 import { awardCrowns, rollCrownDrop } from '../currency/crown-service';
 import { getLootByMonsterId } from '../../db/queries/monster-loot';
+import { getRandomItemByCategory } from '../../db/queries/inventory';
 import { getAbilityLootByMonsterId } from '../../db/queries/abilities';
 import { getSquireLootByMonsterId } from '../../db/queries/monster-squire-loot';
 import { grantAbilityToCharacter, setCharacterInCombat } from '../../db/queries/loadouts';
@@ -371,13 +372,27 @@ export class CombatSession {
         const lootTable = await getLootByMonsterId(this.monster.id);
         for (const entry of lootTable) {
           if (Math.random() * 100 < entry.drop_chance) {
-            await grantItemToCharacter(this.wsSession, this.characterId, entry.item_def_id, entry.quantity);
+            let itemDefId = entry.item_def_id;
+            let itemName = entry.item_name;
+            let iconFilename = entry.icon_filename;
+
+            // Category-based loot: pick a random item from the category
+            if (!itemDefId && entry.item_category) {
+              const picked = await getRandomItemByCategory(entry.item_category);
+              if (!picked) continue; // no items in category, skip
+              itemDefId = picked.id;
+              itemName = picked.name;
+              iconFilename = picked.icon_filename;
+            }
+            if (!itemDefId) continue;
+
+            await grantItemToCharacter(this.wsSession, this.characterId, itemDefId, entry.quantity);
             itemsDropped.push({
-              item_def_id: entry.item_def_id,
-              name:        entry.item_name,
+              item_def_id: itemDefId,
+              name:        itemName ?? 'Unknown',
               quantity:    entry.quantity,
-              icon_url:    entry.icon_filename
-                ? `${config.adminBaseUrl}/item-icons/${entry.icon_filename}`
+              icon_url:    iconFilename
+                ? `${config.adminBaseUrl}/item-icons/${iconFilename}`
                 : null,
             });
           }

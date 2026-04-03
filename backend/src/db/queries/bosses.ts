@@ -44,11 +44,12 @@ export interface BossAbility {
 export interface BossLootEntry {
   id: number;
   boss_id: number;
-  item_def_id: number;
+  item_def_id: number | null;
+  item_category: string | null;
   drop_chance: number; // 0-100
   quantity: number;
   // joined fields
-  item_name?: string;
+  item_name?: string | null;
   icon_filename?: string | null;
 }
 
@@ -196,7 +197,7 @@ export async function getBossLoot(bossId: number): Promise<BossLootEntry[]> {
   const result = await query<BossLootEntry>(
     `SELECT bl.*, i.name AS item_name, i.icon_filename
      FROM boss_loot bl
-     JOIN item_definitions i ON i.id = bl.item_def_id
+     LEFT JOIN item_definitions i ON i.id = bl.item_def_id
      WHERE bl.boss_id = $1
      ORDER BY bl.drop_chance DESC`,
     [bossId],
@@ -206,15 +207,16 @@ export async function getBossLoot(bossId: number): Promise<BossLootEntry[]> {
 
 export async function addBossLoot(
   bossId: number,
-  itemDefId: number,
+  itemDefId: number | null,
   dropChance: number,
   quantity: number,
+  itemCategory?: string | null,
 ): Promise<BossLootEntry> {
   const result = await query<BossLootEntry>(
-    `INSERT INTO boss_loot (boss_id, item_def_id, drop_chance, quantity)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO boss_loot (boss_id, item_def_id, item_category, drop_chance, quantity)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
-    [bossId, itemDefId, dropChance, quantity],
+    [bossId, itemDefId, itemCategory ?? null, dropChance, quantity],
   );
   return result.rows[0]!;
 }

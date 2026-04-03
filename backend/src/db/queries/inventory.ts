@@ -27,6 +27,7 @@ export interface ItemDefinition {
   max_durability: number | null;
   power: number | null;
   disassembly_cost: number;
+  ability_id: number | null;
   created_at: Date;
 }
 
@@ -60,6 +61,7 @@ export interface InventoryItemWithDefinition extends InventoryItem {
   def_tool_type: string | null;
   def_max_durability: number | null;
   def_power: number | null;
+  def_ability_id: number | null;
   current_durability: number | null;
 }
 
@@ -78,6 +80,7 @@ export interface CreateItemDefinitionData {
   max_durability?: number | null;
   power?: number | null;
   disassembly_cost?: number;
+  ability_id?: number | null;
 }
 
 export interface UpdateItemDefinitionData {
@@ -95,6 +98,19 @@ export interface UpdateItemDefinitionData {
   max_durability?: number | null;
   power?: number | null;
   disassembly_cost?: number;
+  ability_id?: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Random item from category (used by loot system)
+// ---------------------------------------------------------------------------
+
+export async function getRandomItemByCategory(category: string): Promise<{ id: number; name: string; icon_filename: string | null } | null> {
+  const result = await query<{ id: number; name: string; icon_filename: string | null }>(
+    `SELECT id, name, icon_filename FROM item_definitions WHERE category = $1 ORDER BY random() LIMIT 1`,
+    [category],
+  );
+  return result.rows[0] ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,8 +142,8 @@ export async function getItemDefinitionById(id: number): Promise<ItemDefinition 
 export async function createItemDefinition(data: CreateItemDefinitionData): Promise<ItemDefinition> {
   const result = await query<ItemDefinition>(
     `INSERT INTO item_definitions
-       (name, description, category, weapon_subtype, attack, defence, heal_power, food_power, stack_size, icon_filename, tool_type, max_durability, power, disassembly_cost)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       (name, description, category, weapon_subtype, attack, defence, heal_power, food_power, stack_size, icon_filename, tool_type, max_durability, power, disassembly_cost, ability_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING *`,
     [
       data.name,
@@ -144,6 +160,7 @@ export async function createItemDefinition(data: CreateItemDefinitionData): Prom
       data.max_durability ?? null,
       data.power ?? null,
       data.disassembly_cost ?? 0,
+      data.ability_id ?? null,
     ],
   );
   return result.rows[0]!;
@@ -168,6 +185,7 @@ export async function updateItemDefinition(id: number, data: UpdateItemDefinitio
   if (data.max_durability !== undefined) { fields.push(`max_durability = $${paramIdx++}`); values.push(data.max_durability); }
   if (data.power !== undefined)          { fields.push(`power = $${paramIdx++}`);          values.push(data.power); }
   if (data.disassembly_cost !== undefined) { fields.push(`disassembly_cost = $${paramIdx++}`); values.push(data.disassembly_cost); }
+  if (data.ability_id !== undefined)      { fields.push(`ability_id = $${paramIdx++}`);      values.push(data.ability_id); }
 
   if (fields.length === 0) {
     return getItemDefinitionById(id);
@@ -221,7 +239,8 @@ export async function getInventoryWithDefinitions(characterId: string): Promise<
        d.crit_damage           AS def_crit_damage,
        d.tool_type             AS def_tool_type,
        d.max_durability        AS def_max_durability,
-       d.power                 AS def_power
+       d.power                 AS def_power,
+       d.ability_id            AS def_ability_id
      FROM inventory_items ii
      JOIN item_definitions d ON d.id = ii.item_def_id
      WHERE ii.character_id = $1
@@ -397,7 +416,8 @@ export async function getInventorySlotById(
        d.crit_damage           AS def_crit_damage,
        d.tool_type             AS def_tool_type,
        d.max_durability        AS def_max_durability,
-       d.power                 AS def_power
+       d.power                 AS def_power,
+       d.ability_id            AS def_ability_id
      FROM inventory_items ii
      JOIN item_definitions d ON d.id = ii.item_def_id
      WHERE ii.id = $1 AND ii.character_id = $2`,
