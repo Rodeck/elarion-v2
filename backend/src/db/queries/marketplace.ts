@@ -155,6 +155,18 @@ export async function getListingById(
 // Listing creation
 // ---------------------------------------------------------------------------
 
+export interface ListingInstanceStats {
+  instance_attack: number | null;
+  instance_defence: number | null;
+  instance_crit_chance: number | null;
+  instance_additional_attacks: number | null;
+  instance_armor_penetration: number | null;
+  instance_max_mana: number | null;
+  instance_mana_on_hit: number | null;
+  instance_mana_regen: number | null;
+  instance_quality_tier: number | null;
+}
+
 export async function createListing(
   buildingId: number,
   sellerId: string,
@@ -163,7 +175,28 @@ export async function createListing(
   pricePerItem: number,
   currentDurability: number | null,
   durationDays: number,
+  instanceStats?: ListingInstanceStats | null,
 ): Promise<number> {
+  if (instanceStats && instanceStats.instance_quality_tier != null) {
+    const result = await query<{ id: number }>(
+      `INSERT INTO marketplace_listings
+         (building_id, seller_id, item_def_id, quantity, price_per_item, current_durability, expires_at,
+          instance_attack, instance_defence, instance_crit_chance, instance_additional_attacks,
+          instance_armor_penetration, instance_max_mana, instance_mana_on_hit, instance_mana_regen,
+          instance_quality_tier)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW() + $7 * INTERVAL '1 day',
+               $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       RETURNING id`,
+      [
+        buildingId, sellerId, itemDefId, quantity, pricePerItem, currentDurability, durationDays,
+        instanceStats.instance_attack, instanceStats.instance_defence, instanceStats.instance_crit_chance,
+        instanceStats.instance_additional_attacks, instanceStats.instance_armor_penetration,
+        instanceStats.instance_max_mana, instanceStats.instance_mana_on_hit, instanceStats.instance_mana_regen,
+        instanceStats.instance_quality_tier,
+      ],
+    );
+    return result.rows[0]!.id;
+  }
   const result = await query<{ id: number }>(
     `INSERT INTO marketplace_listings
        (building_id, seller_id, item_def_id, quantity, price_per_item, current_durability, expires_at)

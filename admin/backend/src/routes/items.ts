@@ -45,6 +45,7 @@ const VALID_CATEGORIES = ['resource', 'food', 'heal', 'weapon', 'boots', 'shield
 const VALID_WEAPON_SUBTYPES = ['one_handed', 'two_handed', 'dagger', 'wand', 'staff', 'bow'] as const;
 const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book']);
 const DEFENCE_CATEGORIES = new Set(['boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate', 'ring', 'amulet']);
+const EQUIPPABLE_CATEGORIES = new Set(['weapon', 'boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate', 'ring', 'amulet']);
 
 type ItemCategory = typeof VALID_CATEGORIES[number];
 
@@ -71,6 +72,14 @@ function formatItem(item: ItemDefinition) {
     power: item.power ?? null,
     disassembly_cost: item.disassembly_cost ?? 0,
     ability_id: item.ability_id ?? null,
+    armor_penetration: item.armor_penetration ?? 0,
+    additional_attacks: item.additional_attacks ?? 0,
+    crit_chance: item.crit_chance ?? 0,
+    max_mana: item.max_mana ?? 0,
+    mana_on_hit: item.mana_on_hit ?? 0,
+    mana_on_damage_taken: item.mana_on_damage_taken ?? 0,
+    mana_regen: item.mana_regen ?? 0,
+    dodge_chance: item.dodge_chance ?? 0,
     created_at: item.created_at,
   };
 }
@@ -143,6 +152,52 @@ function validateItemFields(body: Record<string, unknown>, isCreate: boolean): s
       if (body['tool_type']) return 'tool_type is only allowed for category "tool"';
       if (body['max_durability'] != null) return 'max_durability is only allowed for category "tool"';
       if (body['power'] != null) return 'power is only allowed for category "tool"';
+    }
+
+    // Weapon attribute validation (equippable categories only)
+    const armorPen = body['armor_penetration'];
+    if (armorPen !== undefined && armorPen !== null && armorPen !== '') {
+      if (!EQUIPPABLE_CATEGORIES.has(category)) {
+        return 'armor_penetration is only allowed for equippable items';
+      }
+      const n = Number(armorPen);
+      if (!Number.isInteger(n) || n < 0 || n > 100) return 'armor_penetration must be an integer between 0 and 100';
+    }
+    const addAtk = body['additional_attacks'];
+    if (addAtk !== undefined && addAtk !== null && addAtk !== '') {
+      if (!EQUIPPABLE_CATEGORIES.has(category)) {
+        return 'additional_attacks is only allowed for equippable items';
+      }
+      const n = Number(addAtk);
+      if (!Number.isInteger(n) || n < 0 || n > 10) return 'additional_attacks must be an integer between 0 and 10';
+    }
+    const critChance = body['crit_chance'];
+    if (critChance !== undefined && critChance !== null && critChance !== '') {
+      if (!EQUIPPABLE_CATEGORIES.has(category)) {
+        return 'crit_chance is only allowed for equippable items';
+      }
+      const n = Number(critChance);
+      if (!Number.isInteger(n) || n < 0 || n > 100) return 'crit_chance must be an integer between 0 and 100';
+    }
+
+    // Mana / dodge stat validation (equippable categories only)
+    for (const field of ['max_mana', 'mana_on_hit', 'mana_on_damage_taken', 'mana_regen'] as const) {
+      const val = body[field];
+      if (val !== undefined && val !== null && val !== '') {
+        if (!EQUIPPABLE_CATEGORIES.has(category)) {
+          return `${field} is only allowed for equippable items`;
+        }
+        const n = Number(val);
+        if (!Number.isInteger(n) || n < 0) return `${field} must be a non-negative integer`;
+      }
+    }
+    const dodgeChance = body['dodge_chance'];
+    if (dodgeChance !== undefined && dodgeChance !== null && dodgeChance !== '') {
+      if (!EQUIPPABLE_CATEGORIES.has(category)) {
+        return 'dodge_chance is only allowed for equippable items';
+      }
+      const n = Number(dodgeChance);
+      if (!Number.isInteger(n) || n < 0 || n > 100) return 'dodge_chance must be an integer between 0 and 100';
     }
 
     // Skill book validation
@@ -376,6 +431,14 @@ itemsRouter.post('/', upload.single('icon'), resizeUpload(), async (req: Request
       power: body['power'] != null ? Number(body['power']) : null,
       disassembly_cost: body['disassembly_cost'] != null ? Number(body['disassembly_cost']) : 0,
       ability_id: body['ability_id'] != null ? Number(body['ability_id']) : null,
+      armor_penetration: body['armor_penetration'] != null && body['armor_penetration'] !== '' ? Number(body['armor_penetration']) : 0,
+      additional_attacks: body['additional_attacks'] != null && body['additional_attacks'] !== '' ? Number(body['additional_attacks']) : 0,
+      crit_chance: body['crit_chance'] != null && body['crit_chance'] !== '' ? Number(body['crit_chance']) : 0,
+      max_mana: body['max_mana'] != null && body['max_mana'] !== '' ? Number(body['max_mana']) : 0,
+      mana_on_hit: body['mana_on_hit'] != null && body['mana_on_hit'] !== '' ? Number(body['mana_on_hit']) : 0,
+      mana_on_damage_taken: body['mana_on_damage_taken'] != null && body['mana_on_damage_taken'] !== '' ? Number(body['mana_on_damage_taken']) : 0,
+      mana_regen: body['mana_regen'] != null && body['mana_regen'] !== '' ? Number(body['mana_regen']) : 0,
+      dodge_chance: body['dodge_chance'] != null && body['dodge_chance'] !== '' ? Number(body['dodge_chance']) : 0,
     });
     log('info', 'item_definition_created', { admin: req.username, item_id: item.id, name: item.name, category: item.category });
     return res.status(201).json(formatItem(item));
@@ -459,6 +522,14 @@ itemsRouter.put('/:id', upload.single('icon'), resizeUpload(), async (req: Reque
   if (body['power'] !== undefined)         updateData['power']          = body['power'] != null ? Number(body['power']) : null;
   if (body['disassembly_cost'] !== undefined) updateData['disassembly_cost'] = body['disassembly_cost'] != null ? Number(body['disassembly_cost']) : 0;
   if (body['ability_id'] !== undefined) updateData['ability_id'] = body['ability_id'] != null ? Number(body['ability_id']) : null;
+  if (body['armor_penetration'] !== undefined) updateData['armor_penetration'] = body['armor_penetration'] != null && body['armor_penetration'] !== '' ? Number(body['armor_penetration']) : 0;
+  if (body['additional_attacks'] !== undefined) updateData['additional_attacks'] = body['additional_attacks'] != null && body['additional_attacks'] !== '' ? Number(body['additional_attacks']) : 0;
+  if (body['crit_chance'] !== undefined) updateData['crit_chance'] = body['crit_chance'] != null && body['crit_chance'] !== '' ? Number(body['crit_chance']) : 0;
+  if (body['max_mana'] !== undefined) updateData['max_mana'] = body['max_mana'] != null && body['max_mana'] !== '' ? Number(body['max_mana']) : 0;
+  if (body['mana_on_hit'] !== undefined) updateData['mana_on_hit'] = body['mana_on_hit'] != null && body['mana_on_hit'] !== '' ? Number(body['mana_on_hit']) : 0;
+  if (body['mana_on_damage_taken'] !== undefined) updateData['mana_on_damage_taken'] = body['mana_on_damage_taken'] != null && body['mana_on_damage_taken'] !== '' ? Number(body['mana_on_damage_taken']) : 0;
+  if (body['mana_regen'] !== undefined) updateData['mana_regen'] = body['mana_regen'] != null && body['mana_regen'] !== '' ? Number(body['mana_regen']) : 0;
+  if (body['dodge_chance'] !== undefined) updateData['dodge_chance'] = body['dodge_chance'] != null && body['dodge_chance'] !== '' ? Number(body['dodge_chance']) : 0;
 
   try {
     const item = await updateItemDefinition(id, updateData as Parameters<typeof updateItemDefinition>[1]);

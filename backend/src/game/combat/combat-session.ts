@@ -162,7 +162,37 @@ export class CombatSession {
     };
 
     sendToSession(this.wsSession, 'combat:start', startPayload);
+
+    // Execute additional attacks (bonus hits) before first turn
+    this.executeAdditionalAttacks();
+
     this.startTurn();
+  }
+
+  /** Bonus hits at combat start — no crits, uses normal auto-attack damage. */
+  private executeAdditionalAttacks(): void {
+    const count = this.playerStats.additionalAttacks ?? 0;
+    if (count <= 0) return;
+
+    const bonusEvents: CombatEventDto[] = [];
+
+    for (let i = 0; i < count; i++) {
+      if (this.engineState.enemyHp <= 0) break;
+
+      // Use player attack vs enemy defence (no crit — force critChance to 0)
+      const noCritStats: DerivedCombatStats = { ...this.playerStats, critChance: 0 };
+      const result = computePlayerAttack(noCritStats, 0, this.monster.defense, this.engineState);
+      this.engineState = result.newState;
+      bonusEvents.push(...result.events);
+    }
+
+    if (bonusEvents.length > 0) {
+      this.sendTurnResult('player', bonusEvents);
+    }
+
+    if (this.engineState.enemyHp <= 0) {
+      void this.endCombat('win');
+    }
   }
 
   /**

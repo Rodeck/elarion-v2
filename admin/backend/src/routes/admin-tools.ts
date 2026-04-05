@@ -5,9 +5,11 @@ import {
   getInventorySlotCount,
   findStackableSlot,
   insertInventoryItem,
+  insertInventoryItemWithStats,
   insertToolInventoryItem,
   updateInventoryQuantity,
 } from '../../../../backend/src/db/queries/inventory';
+import { rollItemStats } from '../../../../backend/src/game/inventory/item-roll-service';
 
 export const adminToolsRouter = Router();
 
@@ -123,7 +125,22 @@ adminToolsRouter.post('/grant-item', async (req, res) => {
       if (isTool) {
         await insertToolInventoryItem(character_id, item_def_id, itemDef.max_durability!);
       } else {
-        await insertInventoryItem(character_id, item_def_id, qtyPerSlot);
+        const rolled = rollItemStats(itemDef);
+        if (rolled) {
+          await insertInventoryItemWithStats(character_id, item_def_id, qtyPerSlot, {
+            instance_attack: rolled.instance_attack,
+            instance_defence: rolled.instance_defence,
+            instance_crit_chance: rolled.instance_crit_chance,
+            instance_additional_attacks: rolled.instance_additional_attacks,
+            instance_armor_penetration: rolled.instance_armor_penetration,
+            instance_max_mana: rolled.instance_max_mana,
+            instance_mana_on_hit: rolled.instance_mana_on_hit,
+            instance_mana_regen: rolled.instance_mana_regen,
+            instance_quality_tier: rolled.instance_quality_tier,
+          });
+        } else {
+          await insertInventoryItem(character_id, item_def_id, qtyPerSlot);
+        }
       }
     }
 

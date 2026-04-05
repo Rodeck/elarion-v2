@@ -66,6 +66,9 @@ Run via Bash: `node scripts/game-entities.js <command> '<json-data>'`
   "tool_type": null,            // tool only: pickaxe|axe|fishing_rod|kiln
   "max_durability": null,       // tool only, required for tools, integer >= 1
   "power": null,                // tool only, optional, integer >= 1
+  "crit_chance": null,           // optional, integer 0-100, % chance to crit
+  "armor_penetration": null,     // optional, integer 0-100, % armor penetration
+  "additional_attacks": null,    // optional, integer 0-10, bonus hits at combat start
   "disassembly_cost": 0         // optional, crowns cost per unit to disassemble, integer >= 0
 }
 ```

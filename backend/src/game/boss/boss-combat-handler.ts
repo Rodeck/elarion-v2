@@ -230,6 +230,9 @@ export async function handleBossChallenge(
   // Broadcast state change to zone
   bossManager.broadcastBossState(boss_id);
 
+  // Execute additional attacks (bonus hits before first turn, no crits)
+  executeAdditionalAttacks(combatSession);
+
   // Start first turn
   startTurn(combatSession);
 }
@@ -281,6 +284,29 @@ export async function handleBossDisconnect(characterId: string): Promise<void> {
   const cs = activeSessions.get(characterId);
   if (!cs) return;
   await endCombat(cs, 'loss');
+}
+
+// ---------------------------------------------------------------------------
+// Additional attacks (bonus hits at combat start)
+// ---------------------------------------------------------------------------
+
+function executeAdditionalAttacks(cs: BossCombatSession): void {
+  const count = cs.playerStats.additionalAttacks ?? 0;
+  if (count <= 0) return;
+
+  const bonusEvents: import('../../../../shared/protocol/index').CombatEventDto[] = [];
+
+  for (let i = 0; i < count; i++) {
+    if (cs.engineState.enemyHp <= 0) break;
+    const noCritStats: DerivedCombatStats = { ...cs.playerStats, critChance: 0 };
+    const result = computePlayerAttack(noCritStats, 0, cs.effectiveDefense, cs.engineState);
+    cs.engineState = result.newState;
+    bonusEvents.push(...result.events);
+  }
+
+  if (bonusEvents.length > 0) {
+    sendTurnResult(cs, 'player', bonusEvents);
+  }
 }
 
 // ---------------------------------------------------------------------------

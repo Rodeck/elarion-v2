@@ -66,7 +66,7 @@ async function overview() {
 async function items(category) {
   const q = category
     ? `SELECT id, name, category, weapon_subtype, attack, defence, heal_power, food_power, stack_size,
-         dodge_chance, crit_chance, crit_damage, max_mana, mana_on_hit
+         dodge_chance, crit_chance, crit_damage, max_mana, mana_on_hit, armor_penetration, additional_attacks
        FROM item_definitions WHERE category = $1 ORDER BY id`
     : `SELECT id, name, category, weapon_subtype, attack, defence, heal_power, food_power, stack_size
        FROM item_definitions ORDER BY category, id`;
@@ -100,6 +100,8 @@ async function itemDetail(id) {
   if (item.dodge_chance) console.log(`  Dodge Chance:   ${item.dodge_chance}%`);
   if (item.crit_chance)  console.log(`  Crit Chance:    ${item.crit_chance}%`);
   if (item.crit_damage && item.crit_damage !== 150) console.log(`  Crit Damage:    ${item.crit_damage}%`);
+  if (item.armor_penetration) console.log(`  Armor Pen:      ${item.armor_penetration}%`);
+  if (item.additional_attacks) console.log(`  Extra Attacks:  ${item.additional_attacks}`);
   if (item.icon_filename) console.log(`  Icon:           ${item.icon_filename}`);
 
   // Where does this item drop?
@@ -458,7 +460,7 @@ async function economy() {
   section('Equipment Stats Summary');
   const equipment = await pool.query(`
     SELECT id, name, category, weapon_subtype, attack, defence,
-      dodge_chance, crit_chance, crit_damage, max_mana
+      dodge_chance, crit_chance, crit_damage, max_mana, armor_penetration, additional_attacks
     FROM item_definitions
     WHERE category IN ('weapon','helmet','chestplate','shield','greaves','bracer','boots')
     ORDER BY category, attack DESC NULLS LAST, defence DESC NULLS LAST

@@ -165,6 +165,16 @@ function validateItem(data) {
     if (data.food_power != null && data.category !== 'food') errors.push('food_power is only allowed for food items');
     if (data.food_power != null && (!Number.isInteger(data.food_power) || data.food_power < 0)) errors.push('food_power must be a non-negative integer');
 
+    if (data.crit_chance != null && (!Number.isInteger(data.crit_chance) || data.crit_chance < 0 || data.crit_chance > 100)) errors.push('crit_chance must be an integer 0–100');
+    if (data.armor_penetration != null && (!Number.isInteger(data.armor_penetration) || data.armor_penetration < 0 || data.armor_penetration > 100)) errors.push('armor_penetration must be an integer 0–100');
+    if (data.additional_attacks != null && (!Number.isInteger(data.additional_attacks) || data.additional_attacks < 0 || data.additional_attacks > 10)) errors.push('additional_attacks must be an integer 0–10');
+
+    if (data.max_mana != null && (!Number.isInteger(data.max_mana) || data.max_mana < 0)) errors.push('max_mana must be a non-negative integer');
+    if (data.mana_on_hit != null && (!Number.isInteger(data.mana_on_hit) || data.mana_on_hit < 0)) errors.push('mana_on_hit must be a non-negative integer');
+    if (data.mana_on_damage_taken != null && (!Number.isInteger(data.mana_on_damage_taken) || data.mana_on_damage_taken < 0)) errors.push('mana_on_damage_taken must be a non-negative integer');
+    if (data.mana_regen != null && (!Number.isInteger(data.mana_regen) || data.mana_regen < 0)) errors.push('mana_regen must be a non-negative integer');
+    if (data.dodge_chance != null && (!Number.isInteger(data.dodge_chance) || data.dodge_chance < 0 || data.dodge_chance > 100)) errors.push('dodge_chance must be an integer 0–100');
+
     if (data.category === 'skill_book') {
       if (data.ability_id == null) errors.push('ability_id is required for skill_book items');
       else if (!Number.isInteger(data.ability_id) || data.ability_id < 1) errors.push('ability_id must be a positive integer');

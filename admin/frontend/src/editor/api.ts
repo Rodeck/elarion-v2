@@ -477,6 +477,9 @@ export interface ItemDefinitionResponse {
   max_durability: number | null;
   power: number | null;
   disassembly_cost: number;
+  armor_penetration: number;
+  additional_attacks: number;
+  crit_chance: number;
   created_at: string;
 }
 

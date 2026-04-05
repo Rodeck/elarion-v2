@@ -246,8 +246,22 @@ export async function buyListing(
 
     await client.query('COMMIT');
 
+    // Reconstruct instance stats from listing (if present) to preserve through trade
+    const listingInstanceStats = listing.instance_quality_tier != null ? {
+      instance_attack: listing.instance_attack ?? null,
+      instance_defence: listing.instance_defence ?? null,
+      instance_crit_chance: listing.instance_crit_chance ?? null,
+      instance_additional_attacks: listing.instance_additional_attacks ?? null,
+      instance_armor_penetration: listing.instance_armor_penetration ?? null,
+      instance_max_mana: listing.instance_max_mana ?? null,
+      instance_mana_on_hit: listing.instance_mana_on_hit ?? null,
+      instance_mana_regen: listing.instance_mana_regen ?? null,
+      instance_quality_tier: listing.instance_quality_tier as 1 | 2 | 3 | 4,
+      quality_label: '',
+    } : null;
+
     // Grant item to buyer (outside transaction — uses its own session send)
-    await grantItemToCharacter(session, buyerId, listing.item_def_id, listing.quantity);
+    await grantItemToCharacter(session, buyerId, listing.item_def_id, listing.quantity, listingInstanceStats);
 
     // Update buyer's crown display
     sendToSession(session, 'marketplace.buy_result', {
@@ -356,6 +370,17 @@ export async function listItem(
 
   // Remove items from inventory
   const durability = slot.current_durability ?? null;
+  const instanceStats = slot.instance_quality_tier != null ? {
+    instance_attack: slot.instance_attack ?? null,
+    instance_defence: slot.instance_defence ?? null,
+    instance_crit_chance: slot.instance_crit_chance ?? null,
+    instance_additional_attacks: slot.instance_additional_attacks ?? null,
+    instance_armor_penetration: slot.instance_armor_penetration ?? null,
+    instance_max_mana: slot.instance_max_mana ?? null,
+    instance_mana_on_hit: slot.instance_mana_on_hit ?? null,
+    instance_mana_regen: slot.instance_mana_regen ?? null,
+    instance_quality_tier: slot.instance_quality_tier ?? null,
+  } : null;
   if (quantity === slot.quantity) {
     await deleteInventoryItem(slot_id, ctx.characterId);
     sendToSession(session, 'inventory.item_deleted', { slot_id });
@@ -377,7 +402,7 @@ export async function listItem(
     }
   }
 
-  // Create listing
+  // Create listing (preserving instance stats)
   const listingId = await createListing(
     ctx.buildingId,
     ctx.characterId,
@@ -386,6 +411,7 @@ export async function listItem(
     price_per_item,
     durability,
     ctx.config.listing_duration_days,
+    instanceStats,
   );
 
   const newListingCount = await countSellerActiveListings(ctx.characterId);
@@ -612,6 +638,8 @@ function buildDefinitionDto(row: {
   def_dodge_chance: number;
   def_crit_chance: number;
   def_crit_damage: number;
+  def_armor_penetration: number;
+  def_additional_attacks: number;
   def_tool_type: string | null;
   def_max_durability: number | null;
   def_power: number | null;
@@ -636,6 +664,8 @@ function buildDefinitionDto(row: {
     dodge_chance: row.def_dodge_chance ?? 0,
     crit_chance: row.def_crit_chance ?? 0,
     crit_damage: row.def_crit_damage ?? 0,
+    armor_penetration: row.def_armor_penetration ?? 0,
+    additional_attacks: row.def_additional_attacks ?? 0,
     tool_type: row.def_tool_type,
     max_durability: row.def_max_durability,
     power: row.def_power,

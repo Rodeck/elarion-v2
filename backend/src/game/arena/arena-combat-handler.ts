@@ -381,8 +381,52 @@ async function handleChallengePlayer(
     defender_id: target_character_id,
   });
 
+  // Execute additional attacks for both players before first turn (no crits)
+  executePvpAdditionalAttacks(cs);
+
   // Start first turn
   startPvpTurn(cs);
+}
+
+// ---------------------------------------------------------------------------
+// Additional attacks (bonus hits at combat start)
+// ---------------------------------------------------------------------------
+
+function executePvpAdditionalAttacks(cs: PvpCombatSession): void {
+  const challengerBonusEvents: CombatEventDto[] = [];
+  const defenderBonusEvents: CombatEventDto[] = [];
+
+  // Challenger bonus hits against defender
+  const cCount = cs.challengerStats.additionalAttacks ?? 0;
+  for (let i = 0; i < cCount; i++) {
+    if (cs.defenderState.playerHp <= 0) break;
+    const noCritStats: DerivedCombatStats = { ...cs.challengerStats, critChance: 0 };
+    const result = computePlayerAttack(noCritStats, cs.defenderStats.dodgeChance, cs.defenderStats.defence, {
+      ...cs.challengerState,
+      enemyHp: cs.defenderState.playerHp,
+    });
+    cs.challengerState = { ...result.newState, enemyHp: cs.challengerState.enemyHp };
+    cs.defenderState = { ...cs.defenderState, playerHp: result.newState.enemyHp };
+    challengerBonusEvents.push(...result.events);
+  }
+
+  // Defender bonus hits against challenger
+  const dCount = cs.defenderStats.additionalAttacks ?? 0;
+  for (let i = 0; i < dCount; i++) {
+    if (cs.challengerState.playerHp <= 0) break;
+    const noCritStats: DerivedCombatStats = { ...cs.defenderStats, critChance: 0 };
+    const result = computePlayerAttack(noCritStats, cs.challengerStats.dodgeChance, cs.challengerStats.defence, {
+      ...cs.defenderState,
+      enemyHp: cs.challengerState.playerHp,
+    });
+    cs.defenderState = { ...result.newState, enemyHp: cs.defenderState.enemyHp };
+    cs.challengerState = { ...cs.challengerState, playerHp: result.newState.enemyHp };
+    defenderBonusEvents.push(...result.events);
+  }
+
+  if (challengerBonusEvents.length > 0 || defenderBonusEvents.length > 0) {
+    sendPvpTurnResult(cs, 'player', challengerBonusEvents, defenderBonusEvents);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1215,8 +1259,29 @@ async function handleChallengeNpc(
     monster_name: monster.name,
   });
 
+  // Execute additional attacks before first turn
+  executeNpcAdditionalAttacks(cs);
+
   // Start first turn
   startNpcTurn(cs);
+}
+
+function executeNpcAdditionalAttacks(cs: ArenaNpcCombatSession): void {
+  const count = cs.playerStats.additionalAttacks ?? 0;
+  if (count <= 0) return;
+
+  const bonusEvents: CombatEventDto[] = [];
+  for (let i = 0; i < count; i++) {
+    if (cs.engineState.enemyHp <= 0) break;
+    const noCritStats: DerivedCombatStats = { ...cs.playerStats, critChance: 0 };
+    const result = computePlayerAttack(noCritStats, 0, cs.monsterDefense, cs.engineState);
+    cs.engineState = result.newState;
+    bonusEvents.push(...result.events);
+  }
+
+  if (bonusEvents.length > 0) {
+    sendNpcTurnResult(cs, 'player', bonusEvents);
+  }
 }
 
 // ---------------------------------------------------------------------------

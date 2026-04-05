@@ -589,9 +589,11 @@ export class StatsBar {
         ${this.renderDerived('Mana', 100 + c.attr_intelligence * 8, '#78a8e8')}
         ${this.renderDerived('Attack', effAtk, '#e8c878', c.attack_power, gearAtk)}
         ${this.renderDerived('Defence', effDef, '#78a8e8', c.defence, gearDef)}
-        ${this.renderDerived('Crit %', parseFloat((c.attr_dexterity * 0.1).toFixed(1)), '#e8a878')}
+        ${this.renderDerived('Crit %', parseFloat((c.attr_dexterity * 0.1 + (c.gear_crit_chance ?? 0)).toFixed(1)), '#e8a878', parseFloat((c.attr_dexterity * 0.1).toFixed(1)), c.gear_crit_chance ?? 0)}
         ${this.renderDerived('Dodge %', parseFloat((c.attr_dexterity * 0.1).toFixed(1)), '#a8e878')}
         ${this.renderDerived('Crit Dmg', parseFloat((150 + c.attr_strength * 0.3).toFixed(1)), '#e87878')}
+        ${this.renderDerived('Armor Pen', (c.armor_penetration ?? 0), '#70d4d8')}
+        ${(c.additional_attacks ?? 0) > 0 ? this.renderDerived('1st Strikes', c.additional_attacks ?? 0, '#d870d8') : ''}
       </div>
     `;
     this.expandedPanel.appendChild(statsContent);

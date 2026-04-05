@@ -79,6 +79,8 @@ export async function buildRecipeDto(
       dodge_chance: outputItem.dodge_chance,
       crit_chance: outputItem.crit_chance,
       crit_damage: outputItem.crit_damage,
+      armor_penetration: outputItem.armor_penetration ?? 0,
+      additional_attacks: outputItem.additional_attacks ?? 0,
       tool_type: outputItem.tool_type ?? null,
       max_durability: outputItem.max_durability ?? null,
       power: outputItem.power ?? null,

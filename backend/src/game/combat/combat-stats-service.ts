@@ -31,6 +31,8 @@ interface EquippedItemStats {
   dodge_chance: number;
   crit_chance: number;
   crit_damage: number;
+  armor_penetration: number;
+  additional_attacks: number;
 }
 
 export async function computeCombatStats(
@@ -58,15 +60,17 @@ export async function computeCombatStats(
   // Load all equipped item stats (items with equipped_slot set)
   const itemResult = await query<EquippedItemStats>(
     `SELECT
-       id.attack,
-       id.defence,
-       id.max_mana,
-       id.mana_on_hit,
+       COALESCE(ii.instance_attack, id.attack)                       AS attack,
+       COALESCE(ii.instance_defence, id.defence)                     AS defence,
+       COALESCE(ii.instance_max_mana, id.max_mana)                   AS max_mana,
+       COALESCE(ii.instance_mana_on_hit, id.mana_on_hit)             AS mana_on_hit,
        id.mana_on_damage_taken,
-       id.mana_regen,
+       COALESCE(ii.instance_mana_regen, id.mana_regen)               AS mana_regen,
        id.dodge_chance,
-       id.crit_chance,
-       id.crit_damage
+       COALESCE(ii.instance_crit_chance, id.crit_chance)             AS crit_chance,
+       id.crit_damage,
+       COALESCE(ii.instance_armor_penetration, id.armor_penetration) AS armor_penetration,
+       COALESCE(ii.instance_additional_attacks, id.additional_attacks) AS additional_attacks
      FROM inventory_items ii
      JOIN item_definitions id ON id.id = ii.item_def_id
      WHERE ii.character_id = $1 AND ii.equipped_slot IS NOT NULL`,
@@ -84,6 +88,8 @@ export async function computeCombatStats(
   let critChance = char.attr_dexterity * 0.1;
   let critDamage = DEFAULT_CRIT_DAMAGE + char.attr_strength * 0.3;
   let critDamageSet = false;
+  let armorPenetration = 0;
+  let additionalAttacks = 0;
 
   for (const item of itemResult.rows) {
     bonusAttack    += item.attack   ?? 0;
@@ -98,6 +104,8 @@ export async function computeCombatStats(
       critDamage = Math.max(critDamage, item.crit_damage);
       critDamageSet = true;
     }
+    armorPenetration  += item.armor_penetration;
+    additionalAttacks += item.additional_attacks;
   }
 
   if (!critDamageSet && itemResult.rows.length === 0) {
@@ -115,5 +123,7 @@ export async function computeCombatStats(
     dodgeChance:       Math.min(95, dodgeChance),   // cap dodge at 95%
     critChance:        Math.min(100, critChance),
     critDamage:        critDamage,
+    armorPenetration:  Math.min(100, armorPenetration),
+    additionalAttacks: additionalAttacks,
   };
 }

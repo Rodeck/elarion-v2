@@ -3,7 +3,7 @@ import multer from 'multer';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { updateMapImage } from '../../../../backend/src/db/queries/city-maps';
+import { updateMapImage, updateMap } from '../../../../backend/src/db/queries/city-maps';
 
 export const uploadRouter = Router();
 
@@ -28,6 +28,15 @@ const upload = multer({
 function isValidPng(buffer: Buffer): boolean {
   if (buffer.length < 8) return false;
   return buffer.subarray(0, 8).equals(PNG_MAGIC_BYTES);
+}
+
+/** Read width and height from PNG IHDR chunk (bytes 16–23, big-endian). */
+function readPngDimensions(buffer: Buffer): { width: number; height: number } | null {
+  if (buffer.length < 24) return null;
+  const width = buffer.readUInt32BE(16);
+  const height = buffer.readUInt32BE(20);
+  if (width === 0 || height === 0) return null;
+  return { width, height };
 }
 
 uploadRouter.post('/:id/image', upload.single('image'), async (req: Request, res: Response) => {
@@ -91,12 +100,23 @@ uploadRouter.post('/:id/image', upload.single('image'), async (req: Request, res
       return;
     }
 
+    // Update map dimensions from the actual PNG image
+    const dims = readPngDimensions(req.file.buffer);
+    if (dims) {
+      await updateMap(mapId, {
+        imageWidthPx: dims.width,
+        imageHeightPx: dims.height,
+      });
+    }
+
     console.log(JSON.stringify({
       level: 'info',
       event: 'upload_complete',
       mapId,
       filename,
       size: req.file.size,
+      width: dims?.width,
+      height: dims?.height,
       timestamp: new Date().toISOString(),
     }));
 

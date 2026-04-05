@@ -69,6 +69,8 @@ function buildSlotDto(r: InventoryItemWithDefinition): InventorySlotDto {
       dodge_chance: r.def_dodge_chance,
       crit_chance: r.def_crit_chance,
       crit_damage: r.def_crit_damage,
+      armor_penetration: r.def_armor_penetration ?? 0,
+      additional_attacks: r.def_additional_attacks ?? 0,
       tool_type: r.def_tool_type ?? null,
       max_durability: r.def_max_durability ?? null,
       power: r.def_power ?? null,

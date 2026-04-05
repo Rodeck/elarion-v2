@@ -93,7 +93,8 @@
       "Bash(curl -s http://localhost:4001/api/items)",
       "Bash(for f:*)",
       "Bash(do echo:*)",
-      "Read(//d/projects/elarion-v2/**)"
+      "Read(//d/projects/elarion-v2/**)",
+      "Bash(curl -s http://localhost:4001/api/items?limit=1)"
     ]
   }
 }

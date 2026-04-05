@@ -291,7 +291,9 @@ export class MapCanvas {
     if (e.button === 0) {
       const world = this.screenToWorld(sx, sy);
 
-      // Check if clicking near a building label for drag
+      // Check if clicking near a building label — start drag AND fire node
+      // click so the building gets selected even when the label overlaps
+      // the diamond.
       const labelBuildingId = this.hitTestBuildingLabel(world.x, world.y);
       if (labelBuildingId !== null) {
         const building = this.buildings.find((b) => b.id === labelBuildingId);
@@ -302,6 +304,24 @@ export class MapCanvas {
           this.dragLabelStartY = world.y;
           this.dragLabelOrigOffsetX = building.label_offset_x;
           this.dragLabelOrigOffsetY = building.label_offset_y;
+          if (this.onNodeClick) {
+            this.onNodeClick(building.node_id);
+          }
+          this.needsRedraw = true;
+          return;
+        }
+      }
+
+      // Check building hotspot hit — if user clicked inside a building
+      // hotspot area, treat it as a click on that building's node.
+      const hotspotBuildingId = this.hitTestBuilding(world.x, world.y);
+      if (hotspotBuildingId !== null) {
+        const building = this.buildings.find((b) => b.id === hotspotBuildingId);
+        if (building) {
+          if (this.onNodeClick) {
+            this.onNodeClick(building.node_id);
+          }
+          this.needsRedraw = true;
           return;
         }
       }
@@ -419,17 +439,21 @@ export class MapCanvas {
       return;
     }
 
-    // End label drag
+    // End label drag — only persist if the label actually moved
     if (this.isDraggingLabel && this.dragLabelBuildingId !== null) {
       const building = this.buildings.find(
         (b) => b.id === this.dragLabelBuildingId,
       );
       if (building && this.onBuildingDrag) {
-        this.onBuildingDrag(
-          this.dragLabelBuildingId,
-          building.label_offset_x,
-          building.label_offset_y,
-        );
+        const movedX = Math.abs(building.label_offset_x - this.dragLabelOrigOffsetX);
+        const movedY = Math.abs(building.label_offset_y - this.dragLabelOrigOffsetY);
+        if (movedX > 1 || movedY > 1) {
+          this.onBuildingDrag(
+            this.dragLabelBuildingId,
+            building.label_offset_x,
+            building.label_offset_y,
+          );
+        }
       }
       this.isDraggingLabel = false;
       this.dragLabelBuildingId = null;

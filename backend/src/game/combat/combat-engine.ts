@@ -20,9 +20,11 @@ export interface DerivedCombatStats {
   manaOnHit: number;
   manaOnDamageTaken: number;
   manaRegen: number;
-  dodgeChance: number;   // 0–100
-  critChance: number;    // 0–100
-  critDamage: number;    // integer %: 150 = 1.5×
+  dodgeChance: number;       // 0–100
+  critChance: number;        // 0–100
+  critDamage: number;        // integer %: 150 = 1.5×
+  armorPenetration: number;  // 0–100, % of enemy defence ignored
+  additionalAttacks: number; // bonus hits at combat start
 }
 
 export interface LoadoutSlotSnapshot {
@@ -167,9 +169,10 @@ export function computePlayerAttack(
   const isCrit = rollCrit(playerStats.critChance);
   const critMult = isCrit ? (playerStats.critDamage || DEFAULT_CRIT_DAMAGE) / 100 : 1;
 
-  // Apply enemy defence reduction (mirrors how player defence reduces enemy damage)
+  // Apply armor penetration then enemy defence reduction
+  const effectiveDefence = Math.floor(enemyDefence * (1 - (playerStats.armorPenetration ?? 0) / 100));
   const rawDamage = Math.floor(effectiveAttack * critMult);
-  const damage = Math.max(1, rawDamage - enemyDefence);
+  const damage = Math.max(1, rawDamage - effectiveDefence);
 
   newState.enemyHp = Math.max(0, newState.enemyHp - damage);
 
@@ -395,10 +398,12 @@ function applyAbilityEffect(
 ): CombatEventDto[] {
   const events: CombatEventDto[] = [];
 
+  const effDef = Math.floor(enemyDefence * (1 - (playerStats.armorPenetration ?? 0) / 100));
+
   switch (ability.effectType) {
     case 'damage': {
       const rawDmg = Math.floor(playerStats.attack * (ability.effectValue / 100));
-      const dmg = Math.max(1, rawDmg - enemyDefence);
+      const dmg = Math.max(1, rawDmg - effDef);
       state.enemyHp = Math.max(0, state.enemyHp - dmg);
       events.push({ kind: 'ability_fired', source: 'player', target: 'enemy', value: dmg, ability_name: ability.name });
       break;
@@ -469,7 +474,7 @@ function applyAbilityEffect(
     }
     case 'drain': {
       const rawDmg = Math.floor(playerStats.attack * (ability.effectValue / 100));
-      const dmg = Math.max(1, rawDmg - enemyDefence);
+      const dmg = Math.max(1, rawDmg - effDef);
       const healAmt = Math.floor(dmg * 0.5);
       state.enemyHp = Math.max(0, state.enemyHp - dmg);
       state.playerHp = Math.min(playerStats.maxHp, state.playerHp + healAmt);

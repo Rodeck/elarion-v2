@@ -47,10 +47,11 @@ Generate ready-to-use AI art prompts for all visual assets in a design. Items an
    - Grid spec first with EXACT pixel dimensions: "Pixel-perfect spritesheet, exactly [W]x[H] pixels, [cols] columns x [rows] rows uniform grid, each cell exactly 256x256 pixels, no margins, no padding, no gaps, no borders, cells flush edge-to-edge starting at pixel 0,0."
    - If last row is partial: "Last row has N items then [empty] transparent cell(s)."
    - Background: "Transparent background."
-   - Style: "Fantasy RPG item icons, stylized painted style like World of Warcraft icons, bold simple shapes, high contrast, readable at small size. Each item centered in its cell with padding around it."
+   - Style: "Fantasy RPG item icons, stylized painted style like World of Warcraft icons, bold simple shapes, high contrast, readable at small size. Each item centered in its cell with generous padding, entirely contained within its cell boundaries — nothing may touch or cross cell edges."
+   - **Weapon containment rule**: For weapons (swords, daggers, staves, bows, clubs, etc.), add: "Every weapon drawn vertically upright, NOT diagonal, NOT rotated, sized to fit within 60-70% of the cell with clear empty space on all sides." This prevents long diagonal weapons from overlapping into adjacent cells.
    - Items by row: "Top row left to right: [item], [item], [item]. Second row left to right: ..."
    - Each item: 3-8 words max — just the object and its dominant color. E.g., "dark wine bottle with cork", "glowing purple crystal shard", "clay pot of amber oil"
-   - Negative: "No text, no labels, no decorative borders, no background color."
+   - Negative: "No text, no labels, no decorative borders, no background color, no overlapping between cells."
    - DO NOT include art theory words like "brushstrokes", "specular highlights", "rim lighting" — keep it simple
 
 3. **Generate monster spritesheet prompts** → `game_design/<name>/monster_prompts.md` (or split if >25):
@@ -122,3 +123,4 @@ Generate ready-to-use AI art prompts for all visual assets in a design. Items an
 - **Character through appearance**: For NPCs — clothing, tools, expression tell their story
 - **Creature design logic**: Monsters should have one bold signature feature (crystal growths, iron shell, shadow wisps) that defines them visually
 - **Spritesheet consistency**: Emphasize uniform lighting, scale, and style across all cells in the grid
+- **Cell containment**: Every item MUST be fully contained within its grid cell with visible padding on all sides. Long items (swords, staves, bows) must be drawn vertically upright and sized to ~60-70% of cell height — NEVER diagonal, as diagonal placement causes weapons to overlap into adjacent cells and ruins the spritesheet for slicing. This is the #1 cause of unusable spritesheets.

@@ -38,6 +38,9 @@ export interface CharacterData {
   attr_dexterity: number;
   attr_toughness: number;
   stat_points_unspent: number;
+  armor_penetration: number;
+  additional_attacks: number;
+  gear_crit_chance: number;
 }
 
 export interface PlayerSummary {
@@ -630,6 +633,9 @@ export interface ItemDefinitionDto {
   dodge_chance: number;
   crit_chance: number;
   crit_damage: number;
+  // Weapon attributes
+  armor_penetration: number;
+  additional_attacks: number;
   // Tool-specific (null for non-tools)
   tool_type: string | null;
   max_durability: number | null;
@@ -637,6 +643,23 @@ export interface ItemDefinitionDto {
   // Skill book link (null for non-skill-books)
   ability_id: number | null;
 }
+
+// Quality tier for item variation (1=Poor, 2=Common, 3=Fine, 4=Superior)
+export type QualityTier = 1 | 2 | 3 | 4;
+
+export const QUALITY_LABELS: Record<QualityTier, string> = {
+  1: 'Poor',
+  2: 'Common',
+  3: 'Fine',
+  4: 'Superior',
+};
+
+export const QUALITY_COLORS: Record<QualityTier, string> = {
+  1: '#888888',
+  2: '#cccccc',
+  3: '#44cc44',
+  4: '#f0c060',
+};
 
 /** A single occupied inventory slot as sent to the client. */
 export interface InventorySlotDto {
@@ -646,6 +669,17 @@ export interface InventorySlotDto {
   current_durability?: number | null;  // present for tool items
   is_disassemblable?: boolean;         // true if item has disassembly recipes
   definition: ItemDefinitionDto;
+  // Per-instance stat overrides (null/undefined = use definition value)
+  instance_attack?: number | null;
+  instance_defence?: number | null;
+  instance_crit_chance?: number | null;
+  instance_additional_attacks?: number | null;
+  instance_armor_penetration?: number | null;
+  instance_max_mana?: number | null;
+  instance_mana_on_hit?: number | null;
+  instance_mana_regen?: number | null;
+  quality_tier?: QualityTier | null;
+  quality_label?: string | null;
 }
 
 // ---------------------------------------------------------------------------

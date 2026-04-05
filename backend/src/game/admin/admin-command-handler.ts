@@ -171,7 +171,8 @@ async function handleGiveItem(session: AuthenticatedSession, args: string[], rep
     await grantItemToCharacter(targetSession, character.id, itemId, quantity);
   } else {
     // Player offline — insert directly without WS notification
-    const { insertInventoryItem, insertToolInventoryItem, findStackableSlot, updateInventoryQuantity, getInventorySlotCount } = await import('../../db/queries/inventory');
+    const { insertInventoryItem, insertInventoryItemWithStats, insertToolInventoryItem, findStackableSlot, updateInventoryQuantity, getInventorySlotCount } = await import('../../db/queries/inventory');
+    const { rollItemStats } = await import('../inventory/item-roll-service');
 
     const isStackable = itemDef.stack_size != null;
     const isTool = itemDef.category === 'tool' && itemDef.max_durability != null;
@@ -198,7 +199,22 @@ async function handleGiveItem(session: AuthenticatedSession, args: string[], rep
       if (isTool) {
         await insertToolInventoryItem(character.id, itemId, itemDef.max_durability!);
       } else {
-        await insertInventoryItem(character.id, itemId, qtyPerSlot);
+        const rolled = rollItemStats(itemDef);
+        if (rolled) {
+          await insertInventoryItemWithStats(character.id, itemId, qtyPerSlot, {
+            instance_attack: rolled.instance_attack,
+            instance_defence: rolled.instance_defence,
+            instance_crit_chance: rolled.instance_crit_chance,
+            instance_additional_attacks: rolled.instance_additional_attacks,
+            instance_armor_penetration: rolled.instance_armor_penetration,
+            instance_max_mana: rolled.instance_max_mana,
+            instance_mana_on_hit: rolled.instance_mana_on_hit,
+            instance_mana_regen: rolled.instance_mana_regen,
+            instance_quality_tier: rolled.instance_quality_tier,
+          });
+        } else {
+          await insertInventoryItem(character.id, itemId, qtyPerSlot);
+        }
       }
       inserted++;
     }
@@ -654,6 +670,7 @@ async function handleResetPlayer(session: AuthenticatedSession, args: string[], 
   await query(`DELETE FROM crafting_sessions WHERE character_id = $1`, [character.id]);
   await query(`DELETE FROM character_quests WHERE character_id = $1`, [character.id]);
   await query(`DELETE FROM character_squires WHERE character_id = $1`, [character.id]);
+  await query(`DELETE FROM character_ability_progress WHERE character_id = $1`, [character.id]);
   await query(`DELETE FROM character_owned_abilities WHERE character_id = $1`, [character.id]);
   await query(`DELETE FROM character_loadouts WHERE character_id = $1`, [character.id]);
   await query(`DELETE FROM inventory_items WHERE character_id = $1`, [character.id]);
@@ -675,6 +692,12 @@ async function handleResetPlayer(session: AuthenticatedSession, args: string[], 
          in_gathering = false,
          crowns = 0,
          squire_slots_unlocked = 2,
+         stat_points_unspent = 0,
+         attr_constitution = 0,
+         attr_strength = 0,
+         attr_intelligence = 0,
+         attr_dexterity = 0,
+         attr_toughness = 0,
          updated_at = now()
      WHERE id = $1`,
     [character.id, cls.base_hp, cls.base_attack, cls.base_defence, starterZoneId],

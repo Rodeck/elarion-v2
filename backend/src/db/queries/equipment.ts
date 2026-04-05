@@ -6,7 +6,9 @@ import type {
   InventorySlotDto,
   ItemCategory,
   WeaponSubtype,
+  QualityTier,
 } from '../../../../shared/protocol/index';
+import { QUALITY_LABELS } from '../../../../shared/protocol/index';
 import type { InventoryItemWithDefinition } from './inventory';
 
 // ---------------------------------------------------------------------------
@@ -45,11 +47,22 @@ function buildIconUrl(iconFilename: string | null): string | null {
 }
 
 function buildInventorySlotDto(row: InventoryItemWithDefinition): InventorySlotDto {
+  const tier = row.instance_quality_tier as QualityTier | null;
   return {
     slot_id: row.id,
     item_def_id: row.item_def_id,
     quantity: row.quantity,
     current_durability: row.current_durability ?? undefined,
+    instance_attack: row.instance_attack ?? null,
+    instance_defence: row.instance_defence ?? null,
+    instance_crit_chance: row.instance_crit_chance ?? null,
+    instance_additional_attacks: row.instance_additional_attacks ?? null,
+    instance_armor_penetration: row.instance_armor_penetration ?? null,
+    instance_max_mana: row.instance_max_mana ?? null,
+    instance_mana_on_hit: row.instance_mana_on_hit ?? null,
+    instance_mana_regen: row.instance_mana_regen ?? null,
+    quality_tier: tier,
+    quality_label: tier ? QUALITY_LABELS[tier] : null,
     definition: {
       id: row.item_def_id,
       name: row.def_name,
@@ -69,6 +82,8 @@ function buildInventorySlotDto(row: InventoryItemWithDefinition): InventorySlotD
       dodge_chance: row.def_dodge_chance,
       crit_chance: row.def_crit_chance,
       crit_damage: row.def_crit_damage,
+      armor_penetration: row.def_armor_penetration ?? 0,
+      additional_attacks: row.def_additional_attacks ?? 0,
       tool_type: row.def_tool_type ?? null,
       max_durability: row.def_max_durability ?? null,
       power: row.def_power ?? null,
@@ -90,6 +105,16 @@ export async function getEquipmentState(characterId: string): Promise<EquipmentS
        ii.quantity,
        ii.created_at,
        ii.equipped_slot,
+       ii.current_durability,
+       ii.instance_attack,
+       ii.instance_defence,
+       ii.instance_crit_chance,
+       ii.instance_additional_attacks,
+       ii.instance_armor_penetration,
+       ii.instance_max_mana,
+       ii.instance_mana_on_hit,
+       ii.instance_mana_regen,
+       ii.instance_quality_tier,
        d.name                  AS def_name,
        d.description           AS def_description,
        d.category              AS def_category,
@@ -107,10 +132,11 @@ export async function getEquipmentState(characterId: string): Promise<EquipmentS
        d.dodge_chance          AS def_dodge_chance,
        d.crit_chance           AS def_crit_chance,
        d.crit_damage           AS def_crit_damage,
+       d.armor_penetration     AS def_armor_penetration,
+       d.additional_attacks    AS def_additional_attacks,
        d.tool_type             AS def_tool_type,
        d.max_durability        AS def_max_durability,
-       d.power                 AS def_power,
-       ii.current_durability
+       d.power                 AS def_power
      FROM inventory_items ii
      JOIN item_definitions d ON d.id = ii.item_def_id
      WHERE ii.character_id = $1
@@ -183,7 +209,16 @@ export async function equipItem(
          d.tool_type      AS def_tool_type,
          d.max_durability AS def_max_durability,
          d.power          AS def_power,
-         ii.current_durability
+         ii.current_durability,
+         ii.instance_attack,
+         ii.instance_defence,
+         ii.instance_crit_chance,
+         ii.instance_additional_attacks,
+         ii.instance_armor_penetration,
+         ii.instance_max_mana,
+         ii.instance_mana_on_hit,
+         ii.instance_mana_regen,
+         ii.instance_quality_tier
        FROM inventory_items ii
        JOIN item_definitions d ON d.id = ii.item_def_id
        WHERE ii.id = $1 AND ii.character_id = $2 AND ii.equipped_slot IS NULL`,
@@ -232,7 +267,16 @@ export async function equipItem(
          d.tool_type      AS def_tool_type,
          d.max_durability AS def_max_durability,
          d.power          AS def_power,
-         ii.current_durability
+         ii.current_durability,
+         ii.instance_attack,
+         ii.instance_defence,
+         ii.instance_crit_chance,
+         ii.instance_additional_attacks,
+         ii.instance_armor_penetration,
+         ii.instance_max_mana,
+         ii.instance_mana_on_hit,
+         ii.instance_mana_regen,
+         ii.instance_quality_tier
        FROM inventory_items ii
        JOIN item_definitions d ON d.id = ii.item_def_id
        WHERE ii.character_id = $1 AND ii.equipped_slot = $2`,
@@ -355,7 +399,16 @@ export async function unequipItem(
          d.tool_type      AS def_tool_type,
          d.max_durability AS def_max_durability,
          d.power          AS def_power,
-         ii.current_durability
+         ii.current_durability,
+         ii.instance_attack,
+         ii.instance_defence,
+         ii.instance_crit_chance,
+         ii.instance_additional_attacks,
+         ii.instance_armor_penetration,
+         ii.instance_max_mana,
+         ii.instance_mana_on_hit,
+         ii.instance_mana_regen,
+         ii.instance_quality_tier
        FROM inventory_items ii
        JOIN item_definitions d ON d.id = ii.item_def_id
        WHERE ii.character_id = $1 AND ii.equipped_slot = $2`,

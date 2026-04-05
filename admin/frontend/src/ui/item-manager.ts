@@ -17,10 +17,20 @@ const VALID_CATEGORIES = [
 
 const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book']);
 
+const WEAPON_SUBTYPES = [
+  'one_handed', 'two_handed', 'dagger', 'wand', 'staff', 'bow',
+] as const;
+
+const SUBTYPE_LABELS: Record<string, string> = {
+  one_handed: 'One-Handed', two_handed: 'Two-Handed', dagger: 'Dagger',
+  wand: 'Wand', staff: 'Staff', bow: 'Bow',
+};
+
 export class ItemManager {
   private container!: HTMLElement;
   private items: ItemDefinitionResponse[] = [];
   private currentCategory: string = 'all';
+  private currentSubtype: string = 'all';
   private nameFilter: string = '';
   private modal: ItemModal;
 
@@ -61,6 +71,11 @@ export class ItemManager {
           <button class="btn btn--secondary" id="sprite-sheet-btn" title="Cut icons from a sprite sheet">&#x2702; Sprite Sheet</button>
           <button class="btn" id="item-refresh-btn" title="Refresh items list">&#x21bb; Refresh</button>
         </div>
+        <div id="weapon-subtype-bar" style="display:none;padding:4px 0 0;gap:4px;flex-wrap:wrap;">
+          <span style="color:#6a6a8a;font-size:0.8rem;align-self:center;margin-right:4px;">Subtype:</span>
+          <button class="btn btn--sm btn--active" data-subtype="all">All</button>
+          ${WEAPON_SUBTYPES.map((s) => `<button class="btn btn--sm" data-subtype="${s}">${SUBTYPE_LABELS[s]}</button>`).join('')}
+        </div>
         <div id="item-list-container">
           <p style="color:#3d4262;font-size:0.875rem;">Loading...</p>
         </div>
@@ -88,8 +103,23 @@ export class ItemManager {
       this.currentCategory = btn.dataset['cat'] ?? 'all';
       bar.querySelectorAll('[data-cat]').forEach((b) => b.classList.remove('btn--active'));
       btn.classList.add('btn--active');
+      // Reset subtype filter and toggle subtype bar visibility
+      this.currentSubtype = 'all';
+      this.updateSubtypeBar();
       await this.load();
     });
+
+    const subtypeBar = this.container.querySelector<HTMLElement>('#weapon-subtype-bar');
+    if (subtypeBar) {
+      subtypeBar.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-subtype]');
+        if (!btn) return;
+        this.currentSubtype = btn.dataset['subtype'] ?? 'all';
+        subtypeBar.querySelectorAll('[data-subtype]').forEach((b) => b.classList.remove('btn--active'));
+        btn.classList.add('btn--active');
+        this.renderList();
+      });
+    }
 
     const nameInput = this.container.querySelector<HTMLInputElement>('#item-name-filter');
     if (nameInput) {
@@ -119,6 +149,16 @@ export class ItemManager {
     }
   }
 
+  private updateSubtypeBar(): void {
+    const subtypeBar = this.container.querySelector<HTMLElement>('#weapon-subtype-bar');
+    if (!subtypeBar) return;
+    subtypeBar.style.display = this.currentCategory === 'weapon' ? 'flex' : 'none';
+    // Reset active state
+    subtypeBar.querySelectorAll('[data-subtype]').forEach((b) => b.classList.remove('btn--active'));
+    subtypeBar.querySelector('[data-subtype="all"]')?.classList.add('btn--active');
+    this.currentSubtype = 'all';
+  }
+
   private renderList(): void {
     const container = this.container.querySelector<HTMLElement>('#item-list-container')!;
 
@@ -144,9 +184,13 @@ export class ItemManager {
     `;
 
     const tbody = table.querySelector('tbody')!;
-    const filtered = this.nameFilter
+    let filtered = this.nameFilter
       ? this.items.filter((i) => i.name.toLowerCase().includes(this.nameFilter))
       : this.items;
+
+    if (this.currentSubtype !== 'all') {
+      filtered = filtered.filter((i) => i.weapon_subtype === this.currentSubtype);
+    }
 
     if (filtered.length === 0) {
       container.innerHTML = `<p>No items matching "${this.escHtml(this.nameFilter)}".</p>`;
@@ -267,6 +311,9 @@ export class ItemManager {
     if (item.max_durability != null) pills.push(this.pill(`Dur: ${item.max_durability}`, '#2a2a3d', '#8888cc'));
     if (item.power != null)       pills.push(this.pill(`Power: ${item.power}`,         '#2a2a3d', '#8888cc'));
     if (item.disassembly_cost > 0) pills.push(this.pill(`Disasm: ${item.disassembly_cost}`, '#3d2a00', '#d4a84b'));
+    if (item.crit_chance > 0)     pills.push(this.pill(`Crit: ${item.crit_chance}%`,     '#4a2a1a', '#e8a878'));
+    if (item.armor_penetration > 0) pills.push(this.pill(`ArPen: ${item.armor_penetration}%`, '#1a3a3d', '#70d4d8'));
+    if (item.additional_attacks > 0) pills.push(this.pill(`+${item.additional_attacks} Atk`, '#3d1a3d', '#d870d8'));
     return pills.length
       ? `<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">${pills.join('')}</div>`
       : '\u2014';

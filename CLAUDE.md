@@ -55,6 +55,10 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - PostgreSQL 16 — migration `034_stat_training.sql` (new table + ALTER) (031-stat-training)
 - TypeScript 5.x (frontend, backend, shared, admin) + Phaser 3.60 (frontend), Node.js 20 LTS + ws (backend), Express 4 (admin backend), pg (PostgreSQL client), jose (JWT), Vite 5 (frontends) (032-skill-development)
 - PostgreSQL 16 — migration `035_skill_development.sql` (new tables + ALTER) (032-skill-development)
+- TypeScript 5.x (frontend + backend + shared + admin) + Phaser 3.60 (frontend), Node.js 20 LTS + `ws` (backend), Express 4 (admin backend), Vite 5 (frontends) (033-weapon-attributes)
+- PostgreSQL 16 — migration 037 (ALTER `item_definitions`) (033-weapon-attributes)
+- TypeScript 5.x (frontend + backend + shared) + Phaser 3.60 (frontend), Node.js 20 LTS + `ws` (backend), Express 4 (admin backend), Vite 5 (frontends) (034-item-variation)
+- PostgreSQL 16 — migration 038 (ALTER `inventory_items`, ALTER `marketplace_listings`) (034-item-variation)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -80,9 +84,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 034-item-variation: Added TypeScript 5.x (frontend + backend + shared) + Phaser 3.60 (frontend), Node.js 20 LTS + `ws` (backend), Express 4 (admin backend), Vite 5 (frontends)
+- 033-weapon-attributes: Added TypeScript 5.x (frontend + backend + shared + admin) + Phaser 3.60 (frontend), Node.js 20 LTS + `ws` (backend), Express 4 (admin backend), Vite 5 (frontends)
 - 032-skill-development: Added TypeScript 5.x (frontend, backend, shared, admin) + Phaser 3.60 (frontend), Node.js 20 LTS + ws (backend), Express 4 (admin backend), pg (PostgreSQL client), jose (JWT), Vite 5 (frontends)
-- 031-stat-training: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
-- 030-stat-allocation: Added TypeScript 5.x (frontend, backend, shared, admin) + Node.js 20 LTS + `ws` (backend), Phaser 3.60 + Vite 5 (frontend), Express 4 (admin backend), `pg` (PostgreSQL client), `jose` (JWT)
 
 
 

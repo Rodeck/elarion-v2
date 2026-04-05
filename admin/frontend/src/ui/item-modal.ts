@@ -21,6 +21,7 @@ const VALID_WEAPON_SUBTYPES = [
 
 const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book']);
 const DEFENCE_CATEGORIES = new Set(['helmet', 'chestplate', 'boots', 'shield', 'greaves', 'bracer', 'ring', 'amulet']);
+const EQUIPPABLE_CATEGORIES = new Set(['weapon', 'helmet', 'chestplate', 'boots', 'shield', 'greaves', 'bracer', 'ring', 'amulet']);
 
 type ItemCategory = typeof VALID_CATEGORIES[number];
 
@@ -231,6 +232,21 @@ export class ItemModal {
         <input id="modal-power" type="number" min="1" style="width:120px" value="${item?.power ?? ''}" />
       </div>
 
+      <div id="modal-field-crit_chance" style="display:none">
+        <label for="modal-crit-chance">Crit Chance (%)</label>
+        <input id="modal-crit-chance" type="number" min="0" max="100" style="width:120px" value="${item?.crit_chance ?? ''}" />
+      </div>
+
+      <div id="modal-field-armor_penetration" style="display:none">
+        <label for="modal-armor-penetration">Armor Penetration (%)</label>
+        <input id="modal-armor-penetration" type="number" min="0" max="100" style="width:120px" value="${item?.armor_penetration ?? ''}" />
+      </div>
+
+      <div id="modal-field-additional_attacks" style="display:none">
+        <label for="modal-additional-attacks">Additional Attacks</label>
+        <input id="modal-additional-attacks" type="number" min="0" max="10" style="width:120px" value="${item?.additional_attacks ?? ''}" />
+      </div>
+
       <label for="modal-disassembly-cost">Disassembly Cost (crowns)</label>
       <input id="modal-disassembly-cost" type="number" min="0" style="width:120px" value="${item?.disassembly_cost ?? 0}" />
 
@@ -317,6 +333,10 @@ export class ItemModal {
     show('tool_type', category === 'tool');
     show('max_durability', category === 'tool');
     show('power', category === 'tool');
+    const isEquippable = category !== '' && EQUIPPABLE_CATEGORIES.has(category);
+    show('crit_chance', isEquippable);
+    show('armor_penetration', isEquippable);
+    show('additional_attacks', isEquippable);
   }
 
   private buildRecipeEditor(container: HTMLElement): void {
@@ -520,6 +540,9 @@ export class ItemModal {
     appendNum('#modal-stack', 'stack_size');
     appendNum('#modal-max-durability', 'max_durability');
     appendNum('#modal-power', 'power');
+    appendNum('#modal-crit-chance', 'crit_chance');
+    appendNum('#modal-armor-penetration', 'armor_penetration');
+    appendNum('#modal-additional-attacks', 'additional_attacks');
 
     const toolType = overlay.querySelector<HTMLSelectElement>('#modal-tool-type')?.value;
     if (category === 'tool' && toolType) formData.append('tool_type', toolType);

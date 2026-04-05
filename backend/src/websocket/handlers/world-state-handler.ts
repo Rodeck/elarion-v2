@@ -224,6 +224,10 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
   // Compute effective stats (base + equipped item bonuses)
   const effectiveStats = await getCharacterEffectiveStats(character.id);
 
+  // Compute full combat stats for weapon attributes display
+  const { computeCombatStats } = await import('../../game/combat/combat-stats-service');
+  const combatStats = await computeCombatStats(character.id);
+
   log('info', 'world-state', 'sent', {
     characterId: character.id,
     characterName: character.name,
@@ -262,6 +266,9 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
       attr_dexterity: character.attr_dexterity,
       attr_toughness: character.attr_toughness,
       stat_points_unspent: character.stat_points_unspent,
+      armor_penetration: combatStats.armorPenetration,
+      additional_attacks: combatStats.additionalAttacks,
+      gear_crit_chance: Math.round(combatStats.critChance - character.attr_dexterity * 0.1),
     },
     players,
   };

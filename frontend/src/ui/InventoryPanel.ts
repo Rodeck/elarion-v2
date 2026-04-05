@@ -294,19 +294,38 @@ export class InventoryPanel {
     this.activeSlotId = slot.slot_id;
     const def = slot.definition;
 
+    const subtypeLabels: Record<string, string> = {
+      one_handed: 'One-Handed', two_handed: 'Two-Handed', dagger: 'Dagger',
+      wand: 'Wand', staff: 'Staff', bow: 'Bow',
+    };
+    // Helper: resolve instance stat with definition fallback
+    const eff = (inst: number | null | undefined, base: number | null): number | null =>
+      inst != null ? inst : base;
+
+    const effAttack = eff(slot.instance_attack, def.attack);
+    const effDefence = eff(slot.instance_defence, def.defence);
+    const effCritChance = eff(slot.instance_crit_chance, def.crit_chance);
+    const effAdditionalAttacks = eff(slot.instance_additional_attacks, def.additional_attacks);
+    const effArmorPen = eff(slot.instance_armor_penetration, def.armor_penetration);
+    const effMaxMana = eff(slot.instance_max_mana, def.max_mana);
+    const effManaOnHit = eff(slot.instance_mana_on_hit, def.mana_on_hit);
+    const effManaRegen = eff(slot.instance_mana_regen, def.mana_regen);
+
     const stats: string[] = [];
-    if (def.weapon_subtype) stats.push(`Subtype: ${def.weapon_subtype.replace('_', '-')}`);
-    if (def.attack != null) stats.push(`Attack: ${def.attack}`);
-    if (def.defence != null) stats.push(`Defence: ${def.defence}`);
+    if (def.weapon_subtype) stats.push(subtypeLabels[def.weapon_subtype] ?? def.weapon_subtype);
+    if (effAttack != null) stats.push(`Attack: ${effAttack}`);
+    if (effDefence != null) stats.push(`Defence: ${effDefence}`);
     if (def.heal_power != null) stats.push(`Heal: ${def.heal_power}`);
     if (def.food_power != null) stats.push(`Food: ${def.food_power}`);
-    if (def.max_mana > 0) stats.push(`Max Mana: +${def.max_mana}`);
-    if (def.mana_on_hit > 0) stats.push(`Mana on Hit: +${def.mana_on_hit}`);
+    if (effMaxMana != null && effMaxMana > 0) stats.push(`Max Mana: +${effMaxMana}`);
+    if (effManaOnHit != null && effManaOnHit > 0) stats.push(`Mana on Hit: +${effManaOnHit}`);
     if (def.mana_on_damage_taken > 0) stats.push(`Mana on Hit Taken: +${def.mana_on_damage_taken}`);
-    if (def.mana_regen > 0) stats.push(`Mana Regen: +${def.mana_regen}`);
+    if (effManaRegen != null && effManaRegen > 0) stats.push(`Mana Regen: +${effManaRegen}`);
     if (def.dodge_chance > 0) stats.push(`Dodge: ${def.dodge_chance}%`);
-    if (def.crit_chance > 0) stats.push(`Crit Chance: ${def.crit_chance}%`);
-    if (def.crit_damage !== 150) stats.push(`Crit Dmg: ${def.crit_damage}%`);
+    if (effCritChance != null && effCritChance > 0) stats.push(`Crit Chance: +${effCritChance}%`);
+    if (def.crit_damage != null && def.crit_damage !== 150) stats.push(`Crit Dmg: ${def.crit_damage}%`);
+    if (effArmorPen != null && effArmorPen > 0) stats.push(`Armor Pen: ${effArmorPen}%`);
+    if (effAdditionalAttacks != null && effAdditionalAttacks > 0) stats.push(`+${effAdditionalAttacks} First Strike${effAdditionalAttacks > 1 ? 's' : ''}`);
     if (def.tool_type) stats.push(`Type: ${def.tool_type}`);
     if (def.power != null && def.power > 0) stats.push(`Power: ${def.power}`);
     if (slot.current_durability != null && def.max_durability != null) {
@@ -315,9 +334,13 @@ export class InventoryPanel {
 
     // Map raw DB category to display label
     const categoryLabel = this.resolveDisplayCategory(def.category);
+    const qualityColors: Record<number, string> = { 1: '#888888', 2: '#cccccc', 3: '#44cc44', 4: '#f0c060' };
+    const qualityBadge = slot.quality_tier && slot.quality_label
+      ? ` <span style="color:${qualityColors[slot.quality_tier] ?? '#cccccc'};font-size:12px;font-family:Rajdhani,sans-serif;">[${slot.quality_label}]</span>`
+      : '';
     const displayName = slot.quantity > 1
-      ? `${this.escHtml(def.name)} x${slot.quantity}`
-      : this.escHtml(def.name);
+      ? `${this.escHtml(def.name)} x${slot.quantity}${qualityBadge}`
+      : `${this.escHtml(def.name)}${qualityBadge}`;
 
     this.detailEl.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">

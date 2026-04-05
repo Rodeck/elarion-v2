@@ -28,6 +28,8 @@ export interface ItemDefinition {
   power: number | null;
   disassembly_cost: number;
   ability_id: number | null;
+  armor_penetration: number;
+  additional_attacks: number;
   created_at: Date;
 }
 
@@ -37,10 +39,19 @@ export interface InventoryItem {
   item_def_id: number;
   quantity: number;
   current_durability: number | null;
+  instance_attack: number | null;
+  instance_defence: number | null;
+  instance_crit_chance: number | null;
+  instance_additional_attacks: number | null;
+  instance_armor_penetration: number | null;
+  instance_max_mana: number | null;
+  instance_mana_on_hit: number | null;
+  instance_mana_regen: number | null;
+  instance_quality_tier: number | null;
   created_at: Date;
 }
 
-export interface InventoryItemWithDefinition extends InventoryItem {
+export interface InventoryItemWithDefinition extends Omit<InventoryItem, never> {
   def_name: string;
   def_description: string | null;
   def_category: string;
@@ -62,6 +73,8 @@ export interface InventoryItemWithDefinition extends InventoryItem {
   def_max_durability: number | null;
   def_power: number | null;
   def_ability_id: number | null;
+  def_armor_penetration: number;
+  def_additional_attacks: number;
   current_durability: number | null;
 }
 
@@ -81,6 +94,14 @@ export interface CreateItemDefinitionData {
   power?: number | null;
   disassembly_cost?: number;
   ability_id?: number | null;
+  armor_penetration?: number;
+  additional_attacks?: number;
+  crit_chance?: number;
+  max_mana?: number;
+  mana_on_hit?: number;
+  mana_on_damage_taken?: number;
+  mana_regen?: number;
+  dodge_chance?: number;
 }
 
 export interface UpdateItemDefinitionData {
@@ -99,6 +120,14 @@ export interface UpdateItemDefinitionData {
   power?: number | null;
   disassembly_cost?: number;
   ability_id?: number | null;
+  armor_penetration?: number;
+  additional_attacks?: number;
+  crit_chance?: number;
+  max_mana?: number;
+  mana_on_hit?: number;
+  mana_on_damage_taken?: number;
+  mana_regen?: number;
+  dodge_chance?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -142,8 +171,8 @@ export async function getItemDefinitionById(id: number): Promise<ItemDefinition 
 export async function createItemDefinition(data: CreateItemDefinitionData): Promise<ItemDefinition> {
   const result = await query<ItemDefinition>(
     `INSERT INTO item_definitions
-       (name, description, category, weapon_subtype, attack, defence, heal_power, food_power, stack_size, icon_filename, tool_type, max_durability, power, disassembly_cost, ability_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       (name, description, category, weapon_subtype, attack, defence, heal_power, food_power, stack_size, icon_filename, tool_type, max_durability, power, disassembly_cost, ability_id, armor_penetration, additional_attacks, crit_chance, max_mana, mana_on_hit, mana_on_damage_taken, mana_regen, dodge_chance)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
      RETURNING *`,
     [
       data.name,
@@ -161,6 +190,14 @@ export async function createItemDefinition(data: CreateItemDefinitionData): Prom
       data.power ?? null,
       data.disassembly_cost ?? 0,
       data.ability_id ?? null,
+      data.armor_penetration ?? 0,
+      data.additional_attacks ?? 0,
+      data.crit_chance ?? 0,
+      data.max_mana ?? 0,
+      data.mana_on_hit ?? 0,
+      data.mana_on_damage_taken ?? 0,
+      data.mana_regen ?? 0,
+      data.dodge_chance ?? 0,
     ],
   );
   return result.rows[0]!;
@@ -186,6 +223,14 @@ export async function updateItemDefinition(id: number, data: UpdateItemDefinitio
   if (data.power !== undefined)          { fields.push(`power = $${paramIdx++}`);          values.push(data.power); }
   if (data.disassembly_cost !== undefined) { fields.push(`disassembly_cost = $${paramIdx++}`); values.push(data.disassembly_cost); }
   if (data.ability_id !== undefined)      { fields.push(`ability_id = $${paramIdx++}`);      values.push(data.ability_id); }
+  if (data.armor_penetration !== undefined) { fields.push(`armor_penetration = $${paramIdx++}`); values.push(data.armor_penetration); }
+  if (data.additional_attacks !== undefined) { fields.push(`additional_attacks = $${paramIdx++}`); values.push(data.additional_attacks); }
+  if (data.crit_chance !== undefined) { fields.push(`crit_chance = $${paramIdx++}`); values.push(data.crit_chance); }
+  if (data.max_mana !== undefined) { fields.push(`max_mana = $${paramIdx++}`); values.push(data.max_mana); }
+  if (data.mana_on_hit !== undefined) { fields.push(`mana_on_hit = $${paramIdx++}`); values.push(data.mana_on_hit); }
+  if (data.mana_on_damage_taken !== undefined) { fields.push(`mana_on_damage_taken = $${paramIdx++}`); values.push(data.mana_on_damage_taken); }
+  if (data.mana_regen !== undefined) { fields.push(`mana_regen = $${paramIdx++}`); values.push(data.mana_regen); }
+  if (data.dodge_chance !== undefined) { fields.push(`dodge_chance = $${paramIdx++}`); values.push(data.dodge_chance); }
 
   if (fields.length === 0) {
     return getItemDefinitionById(id);
@@ -220,6 +265,15 @@ export async function getInventoryWithDefinitions(characterId: string): Promise<
        ii.quantity,
        ii.current_durability,
        ii.created_at,
+       ii.instance_attack,
+       ii.instance_defence,
+       ii.instance_crit_chance,
+       ii.instance_additional_attacks,
+       ii.instance_armor_penetration,
+       ii.instance_max_mana,
+       ii.instance_mana_on_hit,
+       ii.instance_mana_regen,
+       ii.instance_quality_tier,
        d.name                  AS def_name,
        d.description           AS def_description,
        d.category              AS def_category,
@@ -240,7 +294,9 @@ export async function getInventoryWithDefinitions(characterId: string): Promise<
        d.tool_type             AS def_tool_type,
        d.max_durability        AS def_max_durability,
        d.power                 AS def_power,
-       d.ability_id            AS def_ability_id
+       d.ability_id            AS def_ability_id,
+       d.armor_penetration     AS def_armor_penetration,
+       d.additional_attacks    AS def_additional_attacks
      FROM inventory_items ii
      JOIN item_definitions d ON d.id = ii.item_def_id
      WHERE ii.character_id = $1
@@ -271,8 +327,8 @@ export interface CharacterEffectiveStats {
 export async function getCharacterEffectiveStats(characterId: string): Promise<CharacterEffectiveStats> {
   const result = await query<{ effective_attack: string; effective_defence: string }>(
     `SELECT
-       c.attack_power + COALESCE(SUM(d.attack), 0)   AS effective_attack,
-       c.defence      + COALESCE(SUM(d.defence), 0)  AS effective_defence
+       c.attack_power + COALESCE(SUM(COALESCE(ii.instance_attack, d.attack)), 0)   AS effective_attack,
+       c.defence      + COALESCE(SUM(COALESCE(ii.instance_defence, d.defence)), 0)  AS effective_defence
      FROM characters c
      LEFT JOIN inventory_items ii
        ON ii.character_id = c.id AND ii.equipped_slot IS NOT NULL
@@ -310,6 +366,44 @@ export async function insertInventoryItem(characterId: string, itemDefId: number
      VALUES ($1, $2, $3)
      RETURNING *`,
     [characterId, itemDefId, quantity],
+  );
+  return result.rows[0]!;
+}
+
+export interface InstanceStatsInsert {
+  instance_attack: number | null;
+  instance_defence: number | null;
+  instance_crit_chance: number | null;
+  instance_additional_attacks: number | null;
+  instance_armor_penetration: number | null;
+  instance_max_mana: number | null;
+  instance_mana_on_hit: number | null;
+  instance_mana_regen: number | null;
+  instance_quality_tier: number | null;
+}
+
+export async function insertInventoryItemWithStats(
+  characterId: string,
+  itemDefId: number,
+  quantity: number,
+  stats: InstanceStatsInsert,
+): Promise<InventoryItem> {
+  const result = await query<InventoryItem>(
+    `INSERT INTO inventory_items (
+       character_id, item_def_id, quantity,
+       instance_attack, instance_defence, instance_crit_chance,
+       instance_additional_attacks, instance_armor_penetration,
+       instance_max_mana, instance_mana_on_hit, instance_mana_regen,
+       instance_quality_tier
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING *`,
+    [
+      characterId, itemDefId, quantity,
+      stats.instance_attack, stats.instance_defence, stats.instance_crit_chance,
+      stats.instance_additional_attacks, stats.instance_armor_penetration,
+      stats.instance_max_mana, stats.instance_mana_on_hit, stats.instance_mana_regen,
+      stats.instance_quality_tier,
+    ],
   );
   return result.rows[0]!;
 }
@@ -397,6 +491,15 @@ export async function getInventorySlotById(
        ii.quantity,
        ii.current_durability,
        ii.created_at,
+       ii.instance_attack,
+       ii.instance_defence,
+       ii.instance_crit_chance,
+       ii.instance_additional_attacks,
+       ii.instance_armor_penetration,
+       ii.instance_max_mana,
+       ii.instance_mana_on_hit,
+       ii.instance_mana_regen,
+       ii.instance_quality_tier,
        d.name                  AS def_name,
        d.description           AS def_description,
        d.category              AS def_category,
@@ -417,7 +520,9 @@ export async function getInventorySlotById(
        d.tool_type             AS def_tool_type,
        d.max_durability        AS def_max_durability,
        d.power                 AS def_power,
-       d.ability_id            AS def_ability_id
+       d.ability_id            AS def_ability_id,
+       d.armor_penetration     AS def_armor_penetration,
+       d.additional_attacks    AS def_additional_attacks
      FROM inventory_items ii
      JOIN item_definitions d ON d.id = ii.item_def_id
      WHERE ii.id = $1 AND ii.character_id = $2`,

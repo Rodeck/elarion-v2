@@ -358,20 +358,144 @@ export class EquipmentPanel {
       slotEl.appendChild(ph);
     }
 
-    // Tooltip on hover — build from non-null stats
-    const tipParts: string[] = [item.definition.name];
+    // Rich tooltip on hover
+    let tip: HTMLElement | null = null;
+    slotEl.addEventListener('mouseenter', (e) => {
+      tip = this.buildItemTooltip(item);
+      document.body.appendChild(tip);
+      this.positionTooltip(tip, e as MouseEvent);
+    });
+    slotEl.addEventListener('mousemove', (e) => {
+      if (tip) this.positionTooltip(tip, e as MouseEvent);
+    });
+    slotEl.addEventListener('mouseleave', () => {
+      tip?.remove();
+      tip = null;
+    });
+  }
+
+  private buildItemTooltip(item: InventorySlotDto): HTMLElement {
     const def = item.definition;
-    if (def.attack != null) tipParts.push(`Attack: ${def.attack}`);
-    if (def.defence != null) tipParts.push(`Defence: ${def.defence}`);
-    if (def.heal_power != null) tipParts.push(`Heal: ${def.heal_power}`);
-    if (def.max_mana > 0) tipParts.push(`Max Mana: +${def.max_mana}`);
-    if (def.mana_on_hit > 0) tipParts.push(`Mana on Hit: +${def.mana_on_hit}`);
-    if (def.mana_on_damage_taken > 0) tipParts.push(`Mana on Hit Taken: +${def.mana_on_damage_taken}`);
-    if (def.mana_regen > 0) tipParts.push(`Mana Regen: +${def.mana_regen}`);
-    if (def.dodge_chance > 0) tipParts.push(`Dodge: ${def.dodge_chance}%`);
-    if (def.crit_chance > 0) tipParts.push(`Crit Chance: ${def.crit_chance}%`);
-    if (def.crit_damage !== 150) tipParts.push(`Crit Dmg: ${def.crit_damage}%`);
-    slotEl.title = tipParts.join('\n');
+    const tip = document.createElement('div');
+    tip.className = 'eq-tooltip';
+    tip.style.cssText =
+      'position:fixed;z-index:9999;pointer-events:none;min-width:160px;max-width:240px;' +
+      'background:linear-gradient(180deg,#1e1a14 0%,#151210 100%);' +
+      'border:1px solid #5a4a2a;border-radius:3px;' +
+      'box-shadow:0 4px 16px rgba(0,0,0,0.7),inset 0 1px 0 rgba(212,168,75,0.08);' +
+      'padding:8px 10px;';
+
+    // Name
+    const nameEl = document.createElement('div');
+    nameEl.style.cssText =
+      "font-family:'Cinzel',serif;font-size:12px;color:#d4a84b;margin-bottom:4px;line-height:1.3;";
+    nameEl.textContent = def.name;
+    tip.appendChild(nameEl);
+
+    // Category + subtype line
+    const catParts: string[] = [];
+    if (def.weapon_subtype) {
+      const labels: Record<string, string> = {
+        one_handed: 'One-Handed', two_handed: 'Two-Handed', dagger: 'Dagger',
+        wand: 'Wand', staff: 'Staff', bow: 'Bow',
+      };
+      catParts.push(labels[def.weapon_subtype] ?? def.weapon_subtype);
+    }
+    catParts.push(def.category.charAt(0).toUpperCase() + def.category.slice(1));
+    const catEl = document.createElement('div');
+    catEl.style.cssText =
+      'font-size:10px;color:#7a6a52;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;';
+    catEl.textContent = catParts.join(' ');
+    tip.appendChild(catEl);
+
+    // Quality tier badge
+    if (item.quality_tier && item.quality_label) {
+      const qualityColors: Record<number, string> = { 1: '#888888', 2: '#cccccc', 3: '#44cc44', 4: '#f0c060' };
+      const qEl = document.createElement('div');
+      qEl.style.cssText =
+        `font-size:10px;font-family:Rajdhani,sans-serif;color:${qualityColors[item.quality_tier] ?? '#cccccc'};margin-bottom:4px;`;
+      qEl.textContent = item.quality_label;
+      tip.appendChild(qEl);
+    }
+
+    // Stat lines
+    const lines = this.buildTooltipStats(item);
+    if (lines.length > 0) {
+      const sep = document.createElement('div');
+      sep.style.cssText = 'height:1px;background:#3a2e1a;margin-bottom:5px;';
+      tip.appendChild(sep);
+
+      for (const line of lines) {
+        const row = document.createElement('div');
+        row.style.cssText =
+          'display:flex;justify-content:space-between;gap:8px;' +
+          "font-family:'Rajdhani',sans-serif;font-size:11px;line-height:1.5;";
+        const labelSpan = document.createElement('span');
+        labelSpan.style.color = '#a89880';
+        labelSpan.textContent = line.label;
+        const valSpan = document.createElement('span');
+        valSpan.style.cssText = `color:${line.color};font-weight:600;`;
+        valSpan.textContent = line.value;
+        row.appendChild(labelSpan);
+        row.appendChild(valSpan);
+        tip.appendChild(row);
+      }
+    }
+
+    // Description
+    if (def.description) {
+      const descSep = document.createElement('div');
+      descSep.style.cssText = 'height:1px;background:#3a2e1a;margin:5px 0;';
+      tip.appendChild(descSep);
+      const descEl = document.createElement('div');
+      descEl.style.cssText =
+        "font-family:'Crimson Text',serif;font-size:11px;color:#8a7a62;font-style:italic;line-height:1.4;";
+      descEl.textContent = def.description;
+      tip.appendChild(descEl);
+    }
+
+    return tip;
+  }
+
+  private buildTooltipStats(slot: InventorySlotDto): { label: string; value: string; color: string }[] {
+    const def = slot.definition;
+    const eff = (inst: number | null | undefined, base: number | null): number | null =>
+      inst != null ? inst : base;
+    const effAttack = eff(slot.instance_attack, def.attack);
+    const effDefence = eff(slot.instance_defence, def.defence);
+    const effCritChance = eff(slot.instance_crit_chance, def.crit_chance);
+    const effAdditionalAttacks = eff(slot.instance_additional_attacks, def.additional_attacks);
+    const effArmorPen = eff(slot.instance_armor_penetration, def.armor_penetration);
+    const effMaxMana = eff(slot.instance_max_mana, def.max_mana);
+    const effManaOnHit = eff(slot.instance_mana_on_hit, def.mana_on_hit);
+    const effManaRegen = eff(slot.instance_mana_regen, def.mana_regen);
+
+    const lines: { label: string; value: string; color: string }[] = [];
+    if (effAttack != null)                                  lines.push({ label: 'Attack',            value: `${effAttack}`,                    color: '#ff9090' });
+    if (effDefence != null)                                 lines.push({ label: 'Defence',           value: `${effDefence}`,                   color: '#80aaff' });
+    if (def.heal_power != null)                             lines.push({ label: 'Heal',              value: `${def.heal_power}`,               color: '#70e89a' });
+    if (effMaxMana != null && effMaxMana > 0)               lines.push({ label: 'Max Mana',          value: `+${effMaxMana}`,                  color: '#80b0ff' });
+    if (effManaOnHit != null && effManaOnHit > 0)           lines.push({ label: 'Mana on Hit',       value: `+${effManaOnHit}`,                color: '#80b0ff' });
+    if (def.mana_on_damage_taken > 0)                       lines.push({ label: 'Mana on Hit Taken', value: `+${def.mana_on_damage_taken}`,    color: '#80b0ff' });
+    if (effManaRegen != null && effManaRegen > 0)           lines.push({ label: 'Mana Regen',        value: `+${effManaRegen}`,                color: '#80b0ff' });
+    if (def.dodge_chance > 0)                               lines.push({ label: 'Dodge',             value: `${def.dodge_chance}%`,             color: '#a0d8a0' });
+    if (effCritChance != null && effCritChance > 0)         lines.push({ label: 'Crit Chance',       value: `+${effCritChance}%`,              color: '#e8a878' });
+    if (def.crit_damage != null && def.crit_damage !== 150) lines.push({ label: 'Crit Damage',       value: `${def.crit_damage}%`,             color: '#e8a878' });
+    if (effArmorPen != null && effArmorPen > 0)             lines.push({ label: 'Armor Pen',         value: `${effArmorPen}%`,                 color: '#70d4d8' });
+    if (effAdditionalAttacks != null && effAdditionalAttacks > 0) lines.push({ label: 'First Strike', value: `+${effAdditionalAttacks}`,       color: '#d870d8' });
+    return lines;
+  }
+
+  private positionTooltip(tip: HTMLElement, e: MouseEvent): void {
+    const pad = 12;
+    let x = e.clientX + pad;
+    let y = e.clientY + pad;
+    const w = tip.offsetWidth;
+    const h = tip.offsetHeight;
+    if (x + w > window.innerWidth - 4) x = e.clientX - w - pad;
+    if (y + h > window.innerHeight - 4) y = e.clientY - h - pad;
+    tip.style.left = `${x}px`;
+    tip.style.top = `${y}px`;
   }
 
   private buildIconPlaceholder(category: string): HTMLElement {
@@ -438,13 +562,22 @@ export class EquipmentPanel {
       this.currentDragType = null;
     });
 
-    cell.addEventListener('mouseenter', () => {
+    let miniTip: HTMLElement | null = null;
+    cell.addEventListener('mouseenter', (e) => {
       cell.style.borderColor = '#a07830';
       cell.style.background = '#2f2820';
+      miniTip = this.buildItemTooltip(slot);
+      document.body.appendChild(miniTip);
+      this.positionTooltip(miniTip, e as MouseEvent);
+    });
+    cell.addEventListener('mousemove', (e) => {
+      if (miniTip) this.positionTooltip(miniTip, e as MouseEvent);
     });
     cell.addEventListener('mouseleave', () => {
       cell.style.borderColor = '#5a4a2a';
       cell.style.background = '#252119';
+      miniTip?.remove();
+      miniTip = null;
     });
 
     if (slot.definition.icon_url) {
@@ -471,7 +604,6 @@ export class EquipmentPanel {
       cell.appendChild(badge);
     }
 
-    cell.title = slot.definition.name;
     return cell;
   }
 
