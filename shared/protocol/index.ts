@@ -136,7 +136,14 @@ export interface ArenaBuildingActionDto {
   arena_name: string;
 }
 
-export type BuildingActionDto = TravelBuildingActionDto | ExploreBuildingActionDto | ExpeditionBuildingActionDto | GatherBuildingActionDto | MarketplaceBuildingActionDto | FishingBuildingActionDto | ArenaBuildingActionDto;
+export interface WarehouseBuildingActionDto {
+  id: number;
+  action_type: 'warehouse';
+  label: string;
+  config: Record<string, never>;
+}
+
+export type BuildingActionDto = TravelBuildingActionDto | ExploreBuildingActionDto | ExpeditionBuildingActionDto | GatherBuildingActionDto | MarketplaceBuildingActionDto | FishingBuildingActionDto | ArenaBuildingActionDto | WarehouseBuildingActionDto;
 
 // ---------------------------------------------------------------------------
 // Expedition sub-types
@@ -282,7 +289,7 @@ export interface CityMovePayload {
 export interface CityBuildingActionPayload {
   building_id: number;
   action_id: number;
-  action_type: 'travel' | 'explore' | 'gather' | 'marketplace' | 'fishing' | 'arena';
+  action_type: 'travel' | 'explore' | 'gather' | 'marketplace' | 'fishing' | 'arena' | 'warehouse';
 }
 
 // ---------------------------------------------------------------------------
@@ -2587,3 +2594,85 @@ export interface SkillBookErrorPayload {
 export type SkillBookUseMessage    = WsMessage<SkillBookUsePayload>;
 export type SkillBookResultMessage = WsMessage<SkillBookResultPayload>;
 export type SkillBookErrorMessage  = WsMessage<SkillBookErrorPayload>;
+
+// ---------------------------------------------------------------------------
+// Warehouse System
+// ---------------------------------------------------------------------------
+
+// Client → Server
+export interface WarehouseDepositPayload {
+  building_id: number;
+  inventory_slot_id: number;
+  quantity: number;
+}
+
+export interface WarehouseWithdrawPayload {
+  building_id: number;
+  warehouse_slot_id: number;
+  quantity: number;
+}
+
+export interface WarehouseBulkToInventoryPayload {
+  building_id: number;
+}
+
+export interface WarehouseBulkToWarehousePayload {
+  building_id: number;
+}
+
+export interface WarehouseMergePayload {
+  building_id: number;
+}
+
+export interface WarehouseBuySlotPayload {
+  building_id: number;
+}
+
+// Server → Client
+export interface WarehouseSlotDto {
+  slot_id: number;
+  item_def_id: number;
+  quantity: number;
+  current_durability?: number | null;
+  definition: ItemDefinitionDto;
+  instance_attack?: number | null;
+  instance_defence?: number | null;
+  instance_crit_chance?: number | null;
+  instance_additional_attacks?: number | null;
+  instance_armor_penetration?: number | null;
+  instance_max_mana?: number | null;
+  instance_mana_on_hit?: number | null;
+  instance_mana_regen?: number | null;
+  quality_tier?: QualityTier | null;
+  quality_label?: string | null;
+}
+
+export interface WarehouseStatePayload {
+  building_id: number;
+  slots: WarehouseSlotDto[];
+  total_capacity: number;
+  used_slots: number;
+  extra_slots_purchased: number;
+  next_slot_cost: number;
+}
+
+export interface WarehouseBuySlotResultPayload {
+  success: boolean;
+  new_total_capacity: number;
+  extra_slots_purchased: number;
+  next_slot_cost: number;
+  new_crowns: number;
+}
+
+export interface WarehouseRejectedPayload {
+  reason: 'warehouse_full' | 'inventory_full' | 'insufficient_crowns'
+        | 'item_not_found' | 'not_at_warehouse' | 'invalid_quantity'
+        | 'equipped_item';
+  message: string;
+}
+
+export interface WarehouseBulkResultPayload {
+  transferred_count: number;
+  skipped_count: number;
+  partial: boolean;
+}

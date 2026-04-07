@@ -38,6 +38,7 @@ import { registerArenaHandlers } from './game/arena/arena-handler';
 import { registerTrainingHandlers } from './game/training/training-handler';
 import { registerStatTrainingHandlers } from './game/training/stat-training-handler';
 import { registerSkillBookHandlers } from './game/skill/skill-book-handler';
+import { registerWarehouseHandlers } from './game/warehouse/warehouse-handler';
 import { loadFromDb as loadArenaState } from './game/arena/arena-state-manager';
 
 async function bootstrap(): Promise<void> {
@@ -118,6 +119,7 @@ async function bootstrap(): Promise<void> {
   registerTrainingHandlers();
   registerStatTrainingHandlers();
   registerSkillBookHandlers();
+  registerWarehouseHandlers();
 
   // Start WebSocket server (also sends world.state on connect)
   startWebSocketServer();

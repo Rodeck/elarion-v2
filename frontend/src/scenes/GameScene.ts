@@ -133,6 +133,10 @@ import type {
   StatTrainingStatePayload,
   StatTrainingResultPayload,
   StatTrainingErrorPayload,
+  WarehouseStatePayload,
+  WarehouseRejectedPayload,
+  WarehouseBulkResultPayload,
+  WarehouseBuySlotResultPayload,
 } from '@elarion/protocol';
 import { TrainingModal } from '../ui/TrainingModal';
 import { StatTrainingModal } from '../ui/StatTrainingModal';
@@ -366,6 +370,59 @@ export class GameScene extends Phaser.Scene {
       inventoryEl.style.zIndex = '';
       inventoryEl.style.position = '';
       this.leftPanel.setDragEnabled(false);
+    });
+    // Warehouse modal wiring
+    const whModal = this.buildingPanel.getWarehouseModal();
+    whModal.setSendFn((type, payload) => {
+      this.client.send(type, payload);
+    });
+    // Drop handler on inventory panel for warehouse→inventory withdrawals
+    let whDropHandler: ((e: DragEvent) => void) | null = null;
+    let whDragOverHandler: ((e: DragEvent) => void) | null = null;
+    whModal.setOnOpen(() => {
+      inventoryEl.style.zIndex = '260';
+      inventoryEl.style.position = 'relative';
+      this.leftPanel.showTab('inventory');
+      this.leftPanel.setDragEnabled(true);
+      // Accept warehouse item drops on inventory panel
+      whDragOverHandler = (e: DragEvent) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; };
+      whDropHandler = (e: DragEvent) => {
+        e.preventDefault();
+        const raw = e.dataTransfer?.getData('text/plain');
+        if (!raw) return;
+        try {
+          const data = JSON.parse(raw);
+          if (data.warehouse_slot_id !== undefined) {
+            const totalQty = data.quantity ?? 1;
+            if (data.shift && totalQty > 1) {
+              whModal.showQuantityPicker(totalQty, (qty) => {
+                this.client.send('warehouse.withdraw', {
+                  building_id: whModal.getBuildingId(),
+                  warehouse_slot_id: data.warehouse_slot_id,
+                  quantity: qty,
+                });
+              });
+            } else {
+              this.client.send('warehouse.withdraw', {
+                building_id: whModal.getBuildingId(),
+                warehouse_slot_id: data.warehouse_slot_id,
+                quantity: totalQty,
+              });
+            }
+          }
+        } catch { /* ignore */ }
+      };
+      inventoryEl.addEventListener('dragover', whDragOverHandler);
+      inventoryEl.addEventListener('drop', whDropHandler);
+    });
+    whModal.setOnClose(() => {
+      inventoryEl.style.zIndex = '';
+      inventoryEl.style.position = '';
+      this.leftPanel.setDragEnabled(false);
+      if (whDragOverHandler) inventoryEl.removeEventListener('dragover', whDragOverHandler);
+      if (whDropHandler) inventoryEl.removeEventListener('drop', whDropHandler);
+      whDragOverHandler = null;
+      whDropHandler = null;
     });
     this.buildingPanel.setInventorySlotsGetter(() => this.leftPanel.getInventorySlots());
     this.buildingPanel.setOnGatheringStart((payload) => {
@@ -913,6 +970,28 @@ export class GameScene extends Phaser.Scene {
     });
     this.client.on<MarketplaceRejectedPayload>('marketplace.rejected', (payload) => {
       mktModal.handleRejected(payload);
+    });
+
+    // Warehouse handlers
+    const whm = this.buildingPanel.getWarehouseModal();
+    this.client.on<WarehouseStatePayload>('warehouse.state', (payload) => {
+      if (this.myCharacter) {
+        whm.setPlayerCrowns(this.myCharacter.crowns);
+      }
+      whm.handleState(payload);
+    });
+    this.client.on<WarehouseRejectedPayload>('warehouse.rejected', (payload) => {
+      whm.handleRejected(payload);
+    });
+    this.client.on<WarehouseBulkResultPayload>('warehouse.bulk_result', (payload) => {
+      whm.handleBulkResult(payload);
+    });
+    this.client.on<WarehouseBuySlotResultPayload>('warehouse.buy_slot_result', (payload) => {
+      whm.handleBuySlotResult(payload);
+      if (payload.success) {
+        if (this.myCharacter) this.myCharacter.crowns = payload.new_crowns;
+        this.statsBar?.setCrowns(payload.new_crowns);
+      }
     });
 
     // Quest handlers

@@ -21,6 +21,7 @@ import { getXpIconUrl, getCrownsIconUrl } from './ui-icons';
 import { CraftingModal } from './CraftingModal';
 import { GatheringModal } from './GatheringModal';
 import { MarketplaceModal } from './MarketplaceModal';
+import { WarehouseModal } from './WarehouseModal';
 import type { MarketplaceBuildingActionDto, FishingBuildingActionDto, ArenaBuildingActionDto } from '@elarion/protocol';
 import type { GatheringCombatLoot } from './GatheringModal';
 
@@ -84,6 +85,7 @@ export class BuildingPanel {
   private bossBlockers = new Map<number, BossDto>(); // buildingId → boss
   private onBossChallenge: ((boss: BossDto) => void) | null = null;
   private marketplaceModal: MarketplaceModal;
+  private warehouseModal: WarehouseModal;
 
   constructor(parent: HTMLElement, onAction: ActionCallback) {
     this.onAction = onAction;
@@ -91,6 +93,7 @@ export class BuildingPanel {
     this.craftingModal = new CraftingModal(document.body);
     this.gatheringModal = new GatheringModal();
     this.marketplaceModal = new MarketplaceModal(document.body);
+    this.warehouseModal = new WarehouseModal();
 
     this.panel = document.createElement('div');
     this.panel.id = 'building-panel';
@@ -559,6 +562,28 @@ export class BuildingPanel {
           continue;
         }
 
+        if (action.action_type === 'warehouse') {
+          const whBtn = document.createElement('button');
+          whBtn.textContent = 'Warehouse';
+          whBtn.style.cssText = [
+            'width:100%',
+            'padding:8px',
+            'margin:4px 0',
+            'background:rgba(90,74,42,0.3)',
+            'border:1px solid #5a4a2a',
+            'border-radius:4px',
+            'color:#e8c870',
+            'font-family:Cinzel,serif',
+            'font-size:13px',
+            'cursor:pointer',
+          ].join(';');
+          whBtn.addEventListener('click', () => {
+            this.onAction({ building_id: building.id, action_id: action.id, action_type: 'warehouse' });
+          });
+          actionsSection.appendChild(whBtn);
+          continue;
+        }
+
         if (action.action_type === 'fishing') {
           const fAction = action as FishingBuildingActionDto;
           const fBtn = document.createElement('button');
@@ -807,6 +832,10 @@ export class BuildingPanel {
 
   getMarketplaceModal(): MarketplaceModal {
     return this.marketplaceModal;
+  }
+
+  getWarehouseModal(): WarehouseModal {
+    return this.warehouseModal;
   }
 
   handleGatheringStarted(payload: GatheringStartedPayload): void {
@@ -1577,6 +1606,7 @@ export class BuildingPanel {
     this.clearProgressIntervals();
     this.gatheringModal.close();
     this.marketplaceModal.close();
+    this.warehouseModal.close();
     this.panel.remove();
     this.combatModal.close();
     this.craftingModal.close();

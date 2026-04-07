@@ -970,6 +970,45 @@ async function abilityProgress(characterId) {
   table(res.rows, ['character_name', 'ability_name', 'current_level', 'current_points', 'last_book_used_at']);
 }
 
+// ─── Warehouse ────────────────────────────────────────────────────────────────
+
+async function warehouse() {
+  section('Warehouse Slots');
+  const slotsRes = await pool.query(`
+    SELECT ws.building_id, b.name AS building_name, ws.base_slots, ws.extra_slots,
+           ws.base_slots + ws.extra_slots AS total_slots
+    FROM warehouse_slots ws
+    JOIN buildings b ON b.id = ws.building_id
+    ORDER BY ws.building_id
+  `);
+  table(slotsRes.rows, ['building_id', 'building_name', 'base_slots', 'extra_slots', 'total_slots']);
+
+  section('Warehouse Items');
+  const itemsRes = await pool.query(`
+    SELECT wi.building_id, b.name AS building_name, d.name AS item_name,
+           wi.quantity, d.id AS item_def_id
+    FROM warehouse_items wi
+    JOIN item_definitions d ON d.id = wi.item_def_id
+    JOIN buildings b ON b.id = wi.building_id
+    ORDER BY wi.building_id, d.name
+  `);
+  table(itemsRes.rows, ['building_id', 'building_name', 'item_name', 'item_def_id', 'quantity']);
+
+  section('Per-Building Summary');
+  const summaryRes = await pool.query(`
+    SELECT wi.building_id, b.name AS building_name,
+           COUNT(DISTINCT wi.item_def_id) AS unique_items,
+           COALESCE(SUM(wi.quantity), 0) AS total_quantity,
+           ws.base_slots + ws.extra_slots AS total_slots
+    FROM warehouse_items wi
+    JOIN buildings b ON b.id = wi.building_id
+    LEFT JOIN warehouse_slots ws ON ws.building_id = wi.building_id
+    GROUP BY wi.building_id, b.name, ws.base_slots, ws.extra_slots
+    ORDER BY wi.building_id
+  `);
+  table(summaryRes.rows, ['building_id', 'building_name', 'unique_items', 'total_quantity', 'total_slots']);
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 const HELP = `
@@ -997,6 +1036,7 @@ Commands:
   economy                  Crown sources/sinks, equipment stats, expedition rewards
   stat-training            Stat training item mappings with tiers and success rates
   fatigue-config           Fatigue settings per combat type (start round, base damage, increment)
+  warehouse                Warehouse slots and stored items per building
   ability-levels [id]      Ability level scaling (optional: filter by ability ID)
   ability-progress [id]    Character ability progress (optional: filter by character ID)
   character-stats <name>   Character attributes, unspent points, derived stats
@@ -1037,6 +1077,7 @@ async function main() {
       case 'boss-instances': await bossInstances(); break;
       case 'stat-training':  await statTraining(); break;
       case 'fatigue-config': await fatigueConfig(); break;
+      case 'warehouse':      await warehouse(); break;
       case 'ability-levels':   await abilityLevels(args[0]); break;
       case 'ability-progress': await abilityProgress(args[0]); break;
       case 'sql':       await rawSql(args.join(' ')); break;

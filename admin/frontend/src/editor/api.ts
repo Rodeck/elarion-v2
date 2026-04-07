@@ -81,7 +81,7 @@ export type BuildingActionConfig = TravelActionConfig | ExploreActionConfig | Ex
 export interface BuildingAction {
   id: number;
   building_id: number;
-  action_type: 'travel' | 'explore' | 'expedition' | 'gather' | 'marketplace' | 'fishing' | 'arena';
+  action_type: 'travel' | 'explore' | 'expedition' | 'gather' | 'marketplace' | 'fishing' | 'arena' | 'warehouse';
   sort_order: number;
   config: BuildingActionConfig | Record<string, unknown>;
   created_at: string;
@@ -381,7 +381,7 @@ export async function createBuildingAction(
   mapId: number,
   buildingId: number,
   data: {
-    action_type: 'travel' | 'explore' | 'expedition' | 'gather' | 'marketplace' | 'fishing' | 'arena';
+    action_type: 'travel' | 'explore' | 'expedition' | 'gather' | 'marketplace' | 'fishing' | 'arena' | 'warehouse';
     sort_order?: number;
     config: BuildingActionConfig | Record<string, unknown>;
   },

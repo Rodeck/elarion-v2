@@ -116,6 +116,14 @@ function toProtocolBuilding(
           },
         } as unknown as BuildingActionDto;
       }
+      if ((a.action_type as string) === 'warehouse') {
+        return {
+          id: a.id,
+          action_type: 'warehouse',
+          label: 'Warehouse',
+          config: {},
+        } as unknown as BuildingActionDto;
+      }
       if ((a.action_type as string) === 'arena') {
         const cfg = a.config as Record<string, unknown>;
         const dto: ArenaBuildingActionDto = {

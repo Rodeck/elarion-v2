@@ -280,6 +280,8 @@ export class PropertiesPanel {
     } else if (action.action_type === 'arena') {
       const cfg = action.config as Record<string, unknown>;
       labelEl.textContent = `Arena (${cfg['arena_name'] ?? 'Arena'})`;
+    } else if (action.action_type === 'warehouse') {
+      labelEl.textContent = 'Warehouse';
     } else {
       const cfg = action.config as ExploreActionConfig;
       labelEl.textContent = `Explore (${cfg.encounter_chance}% chance, ${cfg.monsters.length} monster${cfg.monsters.length !== 1 ? 's' : ''})`;
@@ -704,7 +706,7 @@ export class PropertiesPanel {
 
     const typeSelect = document.createElement('select');
     typeSelect.id = 'action-type-select';
-    const actionTypes: [string, string][] = [['travel', 'Travel'], ['explore', 'Explore'], ['expedition', 'Expedition'], ['gather', 'Gather'], ['marketplace', 'Marketplace'], ['fishing', 'Fishing'], ['arena', 'Arena']];
+    const actionTypes: [string, string][] = [['travel', 'Travel'], ['explore', 'Explore'], ['expedition', 'Expedition'], ['gather', 'Gather'], ['marketplace', 'Marketplace'], ['fishing', 'Fishing'], ['arena', 'Arena'], ['warehouse', 'Warehouse']];
     for (const [val, text] of actionTypes) {
       const opt = document.createElement('option');
       opt.value = val;
@@ -1364,6 +1366,13 @@ export class PropertiesPanel {
 
     container.appendChild(arenaFields);
 
+    // ── Warehouse fields ─────────────────────────────────────────────
+    const warehouseFields = document.createElement('div');
+    warehouseFields.id = 'warehouse-fields';
+    warehouseFields.style.display = 'none';
+
+    container.appendChild(warehouseFields);
+
     // ── Show/hide on type change ─────────────────────────────────────
     typeSelect.addEventListener('change', () => {
       travelFields.style.display = typeSelect.value === 'travel' ? '' : 'none';
@@ -1373,6 +1382,7 @@ export class PropertiesPanel {
       marketplaceFields.style.display = typeSelect.value === 'marketplace' ? '' : 'none';
       fishingFields.style.display = typeSelect.value === 'fishing' ? '' : 'none';
       arenaFields.style.display = typeSelect.value === 'arena' ? '' : 'none';
+      warehouseFields.style.display = typeSelect.value === 'warehouse' ? '' : 'none';
     });
 
     // ── Buttons ──────────────────────────────────────────────────────
@@ -1472,6 +1482,11 @@ export class PropertiesPanel {
           await createBuildingAction(mapId, buildingId, {
             action_type: 'arena',
             config: { arena_id: arenaId, arena_name: arenaName },
+          });
+        } else if (typeSelect.value === 'warehouse') {
+          await createBuildingAction(mapId, buildingId, {
+            action_type: 'warehouse',
+            config: {},
           });
         } else {
           const baseGold = parseInt(baseGoldInput.value, 10);

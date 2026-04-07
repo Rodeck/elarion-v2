@@ -28,7 +28,7 @@ Run via Bash: `node scripts/game-entities.js <command> '<json-data>'`
 | `upload-npc-icon` | Upload PNG icon for NPC use | POST `/api/npcs/upload` |
 | `set-npc-crafter` | Set/unset NPC crafter flag | PUT `/api/npcs/:id/crafter` |
 | `create-recipe` | Create a crafting recipe | POST `/api/recipes` |
-| `create-building-action` | Create building action (travel/explore/expedition/gather/arena) | POST `/api/maps/:z/buildings/:b/actions` |
+| `create-building-action` | Create building action (travel/explore/expedition/gather/arena/warehouse) | POST `/api/maps/:z/buildings/:b/actions` |
 | `assign-building-npc` | Assign NPC to a building | POST `/api/maps/:z/buildings/:b/npcs` |
 | `create-ability` | Create a combat ability | POST `/api/abilities` |
 | `set-encounter` | Set night random encounter entry | PUT `/api/encounter-tables/:zoneId` |

@@ -126,6 +126,13 @@ export async function handleBuildingAction(
     return;
   }
 
+  if ((action.action_type as string) === 'warehouse') {
+    const { sendWarehouseState } = await import('../warehouse/warehouse-handler');
+    await sendWarehouseState(session, characterId, building_id);
+    log('debug', 'building-action', 'warehouse_opened', { characterId, building_id, action_id });
+    return;
+  }
+
   if (action.action_type === 'explore') {
     const exploreConfig = action.config as ExploreActionConfig;
 

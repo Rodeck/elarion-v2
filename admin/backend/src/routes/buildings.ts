@@ -262,8 +262,8 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
     config: Record<string, unknown>;
   };
 
-  if (action_type !== 'travel' && action_type !== 'explore' && action_type !== 'expedition' && action_type !== 'gather' && action_type !== 'marketplace' && action_type !== 'fishing' && action_type !== 'arena') {
-    return res.status(400).json({ error: 'action_type must be "travel", "explore", "expedition", "gather", "marketplace", "fishing", or "arena"' });
+  if (action_type !== 'travel' && action_type !== 'explore' && action_type !== 'expedition' && action_type !== 'gather' && action_type !== 'marketplace' && action_type !== 'fishing' && action_type !== 'arena' && action_type !== 'warehouse') {
+    return res.status(400).json({ error: 'action_type must be "travel", "explore", "expedition", "gather", "marketplace", "fishing", "arena", or "warehouse"' });
   }
 
   try {
@@ -415,6 +415,10 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
       const fishingConfig = config ?? {};
       const action = await createBuildingAction(buildingId, 'fishing' as 'travel', fishingConfig as unknown as TravelActionConfig, sort_order ?? 0);
       log('info', 'Created fishing action', { building_id: buildingId, action_id: action.id, admin: req.username });
+      return res.status(201).json({ action });
+    } else if (action_type === 'warehouse') {
+      const action = await createBuildingAction(buildingId, 'warehouse' as 'travel', {} as unknown as TravelActionConfig, sort_order ?? 0);
+      log('info', 'Created warehouse action', { building_id: buildingId, action_id: action.id, admin: req.username });
       return res.status(201).json({ action });
     } else if (action_type === 'arena') {
       const cfg = config as { arena_id?: unknown; arena_name?: unknown };

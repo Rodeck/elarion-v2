@@ -19,7 +19,7 @@ const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book'])
 const DEFENCE_CATEGORIES = new Set(['boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate', 'ring', 'amulet']);
 const VALID_EFFECT_TYPES = ['damage', 'heal', 'buff', 'debuff', 'dot', 'reflect', 'drain'];
 const VALID_SLOT_TYPES = ['auto', 'active', 'both'];
-const VALID_ACTION_TYPES = ['travel', 'explore', 'expedition', 'gather', 'fishing', 'arena'];
+const VALID_ACTION_TYPES = ['travel', 'explore', 'expedition', 'gather', 'fishing', 'arena', 'warehouse'];
 const VALID_TOOL_TYPES = ['pickaxe', 'axe', 'fishing_rod', 'kiln'];
 const VALID_GATHER_EVENT_TYPES = ['resource', 'gold', 'monster', 'accident', 'nothing', 'squire'];
 

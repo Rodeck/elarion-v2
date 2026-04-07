@@ -35,6 +35,7 @@ Run via Bash: `node scripts/game-data.js <command> [args...]`
 | `ability-levels [ability_id]` | Ability level stat definitions (effect_value, mana_cost, duration, cooldown per level). Optionally filtered by ability ID |
 | `ability-progress [character_id]` | Character skill progress — current level, XP, and ability details per character. Optionally filtered by character ID |
 | `fatigue-config` | Fatigue settings per combat type — start round, base damage, damage increment |
+| `warehouse` | Warehouse slots and stored items per building |
 | `sql "<query>"` | Run a raw SELECT query for ad-hoc analysis |
 
 ## Usage Pattern

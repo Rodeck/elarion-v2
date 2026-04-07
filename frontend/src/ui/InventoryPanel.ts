@@ -264,6 +264,8 @@ export class InventoryPanel {
           e.dataTransfer.setData('text/plain', JSON.stringify({
             slot_id: slot.slot_id,
             item_def_id: slot.definition.id,
+            quantity: slot.quantity,
+            shift: e.shiftKey,
           }));
           e.dataTransfer.effectAllowed = 'copy';
         }
