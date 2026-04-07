@@ -94,7 +94,10 @@
       "Bash(for f:*)",
       "Bash(do echo:*)",
       "Read(//d/projects/elarion-v2/**)",
-      "Bash(curl -s http://localhost:4001/api/items?limit=1)"
+      "Bash(curl -s http://localhost:4001/api/items?limit=1)",
+      "Bash(curl -s -X POST http://localhost:4001/login -H \"Content-Type: application/json\" -d '{\"username\":\"admin\",\"password\":\"123456789\"}')",
+      "Bash(curl -s -X DELETE http://localhost:4001/api/spells/1 -H 'Authorization: Bearer __TRACKED_VAR__' -w ' HTTP_%{http_code}')",
+      "Bash(curl -s -X DELETE http://localhost:4001/api/spells/2 -H 'Authorization: Bearer __TRACKED_VAR__' -w ' HTTP_%{http_code}')"
     ]
   }
 }

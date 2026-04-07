@@ -43,15 +43,20 @@ Generate ready-to-use AI art prompts for all visual assets in a design. Items an
    [Single complete prompt paragraph — ready to paste into image model. Describes the full spritesheet grid, art style, each item by grid position, and output format.]
    ```
 
-   **Prompt structure** (single paragraph, keep it tight):
-   - Grid spec first with EXACT pixel dimensions: "Pixel-perfect spritesheet, exactly [W]x[H] pixels, [cols] columns x [rows] rows uniform grid, each cell exactly 256x256 pixels, no margins, no padding, no gaps, no borders, cells flush edge-to-edge starting at pixel 0,0."
-   - If last row is partial: "Last row has N items then [empty] transparent cell(s)."
-   - Background: "Transparent background."
-   - Style: "Fantasy RPG item icons, stylized painted style like World of Warcraft icons, bold simple shapes, high contrast, readable at small size. Each item centered in its cell with generous padding, entirely contained within its cell boundaries — nothing may touch or cross cell edges."
-   - **Weapon containment rule**: For weapons (swords, daggers, staves, bows, clubs, etc.), add: "Every weapon drawn vertically upright, NOT diagonal, NOT rotated, sized to fit within 60-70% of the cell with clear empty space on all sides." This prevents long diagonal weapons from overlapping into adjacent cells.
-   - Items by row: "Top row left to right: [item], [item], [item]. Second row left to right: ..."
-   - Each item: 3-8 words max — just the object and its dominant color. E.g., "dark wine bottle with cork", "glowing purple crystal shard", "clay pot of amber oil"
-   - Negative: "No text, no labels, no decorative borders, no background color, no overlapping between cells."
+   **Prompt structure** (single paragraph — the model must understand this is a sliceable grid):
+
+   The prompt MUST follow this exact structure. Image models often ignore grid spacing instructions, so the prompt is designed to over-emphasize containment and isolation:
+
+   1. **Grid as sliceable image**: Start with "A flat grid spritesheet image for a video game. The image is exactly [W]x[H] pixels. It contains a strict [cols]x[rows] grid of square cells. Each cell is exactly 256x256 pixels. There are zero pixels of margin, padding, or gap between cells — cells tile perfectly edge-to-edge so the image can be sliced into [total] equal squares by cutting at every 256-pixel boundary."
+   2. **Item sizing and isolation** (critical for slicing): "Each item is drawn SMALL — occupying only the center 50-60% of its cell, leaving at least 50 pixels of empty transparent space on every side as a safety margin. No part of any item may come within 50 pixels of any cell edge. This is critical: every item must be an isolated floating object surrounded by transparent emptiness within its own square."
+   3. **Background**: "Transparent background throughout the entire image."
+   4. **Style**: "Style: fantasy RPG item icons, painted style like World of Warcraft inventory icons, bold readable shapes, warm palette, soft drop shadows beneath each item to ground them."
+   5. **Weapon containment rule**: For weapons (swords, daggers, staves, bows, clubs, etc.), add: "Every weapon drawn vertically upright, NOT diagonal, NOT rotated, sized to fit within 50-60% of the cell with clear empty space on all sides."
+   6. **Items by cell position using numbered references**: "Row 1 (cells 1-5, left to right): [1] a short description, [2] a short description, ... Row 2 (cells 1-N): [N+1] description, ..."
+   7. **Partial rows**: If last row is partial: "Cells N-M of row R are completely empty and transparent."
+   8. **Each item**: 8-15 words — the object, its dominant color, and one distinguishing feature. E.g., "[1] a dark wine bottle with red wax seal and cork", "[2] a glowing purple crystal shard with jagged edges"
+   9. **Closing containment reminder**: "Every item is a single small centered object floating in transparent space. Items do not touch each other or their cell boundaries."
+   10. **Negative**: "No text, no labels, no numbers, no borders, no frames, no background color anywhere."
    - DO NOT include art theory words like "brushstrokes", "specular highlights", "rim lighting" — keep it simple
 
 3. **Generate monster spritesheet prompts** → `game_design/<name>/monster_prompts.md` (or split if >25):
@@ -70,13 +75,16 @@ Generate ready-to-use AI art prompts for all visual assets in a design. Items an
    [Single complete prompt paragraph — ready to paste.]
    ```
 
-   **Prompt structure** (single paragraph, keep it tight):
-   - Grid spec first with EXACT pixel dimensions: "Pixel-perfect spritesheet, exactly [W]x[H] pixels, [cols] columns x [rows] rows uniform grid, each cell exactly 350x350 pixels, no margins, no padding, no gaps, no borders, cells flush edge-to-edge starting at pixel 0,0."
-   - Background: "Dark vignette background in each cell."
-   - Style: "Fantasy RPG creature portraits, stylized painted style like World of Warcraft bestiary, bold shapes, high contrast, 3/4 view, dramatic top lighting, readable at small size."
-   - Monsters by row: "Top row left to right: [monster], [monster]. Bottom row: ..."
-   - Each monster: 8-15 words max — body type, color, one signature feature. E.g., "massive dark stone golem with glowing blue-green veins", "coiled green serpent with golden eyes and dripping fangs"
-   - Negative: "No text, no labels, no decorative borders."
+   **Prompt structure** (single paragraph — same containment-first approach as items):
+
+   1. **Grid as sliceable image**: "A flat grid spritesheet image for a video game. The image is exactly [W]x[H] pixels. It contains a strict [cols]x[rows] grid of square cells. Each cell is exactly 350x350 pixels. There are zero pixels of margin, padding, or gap between cells — cells tile perfectly edge-to-edge so the image can be sliced into [total] equal squares by cutting at every 350-pixel boundary."
+   2. **Creature sizing and isolation**: "Each creature is drawn to occupy only the center 60-70% of its cell, leaving at least 50 pixels of empty space on every side. No part of any creature may come within 50 pixels of any cell edge. Every creature must be fully contained within its own square."
+   3. **Background**: "Dark vignette background in each cell."
+   4. **Style**: "Style: fantasy RPG creature portraits, painted style like World of Warcraft bestiary, bold shapes, high contrast, 3/4 view, dramatic top lighting, readable at small size."
+   5. **Monsters by cell position using numbered references**: "Row 1 (cells 1-N): [1] description, [2] description, ... Row 2: ..."
+   6. **Each monster**: 8-15 words — body type, color, one signature feature. E.g., "[1] massive dark stone golem with glowing blue-green veins", "[2] coiled green serpent with golden eyes and dripping fangs"
+   7. **Closing containment reminder**: "Every creature is fully contained within its cell. Creatures do not touch each other or their cell boundaries."
+   8. **Negative**: "No text, no labels, no numbers, no decorative borders."
    - DO NOT include art theory words
 
 4. **Generate NPC prompts** → `game_design/<name>/npc_prompts.md` (if design has NPCs):
@@ -116,11 +124,22 @@ Generate ready-to-use AI art prompts for all visual assets in a design. Items an
 
 ## Art Style Guidelines
 
-- **Stylized, not realistic**: Inspired by WoW/Diablo icon art — bold shapes, strong contrast, painterly brushstrokes. NOT photorealistic.
+- **Stylized, not realistic**: Inspired by WoW/Diablo icon art — bold shapes, strong contrast, warm palette. NOT photorealistic.
 - **Readability first**: Every icon must be recognizable at 48x48 pixels. Favor clear silhouettes and dominant colors over fine detail.
-- **Keep descriptions short**: 10-20 words per item focusing on shape + color + one signature feature. Micro-details (hairline fractures, air bubbles, thread patterns) are wasted — the model either ignores them or adds noise.
+- **Keep descriptions concise**: 8-15 words per item focusing on shape + color + one distinguishing feature. Micro-details (hairline fractures, air bubbles, thread patterns) are wasted — the model either ignores them or adds noise.
 - **Material focus**: For items — dominant material color and glossiness (not texture grain). For gems — glow color and shape.
 - **Character through appearance**: For NPCs — clothing, tools, expression tell their story
 - **Creature design logic**: Monsters should have one bold signature feature (crystal growths, iron shell, shadow wisps) that defines them visually
-- **Spritesheet consistency**: Emphasize uniform lighting, scale, and style across all cells in the grid
-- **Cell containment**: Every item MUST be fully contained within its grid cell with visible padding on all sides. Long items (swords, staves, bows) must be drawn vertically upright and sized to ~60-70% of cell height — NEVER diagonal, as diagonal placement causes weapons to overlap into adjacent cells and ruins the spritesheet for slicing. This is the #1 cause of unusable spritesheets.
+
+### Spritesheet Slicing Rules (Critical)
+
+These rules exist because image models tend to draw items too large, too close together, or overlapping cell boundaries — making the spritesheet impossible to slice into individual icons.
+
+- **Item sizing**: Every item occupies only the CENTER 50-60% of its cell. At least 50px of transparent empty space on all sides.
+- **No-go zone**: No part of any item may come within 50 pixels of any cell edge. This is the #1 instruction to repeat and emphasize.
+- **Isolation language**: Describe each item as "an isolated floating object surrounded by transparent emptiness" — this framing helps models understand spacing.
+- **Numbered cell references**: Use `[1]`, `[2]`, etc. instead of prose like "top row left to right" — numbered positions are followed more reliably.
+- **Drop shadows**: Add "soft drop shadows beneath each item" — this grounds items visually without needing them to fill the cell.
+- **Containment bookend**: End the prompt with a containment reminder: "Every item is a single small centered object floating in transparent space. Items do not touch each other or their cell boundaries."
+- **Weapon containment**: Long items (swords, staves, bows) must be drawn vertically upright, NOT diagonal, sized to 50-60% of cell height — diagonal placement causes overlap into adjacent cells.
+- **No art theory words**: Avoid "brushstrokes", "specular highlights", "rim lighting", "volumetric" — these bloat the prompt without improving output.

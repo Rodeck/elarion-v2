@@ -1,0 +1,5 @@
+# NPC Prompts
+
+## Elara the Inscriber (ID: 15)
+
+Semi-realistic digital painting, medieval fantasy RPG character portrait. A pale woman in her mid-thirties with sharp angular features and dark circles under her eyes from long candlelit nights. Thin face, high cheekbones, straight black hair pulled back and pinned loosely. Her fingers and the edges of her hands are stained with deep blue-black ink that never fully washes out. She wears a dark grey linen robe with a leather apron, ink-spotted and burn-marked from hot metal work. A thin silver chain around her neck holds a small metal stylus. Her eyes have a faint unnatural pale glow, like moonlight behind glass. Expression is focused and slightly distant, as if seeing something invisible. Warm amber lighting from below as if lit by candles, portrait framing showing head and upper shoulders. Dark warm brown vignette background. Palette: charcoal grey, ink blue-black, pale skin with cool undertones, silver accents. 256x256 pixels, PNG. No outlines, no cel-shading, no pixel art, no text.

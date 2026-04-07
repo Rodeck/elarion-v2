@@ -39,8 +39,10 @@ export class Toolbar {
   private onBack: (() => void) | null = null;
   private onConfiguration: (() => void) | null = null;
   private onItemOverlay: (() => void) | null = null;
+  private onNpcOverlay: (() => void) | null = null;
   private configButton!: HTMLButtonElement;
   private itemOverlayButton!: HTMLButtonElement;
+  private npcOverlayButton!: HTMLButtonElement;
 
   constructor(parent: HTMLElement) {
     this.container = document.createElement('div');
@@ -143,6 +145,15 @@ export class Toolbar {
     });
     group.appendChild(this.itemOverlayButton);
 
+    // NPC Overlay ------------------------------------------------------------
+    this.npcOverlayButton = document.createElement('button');
+    this.npcOverlayButton.className = 'toolbar-btn';
+    this.npcOverlayButton.textContent = 'NPCs';
+    this.npcOverlayButton.addEventListener('click', () => {
+      this.onNpcOverlay?.();
+    });
+    group.appendChild(this.npcOverlayButton);
+
     // Configuration ----------------------------------------------------------
     this.configButton = document.createElement('button');
     this.configButton.className = 'toolbar-btn';
@@ -208,6 +219,14 @@ export class Toolbar {
 
   setItemOverlayActive(active: boolean): void {
     this.itemOverlayButton.classList.toggle('toolbar-btn--active', active);
+  }
+
+  setOnNpcOverlay(cb: () => void): void {
+    this.onNpcOverlay = cb;
+  }
+
+  setNpcOverlayActive(active: boolean): void {
+    this.npcOverlayButton.classList.toggle('toolbar-btn--active', active);
   }
 
   enableSave(enabled: boolean): void {

@@ -14,6 +14,7 @@ import { SquireDefinitionManager } from './ui/squire-definition-manager';
 import { FishingManager } from './ui/fishing-manager';
 import { BossManager } from './ui/boss-manager';
 import { ArenaManager } from './ui/arena-manager';
+import { SpellManager } from './ui/spell-manager';
 import { Toolbar } from './ui/toolbar';
 import { MapCanvas } from './editor/canvas';
 import { EditorModeManager } from './editor/modes';
@@ -31,6 +32,7 @@ import {
   updateBuilding,
   deleteBuilding,
   fetchBuildingItems,
+  fetchBuildingNpcs,
   type MapFull,
   type PathNode,
   type PathEdge,
@@ -54,6 +56,7 @@ let squireDefManager: SquireDefinitionManager | null = null;
 let fishingManager: FishingManager | null = null;
 let bossManager: BossManager | null = null;
 let arenaManager: ArenaManager | null = null;
+let spellManager: SpellManager | null = null;
 let fatigueConfigManager: FatigueConfigManager | null = null;
 let toolbar: Toolbar | null = null;
 let canvas: MapCanvas | null = null;
@@ -126,12 +129,13 @@ function destroyAll(): void {
   recipeManager = null;
   bossManager = null;
   arenaManager = null;
+  spellManager = null;
   fatigueConfigManager = null;
   destroyEditor();
   app.innerHTML = '';
 }
 
-async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' | 'quests' | 'squires' | 'fishing' | 'bosses' | 'arenas' | 'fatigue' = 'maps'): Promise<void> {
+async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'spells' | 'recipes' | 'quests' | 'squires' | 'fishing' | 'bosses' | 'arenas' | 'fatigue' = 'maps'): Promise<void> {
   destroyAll();
 
   // Tab bar — hidden until authenticated
@@ -148,6 +152,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     <button class="btn ${activeTab === 'config' ? 'btn--active' : ''}" id="tab-config">Config</button>
     <button class="btn ${activeTab === 'npcs' ? 'btn--active' : ''}" id="tab-npcs">NPCs</button>
     <button class="btn ${activeTab === 'abilities' ? 'btn--active' : ''}" id="tab-abilities">Abilities</button>
+    <button class="btn ${activeTab === 'spells' ? 'btn--active' : ''}" id="tab-spells">Spells</button>
     <button class="btn ${activeTab === 'recipes' ? 'btn--active' : ''}" id="tab-recipes">Recipes</button>
     <button class="btn ${activeTab === 'quests' ? 'btn--active' : ''}" id="tab-quests">Quests</button>
     <button class="btn ${activeTab === 'squires' ? 'btn--active' : ''}" id="tab-squires">Squires</button>
@@ -201,6 +206,11 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
   abilityManagerPanel.style.display = activeTab === 'abilities' ? '' : 'none';
   app.appendChild(abilityManagerPanel);
 
+  const spellManagerPanel = document.createElement('div');
+  spellManagerPanel.id = 'spell-manager';
+  spellManagerPanel.style.display = activeTab === 'spells' ? '' : 'none';
+  app.appendChild(spellManagerPanel);
+
   const recipeManagerPanel = document.createElement('div');
   recipeManagerPanel.id = 'recipe-manager';
   recipeManagerPanel.style.display = activeTab === 'recipes' ? '' : 'none';
@@ -236,7 +246,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
   fatigueConfigPanel.style.display = activeTab === 'fatigue' ? '' : 'none';
   app.appendChild(fatigueConfigPanel);
 
-  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' | 'quests' | 'squires' | 'fishing' | 'bosses' | 'arenas' | 'fatigue'): void {
+  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'spells' | 'recipes' | 'quests' | 'squires' | 'fishing' | 'bosses' | 'arenas' | 'fatigue'): void {
     mapEditorPanel.style.display = tab === 'maps' ? '' : 'none';
     itemManagerPanel.style.display = tab === 'items' ? '' : 'none';
     monsterManagerPanel.style.display = tab === 'monsters' ? '' : 'none';
@@ -245,6 +255,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     adminConfigPanel.style.display = tab === 'config' ? '' : 'none';
     npcManagerPanel.style.display = tab === 'npcs' ? '' : 'none';
     abilityManagerPanel.style.display = tab === 'abilities' ? '' : 'none';
+    spellManagerPanel.style.display = tab === 'spells' ? '' : 'none';
     recipeManagerPanel.style.display = tab === 'recipes' ? '' : 'none';
     questManagerPanel.style.display = tab === 'quests' ? '' : 'none';
     squireDefPanel.style.display = tab === 'squires' ? '' : 'none';
@@ -260,6 +271,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     tabBar.querySelector('#tab-config')!.classList.toggle('btn--active', tab === 'config');
     tabBar.querySelector('#tab-npcs')!.classList.toggle('btn--active', tab === 'npcs');
     tabBar.querySelector('#tab-abilities')!.classList.toggle('btn--active', tab === 'abilities');
+    tabBar.querySelector('#tab-spells')!.classList.toggle('btn--active', tab === 'spells');
     tabBar.querySelector('#tab-recipes')!.classList.toggle('btn--active', tab === 'recipes');
     tabBar.querySelector('#tab-quests')!.classList.toggle('btn--active', tab === 'quests');
     tabBar.querySelector('#tab-squires')!.classList.toggle('btn--active', tab === 'squires');
@@ -331,6 +343,15 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
       abilityManager = new AbilityManager();
       abilityManager.init(abilityManagerPanel);
       await abilityManager.load();
+    }
+  });
+
+  tabBar.querySelector('#tab-spells')!.addEventListener('click', async () => {
+    setActiveTab('spells');
+    if (!spellManager) {
+      spellManager = new SpellManager();
+      spellManager.init(spellManagerPanel);
+      await spellManager.load();
     }
   });
 
@@ -433,6 +454,10 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     abilityManager = new AbilityManager();
     abilityManager.init(abilityManagerPanel);
     await abilityManager.load();
+  } else if (activeTab === 'spells') {
+    spellManager = new SpellManager();
+    spellManager.init(spellManagerPanel);
+    await spellManager.load();
   } else if (activeTab === 'recipes') {
     recipeManager = new RecipeManager();
     recipeManager.init(recipeManagerPanel);
@@ -688,14 +713,41 @@ async function showEditor(mapId: number): Promise<void> {
     }
   });
 
+  // NPC overlay toggle
+  let npcOverlayActive = false;
+  toolbar.setOnNpcOverlay(async () => {
+    npcOverlayActive = !npcOverlayActive;
+    toolbar!.setNpcOverlayActive(npcOverlayActive);
+    if (npcOverlayActive && canvas) {
+      try {
+        const data = await fetchBuildingNpcs(mapId);
+        canvas.setNpcOverlayData(data);
+        canvas.npcOverlayEnabled = true;
+      } catch (err) {
+        alert(`Failed to load NPC overlay: ${(err as Error).message}`);
+        npcOverlayActive = false;
+        toolbar!.setNpcOverlayActive(false);
+      }
+    } else if (canvas) {
+      canvas.clearNpcOverlay();
+    }
+  });
+
   toolbar.setOnSave(async () => {
     await saveMap();
-    // Refresh overlay if active
+    // Refresh overlays if active
     if (itemOverlayActive && canvas) {
       try {
         const data = await fetchBuildingItems(mapId);
         canvas.setOverlayData(data);
         canvas.overlayEnabled = true;
+      } catch { /* ignore refresh failure */ }
+    }
+    if (npcOverlayActive && canvas) {
+      try {
+        const data = await fetchBuildingNpcs(mapId);
+        canvas.setNpcOverlayData(data);
+        canvas.npcOverlayEnabled = true;
       } catch { /* ignore refresh failure */ }
     }
   });

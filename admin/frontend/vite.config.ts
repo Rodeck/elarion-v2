@@ -54,6 +54,10 @@ export default defineConfig({
         target: 'http://localhost:4001',
         changeOrigin: true,
       },
+      '/spell-icons': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
     },
   },
 });

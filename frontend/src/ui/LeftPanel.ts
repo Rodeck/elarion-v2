@@ -2,6 +2,8 @@ import { InventoryPanel } from './InventoryPanel';
 import { EquipmentPanel } from './EquipmentPanel';
 import { LoadoutPanel } from './LoadoutPanel';
 import { SquireRosterPanel } from './SquireRosterPanel';
+import { SpellPanel } from './SpellPanel';
+import { SpellDetailModal } from './SpellDetailModal';
 import type {
   InventorySlotDto,
   InventoryStatePayload,
@@ -15,6 +17,8 @@ import type {
   LoadoutStatePayload,
   LoadoutUpdateRejectedPayload,
   SquireRosterDto,
+  SpellStatePayload,
+  OwnedSpellDto,
 } from '../../../shared/protocol/index';
 
 const EQUIPPABLE_CATEGORIES = ['weapon', 'shield', 'boots', 'greaves', 'bracer', 'helmet', 'chestplate', 'ring', 'amulet'];
@@ -31,12 +35,18 @@ export class LeftPanel {
   private inventoryContentEl!: HTMLElement;
   private loadoutContentEl!: HTMLElement;
   private squiresContentEl!: HTMLElement;
+  private spellsContentEl!: HTMLElement;
 
   private inventoryPanel: InventoryPanel;
   private equipmentPanel: EquipmentPanel | null = null;
   private loadoutPanel: LoadoutPanel | null = null;
   private squirePanel: SquireRosterPanel | null = null;
-  private activeTab: 'equipment' | 'inventory' | 'loadout' | 'squires' = 'inventory';
+  private spellPanel: SpellPanel | null = null;
+  private spellDetailModal: SpellDetailModal | null = null;
+  private pendingSpellState: SpellStatePayload | null = null;
+  private activeTab: 'equipment' | 'inventory' | 'loadout' | 'squires' | 'spells' = 'inventory';
+
+  private onSpellCast: ((spellId: number) => void) | null = null;
 
   private inventorySlots: InventorySlotDto[] = [];
 
@@ -74,10 +84,11 @@ export class LeftPanel {
     this.tabsEl = document.createElement('div');
     this.tabsEl.className = 'left-panel__tabs';
 
-    const tabs: { id: 'equipment' | 'inventory' | 'loadout' | 'squires'; label: string }[] = [
+    const tabs: { id: 'equipment' | 'inventory' | 'loadout' | 'squires' | 'spells'; label: string }[] = [
       { id: 'inventory', label: '🎒 Inventory' },
       { id: 'equipment', label: '⚔ Equipment' },
       { id: 'loadout',   label: '🗡 Loadout' },
+      { id: 'spells',    label: '✨ Spells' },
       { id: 'squires',   label: '🛡 Squires' },
     ];
 
@@ -103,10 +114,14 @@ export class LeftPanel {
     this.squiresContentEl = document.createElement('div');
     this.squiresContentEl.style.cssText = 'flex:1;display:none;overflow:hidden;flex-direction:column;';
 
+    this.spellsContentEl = document.createElement('div');
+    this.spellsContentEl.style.cssText = 'flex:1;display:none;overflow:hidden;flex-direction:column;';
+
     this.container.appendChild(this.tabsEl);
     this.container.appendChild(this.equipmentContentEl);
     this.container.appendChild(this.inventoryContentEl);
     this.container.appendChild(this.loadoutContentEl);
+    this.container.appendChild(this.spellsContentEl);
     this.container.appendChild(this.squiresContentEl);
 
     // Show default tab
@@ -150,6 +165,25 @@ export class LeftPanel {
     return this.squirePanel;
   }
 
+  private ensureSpellPanel(): SpellPanel {
+    if (!this.spellPanel) {
+      this.spellPanel = new SpellPanel(this.spellsContentEl);
+      this.spellDetailModal = new SpellDetailModal();
+      this.spellPanel.setOnSpellClick((spell: OwnedSpellDto) => {
+        this.spellDetailModal!.open(spell, true);
+        this.spellDetailModal!.setOnCast((spellId: number) => {
+          this.onSpellCast?.(spellId);
+        });
+      });
+      this.updateTabVisibility();
+      // Apply any spell state that arrived before the panel was created
+      if (this.pendingSpellState) {
+        this.spellPanel.updateSpells(this.pendingSpellState);
+      }
+    }
+    return this.spellPanel;
+  }
+
   // ---------------------------------------------------------------------------
   // Tab navigation
   // ---------------------------------------------------------------------------
@@ -158,7 +192,7 @@ export class LeftPanel {
     this.onTabClick = cb;
   }
 
-  showTab(tab: 'equipment' | 'inventory' | 'loadout' | 'squires'): void {
+  showTab(tab: 'equipment' | 'inventory' | 'loadout' | 'squires' | 'spells'): void {
     this.activeTab = tab;
     this.onTabClick?.();
     this.updateTabVisibility();
@@ -184,6 +218,11 @@ export class LeftPanel {
     if (tab === 'squires') {
       this.ensureSquirePanel();
     }
+
+    // If switching to spells, ensure panel exists
+    if (tab === 'spells') {
+      this.ensureSpellPanel();
+    }
   }
 
   private updateTabVisibility(): void {
@@ -192,6 +231,7 @@ export class LeftPanel {
     this.inventoryContentEl.style.display  = tab === 'inventory' ? 'flex' : 'none';
     this.loadoutContentEl.style.display    = tab === 'loadout'   ? 'flex' : 'none';
     this.squiresContentEl.style.display    = tab === 'squires'   ? 'flex' : 'none';
+    this.spellsContentEl.style.display     = tab === 'spells'    ? 'flex' : 'none';
   }
 
   // ---------------------------------------------------------------------------
@@ -338,5 +378,24 @@ export class LeftPanel {
   /** Returns the bottom edge of the tab bar (for positioning the expanded stats panel). */
   getTabsBottom(): number {
     return this.tabsEl.getBoundingClientRect().bottom;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Spell pass-through
+  // ---------------------------------------------------------------------------
+
+  updateSpells(payload: SpellStatePayload): void {
+    this.pendingSpellState = payload;
+    if (this.spellPanel) {
+      this.spellPanel.updateSpells(payload);
+    }
+  }
+
+  setOnSpellCast(cb: (spellId: number) => void): void {
+    this.onSpellCast = cb;
+  }
+
+  setOnUseSpellBook(cb: (slotId: number) => void): void {
+    this.inventoryPanel.setOnUseSpellBook(cb);
   }
 }

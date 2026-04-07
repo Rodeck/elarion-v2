@@ -5,6 +5,7 @@ import { signToken } from './jwt';
 import { log } from '../logger';
 import { sendToSession } from '../websocket/server';
 import { sendLoadoutState } from '../game/combat/combat-handlers';
+import { sendSpellState } from '../game/spell/spell-state-handler';
 import type { AuthenticatedSession } from '../websocket/server';
 import type { AuthLoginPayload } from '@elarion/protocol';
 
@@ -58,5 +59,6 @@ export async function handleAuthLogin(session: AuthenticatedSession, payload: un
   // Push initial loadout state if character exists
   if (character) {
     void sendLoadoutState(session, character.id);
+    void sendSpellState(session, character.id);
   }
 }

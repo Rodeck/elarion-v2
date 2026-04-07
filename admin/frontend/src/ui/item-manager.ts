@@ -12,7 +12,7 @@ import { invalidateItemPickerCache } from './item-picker';
 const VALID_CATEGORIES = [
   'resource', 'food', 'heal', 'weapon',
   'helmet', 'chestplate', 'boots', 'shield', 'greaves', 'bracer', 'tool',
-  'ring', 'amulet', 'skill_book',
+  'ring', 'amulet', 'skill_book', 'spell_book_spell',
 ] as const;
 
 const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book']);
@@ -341,7 +341,7 @@ export class ItemManager {
       resource: 'Resource', food: 'Food', heal: 'Heal', weapon: 'Weapon',
       helmet: 'Helmet', chestplate: 'Chestplate', boots: 'Boots', shield: 'Shield',
       greaves: 'Greaves', bracer: 'Bracer', tool: 'Tool', ring: 'Ring', amulet: 'Amulet',
-      skill_book: 'Skill Book',
+      skill_book: 'Skill Book', spell_book_spell: 'Spell Tome',
     };
     return labels[category] ?? category;
   }

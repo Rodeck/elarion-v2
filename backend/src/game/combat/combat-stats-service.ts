@@ -1,5 +1,6 @@
 import { query } from '../../db/connection';
 import type { DerivedCombatStats } from './combat-engine';
+import { getActiveSpellBuffModifiers } from '../spell/spell-buff-service';
 
 const DEFAULT_MAX_MANA = 100;
 const DEFAULT_MANA_ON_HIT = 10;        // mana gained per attack landed
@@ -112,17 +113,24 @@ export async function computeCombatStats(
     critDamage = DEFAULT_CRIT_DAMAGE + char.attr_strength * 0.3;
   }
 
+  // Pass 3: Apply active spell buff modifiers (percentage-based, additive stacking)
+  const spellMods = await getActiveSpellBuffModifiers(characterId);
+  const baseAttack = derivedAttack + bonusAttack;
+  const baseDefence = derivedDefence + bonusDefence;
+  const spellAttackBonus = Math.floor(baseAttack * spellMods.attackPct / 100);
+  const spellDefenceBonus = Math.floor(baseDefence * spellMods.defencePct / 100);
+
   return {
-    attack:            derivedAttack + bonusAttack,
-    defence:           derivedDefence + bonusDefence,
+    attack:            baseAttack + spellAttackBonus,
+    defence:           baseDefence + spellDefenceBonus,
     maxHp:             derivedMaxHp,
     maxMana:           maxMana,
     manaOnHit:         manaOnHit,
     manaOnDamageTaken: manaOnDamageTaken,
     manaRegen:         manaRegen,
     dodgeChance:       Math.min(95, dodgeChance),   // cap dodge at 95%
-    critChance:        Math.min(100, critChance),
-    critDamage:        critDamage,
+    critChance:        Math.min(100, critChance + spellMods.critChancePct),
+    critDamage:        critDamage + spellMods.critDamagePct,
     armorPenetration:  Math.min(100, armorPenetration),
     additionalAttacks: additionalAttacks,
   };

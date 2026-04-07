@@ -18,6 +18,7 @@ import { log } from '../../logger';
 import { sendToSession } from '../../websocket/server';
 import type { AuthenticatedSession } from '../../websocket/server';
 import type { CityMovePayload, CityMapBuilding, ExpeditionStateDto } from '@elarion/protocol';
+import { getActiveSpellBuffModifiers } from '../spell/spell-buff-service';
 
 // ---------------------------------------------------------------------------
 // Movement cancellation — track active movement timers per character
@@ -277,11 +278,14 @@ export async function handleCityMove(session: AuthenticatedSession, payload: unk
   const movement: ActiveMovement = { timers: [], cancelled: false };
   activeMovements.set(characterId, movement);
 
+  const spellMods = await getActiveSpellBuffModifiers(characterId);
+  const spellSpeedBonus = spellMods.movementSpeed;
+
   let cumulativeDelay = 0;
   for (let i = 1; i < path.length; i++) {
     const stepNodeId = path[i]!;
     const predictedEnergy = Math.max(0, (character.current_energy ?? 1000) - (i - 1) * 2);
-    const stepDelay = computeStepDelay(character.movement_speed ?? 100, predictedEnergy);
+    const stepDelay = computeStepDelay((character.movement_speed ?? 100) + spellSpeedBonus, predictedEnergy);
     cumulativeDelay += stepDelay;
     const delay = cumulativeDelay;
 

@@ -1009,6 +1009,61 @@ async function warehouse() {
   table(summaryRes.rows, ['building_id', 'building_name', 'unique_items', 'total_quantity', 'total_slots']);
 }
 
+// ─── Spells ─────────────────────────────────────────────────────────────────────
+
+async function spells() {
+  section('All Spell Definitions');
+  const res = await pool.query(`
+    SELECT s.id, s.name, s.effect_type, s.effect_value, s.duration_seconds,
+           (SELECT COUNT(*) FROM spell_levels sl WHERE sl.spell_id = s.id) AS level_count,
+           (SELECT COUNT(*) FROM character_spells cs WHERE cs.spell_id = s.id) AS learners
+    FROM spells s
+    ORDER BY s.id
+  `);
+  table(res.rows);
+
+  section('Spell Levels');
+  const lvRes = await pool.query(`
+    SELECT sl.spell_id, s.name AS spell_name, sl.level, sl.effect_value, sl.duration_seconds, sl.gold_cost
+    FROM spell_levels sl
+    JOIN spells s ON s.id = sl.spell_id
+    ORDER BY sl.spell_id, sl.level
+  `);
+  table(lvRes.rows);
+
+  section('Spell Costs');
+  const costRes = await pool.query(`
+    SELECT sc.spell_id, s.name AS spell_name, sc.level, d.name AS item_name, sc.quantity
+    FROM spell_costs sc
+    JOIN spells s ON s.id = sc.spell_id
+    JOIN item_definitions d ON d.id = sc.item_def_id
+    ORDER BY sc.spell_id, sc.level, d.name
+  `);
+  table(costRes.rows);
+}
+
+async function spellBuffs(characterId) {
+  section('Active Spell Buffs');
+  let q = `
+    SELECT asb.id, asb.character_id, c.name AS char_name, s.name AS spell_name,
+           asb.level, asb.effect_type, asb.effect_value, asb.expires_at,
+           cast2.name AS caster_name
+    FROM active_spell_buffs asb
+    JOIN spells s ON s.id = asb.spell_id
+    JOIN characters c ON c.id = asb.character_id
+    JOIN characters cast2 ON cast2.id = asb.caster_id
+    WHERE asb.expires_at > NOW()
+  `;
+  const params = [];
+  if (characterId) {
+    q += ' AND asb.character_id = $1';
+    params.push(characterId);
+  }
+  q += ' ORDER BY asb.character_id, asb.spell_id';
+  const res = await pool.query(q, params);
+  table(res.rows);
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 const HELP = `
@@ -1038,6 +1093,8 @@ Commands:
   fatigue-config           Fatigue settings per combat type (start round, base damage, increment)
   warehouse                Warehouse slots and stored items per building
   ability-levels [id]      Ability level scaling (optional: filter by ability ID)
+  spells                   List all spell definitions with levels and costs
+  spell-buffs [char_id]    Active spell buffs (optional: filter by character ID)
   ability-progress [id]    Character ability progress (optional: filter by character ID)
   character-stats <name>   Character attributes, unspent points, derived stats
   search <term>            Search across all entity types by name
@@ -1080,6 +1137,8 @@ async function main() {
       case 'warehouse':      await warehouse(); break;
       case 'ability-levels':   await abilityLevels(args[0]); break;
       case 'ability-progress': await abilityProgress(args[0]); break;
+      case 'spells':           await spells(); break;
+      case 'spell-buffs':      await spellBuffs(args[0]); break;
       case 'sql':       await rawSql(args.join(' ')); break;
       default:
         console.error(`Unknown command: ${cmd}`);

@@ -22,11 +22,13 @@ import { abilitiesRouter } from './routes/abilities';
 import { recipesRouter } from './routes/recipes';
 import { questsRouter } from './routes/quests';
 import { buildingItemsRouter } from './routes/building-items';
+import { buildingNpcsRouter } from './routes/building-npcs';
 import { squireDefinitionsRouter } from './routes/squire-definitions';
 import { fishingRouter } from './routes/fishing';
 import { bossesRouter } from './routes/bosses';
 import { arenasRouter } from './routes/arenas';
 import { statTrainingRouter } from './routes/stat-training';
+import { spellsRouter } from './routes/spells';
 
 const app = express();
 
@@ -71,6 +73,10 @@ app.use('/boss-sprites', express.static(bossSpritesDir));
 const uiIconsDir = path.resolve(__dirname, '../../../backend/assets/ui-icons');
 app.use('/ui-icons', express.static(uiIconsDir));
 
+// Serve spell icons statically
+const spellIconsDir = path.resolve(__dirname, '../../../backend/assets/spells/icons');
+app.use('/spell-icons', express.static(spellIconsDir));
+
 // Serve fatigue icons statically
 const fatigueIconsDir = path.resolve(__dirname, '../../../backend/assets/fatigue-icons');
 app.use('/fatigue-icons', express.static(fatigueIconsDir));
@@ -87,6 +93,7 @@ app.use('/api/maps', nodesRouter);
 app.use('/api/maps', edgesRouter);
 app.use('/api/maps', buildingsRouter);
 app.use('/api/maps', buildingItemsRouter);
+app.use('/api/maps', buildingNpcsRouter);
 app.use('/api/maps', uploadRouter);
 app.use('/api/items', itemsRouter);
 app.use('/api/monsters', monstersRouter);
@@ -105,6 +112,7 @@ app.use('/api', fishingRouter);
 app.use('/api/bosses', bossesRouter);
 app.use('/api/arenas', arenasRouter);
 app.use('/api/stat-training', statTrainingRouter);
+app.use('/api/spells', spellsRouter);
 
 if (!process.env['OPENROUTER_API_KEY']) {
   console.log(JSON.stringify({ level: 'warn', event: 'openrouter_key_missing', msg: 'OPENROUTER_API_KEY not set — AI image generation will return 503', timestamp: new Date().toISOString() }));

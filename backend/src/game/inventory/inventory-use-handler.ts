@@ -119,6 +119,10 @@ export async function handleInventoryUseItem(
     await sendInventoryState(session);
     log('info', 'inventory', 'item_used', { characterId, slotId, category, healPower, newHp });
 
+  } else if (category === 'spell_book_spell') {
+    // Spell books are handled via the dedicated spell-book-spell.use WS message
+    reject(session, 'not_consumable', 'Use this spell book from the Spells tab.');
+
   } else {
     reject(session, 'not_consumable', 'This item cannot be consumed.');
   }

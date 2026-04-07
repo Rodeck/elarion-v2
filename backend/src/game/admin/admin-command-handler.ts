@@ -15,6 +15,8 @@ import { getActiveExpeditionsForCharacter } from '../../db/queries/squires';
 import { getMapsByType } from '../../db/queries/city-maps';
 import { query } from '../../db/connection';
 import { log } from '../../logger';
+import { grantAllSpells } from '../../db/queries/spell-progress';
+import { sendSpellState } from '../spell/spell-state-handler';
 import { kickFromArena } from '../arena/arena-handler';
 import { getParticipant, updateHp as updateArenaHp } from '../arena/arena-state-manager';
 import {
@@ -52,6 +54,8 @@ export async function handleAdminCommand(session: AuthenticatedSession, rawMessa
     case '/night':           return handleForcePhase(session, 'night', reply);
     case '/crown':           return handleGiveCrowns(session, args, reply);
     case '/skill_all':       return handleSkillAll(session, args, reply);
+    case '/abilities.all':   return handleSkillAll(session, args, reply);
+    case '/spells.all':      return handleSpellsAll(session, args, reply);
     case '/crafting_finish': return handleCraftingFinish(session, args, reply);
     case '/heal':            return handleHeal(session, args, reply);
     case '/squire':          return handleGiveSquire(session, args, reply);
@@ -60,7 +64,7 @@ export async function handleAdminCommand(session: AuthenticatedSession, rawMessa
     case '/arena.kick':          return handleArenaKick(session, args, reply);
     case '/arena.timers.reset':  return handleArenaTimersReset(session, args, reply);
     default:
-      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown, /skill_all, /crafting_finish, /heal, /squire, /expedition_finish, /reset_player, /arena.kick, /arena.timers.reset`);
+      reply(false, `Unknown command '${command}'. Available: /level_up, /item, /clear_inventory, /day, /night, /crown, /abilities.all, /spells.all, /crafting_finish, /heal, /squire, /expedition_finish, /reset_player, /arena.kick, /arena.timers.reset`);
   }
 }
 
@@ -829,4 +833,42 @@ async function handleArenaTimersReset(session: AuthenticatedSession, args: strin
   });
 
   reply(true, `Arena timers reset for ${playerName}: ${messages.join(', ')}.`);
+}
+
+// ---------------------------------------------------------------------------
+// /spells.all <player>
+// ---------------------------------------------------------------------------
+
+async function handleSpellsAll(session: AuthenticatedSession, args: string[], reply: ReplyFn): Promise<void> {
+  const playerName = args[0];
+  if (!playerName) {
+    reply(false, 'Usage: /spells.all <player>');
+    return;
+  }
+
+  const character = await findByName(playerName);
+  if (!character) {
+    reply(false, `Player '${playerName}' not found.`);
+    return;
+  }
+
+  const granted = await grantAllSpells(character.id);
+
+  // Push updated spell state if player is online
+  const targetSession = getSessionByCharacterId(character.id);
+  if (targetSession) {
+    await sendSpellState(targetSession, character.id);
+  }
+
+  log('info', 'admin', 'admin_command', {
+    event: 'admin_command',
+    admin_account_id: session.accountId,
+    admin_character_id: session.characterId,
+    command: '/spells.all',
+    target_player: playerName,
+    target_character_id: character.id,
+    granted,
+  });
+
+  reply(true, `Granted all spells to ${playerName}. ${granted} new spell(s) added.`);
 }

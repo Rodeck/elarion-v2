@@ -2709,3 +2709,154 @@ export interface InventoryUseRejectedPayload {
   reason: 'not_found' | 'not_consumable' | 'energy_full' | 'hp_full' | 'in_combat';
   message: string;
 }
+
+// ---------------------------------------------------------------------------
+// Spell System
+// ---------------------------------------------------------------------------
+
+// ── DTOs ──────────────────────────────────────────────────────────────────
+
+export interface SpellItemCostDto {
+  item_def_id: number;
+  item_name: string;
+  item_icon_url: string | null;
+  quantity: number;
+}
+
+export interface SpellLevelStatsDto {
+  level: number;
+  effect_value: number;
+  duration_seconds: number;
+  gold_cost: number;
+  item_costs: SpellItemCostDto[];
+}
+
+export interface OwnedSpellDto {
+  id: number;
+  name: string;
+  icon_url: string | null;
+  description: string;
+  effect_type: string;
+  effect_value: number;
+  duration_seconds: number;
+  level: number;
+  points: number;
+  points_to_next: number | null;
+  cooldown_until: string | null;
+  current_level_stats: SpellLevelStatsDto | null;
+  next_level_stats: SpellLevelStatsDto | null;
+}
+
+export interface ActiveSpellBuffDto {
+  spell_id: number;
+  spell_name: string;
+  icon_url: string | null;
+  level: number;
+  effect_type: string;
+  effect_value: number;
+  duration_seconds: number;
+  expires_at: string;
+  caster_name: string;
+}
+
+// ── Client → Server ───────────────────────────────────────────────────────
+
+export interface SpellRequestStatePayload {}
+
+export interface SpellCastPayload {
+  spell_id: number;
+}
+
+export interface SpellCastOnPlayerPayload {
+  spell_id: number;
+  target_character_id: string;
+}
+
+export interface SpellBookSpellUsePayload {
+  slot_id: number;
+}
+
+// ── Server → Client ───────────────────────────────────────────────────────
+
+export interface SpellStatePayload {
+  spells: OwnedSpellDto[];
+  active_buffs: ActiveSpellBuffDto[];
+}
+
+export interface SpellCastResultPayload {
+  spell_id: number;
+  spell_name: string;
+  target_character_id: string;
+  level: number;
+  effect_type: string;
+  effect_value: number;
+  duration_seconds: number;
+  expires_at: string;
+}
+
+export interface SpellCastRejectedPayload {
+  spell_id: number;
+  reason: 'in_combat' | 'not_owned' | 'insufficient_resources' | 'higher_level_active' | 'target_not_found' | 'target_not_in_location';
+  message: string;
+}
+
+export interface SpellBuffReceivedPayload {
+  spell_id: number;
+  spell_name: string;
+  caster_name: string;
+  level: number;
+  effect_type: string;
+  effect_value: number;
+  duration_seconds: number;
+  expires_at: string;
+  icon_url: string | null;
+}
+
+export interface SpellBuffExpiredPayload {
+  spell_id: number;
+  spell_name: string;
+  effect_type: string;
+}
+
+export interface SpellBookSpellResultPayload {
+  spell_id: number;
+  spell_name: string;
+  points_gained: number;
+  new_points: number;
+  new_level: number;
+  leveled_up: boolean;
+  cooldown_until: string | null;
+}
+
+export interface SpellBookSpellErrorPayload {
+  message: string;
+}
+
+// ── Message type aliases ──────────────────────────────────────────────────
+
+export type SpellRequestStateMessage    = WsMessage<SpellRequestStatePayload>;
+export type SpellCastMessage            = WsMessage<SpellCastPayload>;
+export type SpellCastOnPlayerMessage    = WsMessage<SpellCastOnPlayerPayload>;
+export type SpellBookSpellUseMessage    = WsMessage<SpellBookSpellUsePayload>;
+export type SpellStateMessage           = WsMessage<SpellStatePayload>;
+export type SpellCastResultMessage      = WsMessage<SpellCastResultPayload>;
+export type SpellCastRejectedMessage    = WsMessage<SpellCastRejectedPayload>;
+export type SpellBuffReceivedMessage    = WsMessage<SpellBuffReceivedPayload>;
+export type SpellBuffExpiredMessage     = WsMessage<SpellBuffExpiredPayload>;
+export type SpellBookSpellResultMessage = WsMessage<SpellBookSpellResultPayload>;
+export type SpellBookSpellErrorMessage  = WsMessage<SpellBookSpellErrorPayload>;
+
+// ── Spell utilities ───────────────────────────────────────────────────────
+
+/** Format seconds into human-readable duration (e.g., "1h 19min", "45min", "30s"). */
+export function formatDuration(seconds: number): string {
+  if (seconds <= 0) return '0s';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}min`);
+  if (s > 0 && h === 0) parts.push(`${s}s`);
+  return parts.join(' ') || '0s';
+}

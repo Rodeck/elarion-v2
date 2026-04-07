@@ -1,5 +1,6 @@
-import type { CharacterData } from '../../../shared/protocol/index';
+import type { CharacterData, ActiveSpellBuffDto } from '../../../shared/protocol/index';
 import { getRodUpgradePointsIconUrl } from './ui-icons';
+import { BuffBar } from './BuffBar';
 
 export class StatsBar {
   private container: HTMLDivElement;
@@ -15,7 +16,13 @@ export class StatsBar {
   private crownsEl: HTMLSpanElement | null = null;
   private energyFillEl!: HTMLDivElement;
   private energyTextEl!: HTMLSpanElement;
+  private buffBarEl!: HTMLDivElement;
+  private buffBar: BuffBar | null = null;
+  private xpRingSvg: SVGSVGElement | null = null;
+  private xpRingCircle: SVGCircleElement | null = null;
+  private xpTooltipEl: HTMLElement | null = null;
   private maxHp = 1;
+  private currentXp = 0;
 
   // Expand/collapse state
   private expanded = false;
@@ -165,8 +172,56 @@ export class StatsBar {
     levelBadge.appendChild(lvLabel);
     levelBadge.appendChild(this.levelEl);
 
+    // XP ring SVG overlay around level badge
+    const levelBadgeWrap = document.createElement('div');
+    levelBadgeWrap.style.cssText = 'position:relative;flex-shrink:0;width:46px;height:46px;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('width', '46');
+    svg.setAttribute('height', '46');
+    svg.style.cssText = 'position:absolute;top:0;left:0;transform:rotate(-90deg);pointer-events:none;';
+
+    const bgCircle = document.createElementNS(svgNS, 'circle');
+    bgCircle.setAttribute('cx', '23');
+    bgCircle.setAttribute('cy', '23');
+    bgCircle.setAttribute('r', '21');
+    bgCircle.setAttribute('fill', 'none');
+    bgCircle.setAttribute('stroke', 'rgba(255,255,255,0.08)');
+    bgCircle.setAttribute('stroke-width', '2');
+    svg.appendChild(bgCircle);
+
+    const xpCircle = document.createElementNS(svgNS, 'circle');
+    xpCircle.setAttribute('cx', '23');
+    xpCircle.setAttribute('cy', '23');
+    xpCircle.setAttribute('r', '21');
+    xpCircle.setAttribute('fill', 'none');
+    xpCircle.setAttribute('stroke', 'var(--color-xp-fill, #7ab8e0)');
+    xpCircle.setAttribute('stroke-width', '2');
+    xpCircle.setAttribute('stroke-linecap', 'round');
+    const circumference = 2 * Math.PI * 21;
+    xpCircle.setAttribute('stroke-dasharray', String(circumference));
+    xpCircle.setAttribute('stroke-dashoffset', String(circumference));
+    svg.appendChild(xpCircle);
+    this.xpRingSvg = svg;
+    this.xpRingCircle = xpCircle;
+
+    levelBadgeWrap.appendChild(svg);
+    levelBadgeWrap.appendChild(levelBadge);
+
+    // XP tooltip on hover
+    const xpTooltip = document.createElement('div');
+    xpTooltip.style.cssText = 'display:none;position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--color-bg-panel,#252119);border:1px solid rgba(212,168,75,0.4);border-radius:4px;padding:4px 8px;white-space:nowrap;z-index:100;font-size:10px;color:rgba(255,255,255,0.8);pointer-events:none;font-family:var(--font-number);';
+    this.xpTooltipEl = xpTooltip;
+    levelBadgeWrap.appendChild(xpTooltip);
+    levelBadgeWrap.addEventListener('mouseenter', () => {
+      xpTooltip.textContent = `${this.currentXp} / ${this.xpThreshold} XP`;
+      xpTooltip.style.display = 'block';
+    });
+    levelBadgeWrap.addEventListener('mouseleave', () => { xpTooltip.style.display = 'none'; });
+
     headerRow.appendChild(nameBlock);
-    headerRow.appendChild(levelBadge);
+    headerRow.appendChild(levelBadgeWrap);
 
     // ── HP Bar ────────────────────────────────────────────────────
     const { el: hpEl, fill: hpFill, valueText: hpText } = this.createBarSection(
@@ -177,14 +232,10 @@ export class StatsBar {
     this.hpFillEl = hpFill;
     this.hpTextEl = hpText;
 
-    // ── XP Bar ────────────────────────────────────────────────────
-    const { el: xpEl, fill: xpFill, valueText: xpText } = this.createBarSection(
-      'XP',
-      'var(--color-xp-fill)',
-      'var(--color-xp-bg)',
-    );
-    this.xpFillEl = xpFill;
-    this.xpTextEl = xpText;
+    // ── Buff Bar (replaces XP bar) ──────────────────────────────
+    this.buffBarEl = document.createElement('div');
+    this.buffBarEl.style.cssText = 'min-height:20px;';
+    this.buffBar = new BuffBar(this.buffBarEl);
 
     // ── Energy Bar ────────────────────────────────────────────────
     const { el: energyEl, fill: energyFill, valueText: energyText } = this.createBarSection(
@@ -251,7 +302,7 @@ export class StatsBar {
     this.collapsedEl.appendChild(headerRow);
     this.collapsedEl.appendChild(hpEl);
     this.collapsedEl.appendChild(energyEl);
-    this.collapsedEl.appendChild(xpEl);
+    this.collapsedEl.appendChild(this.buffBarEl);
     this.collapsedEl.appendChild(statsRow);
     this.container.appendChild(this.collapsedEl);
 
@@ -355,10 +406,19 @@ export class StatsBar {
   }
 
   setXp(current: number, threshold: number): void {
+    this.currentXp = current;
     this.xpThreshold = threshold;
     const ratio = threshold > 0 ? Math.max(0, Math.min(1, current / threshold)) : 0;
-    this.xpFillEl.style.width = `${Math.round(ratio * 100)}%`;
-    this.xpTextEl.textContent = `${current} / ${threshold}`;
+    // Update XP ring around level badge
+    if (this.xpRingCircle) {
+      const circumference = 2 * Math.PI * 21;
+      const offset = circumference * (1 - ratio);
+      this.xpRingCircle.setAttribute('stroke-dashoffset', String(offset));
+    }
+  }
+
+  updateBuffs(buffs: ActiveSpellBuffDto[]): void {
+    this.buffBar?.updateBuffs(buffs);
   }
 
   setLevel(level: number): void {

@@ -2,7 +2,7 @@
 // Elarion Map Editor — HTML5 Canvas 2D Rendering Engine
 // ---------------------------------------------------------------------------
 
-import type { BuildingItemsResponse, BuildingOverlayItem } from './api';
+import type { BuildingItemsResponse, BuildingOverlayItem, BuildingNpcsResponse, BuildingOverlayNpc } from './api';
 
 // ---------------------------------------------------------------------------
 // Data Types
@@ -79,6 +79,10 @@ const OVERLAY_COLORS: Record<string, string> = {
   found: '#4ade80',
   bought: '#a78bfa',
 };
+
+// NPC Overlay
+const NPC_OVERLAY_OFFSET_Y = -40; // offset above building diamond
+const NPC_OVERLAY_BORDER_COLOR = '#fbbf24'; // amber/gold for NPCs
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -174,6 +178,11 @@ export class MapCanvas {
   private overlayIcons: Map<string, HTMLImageElement> = new Map();
   private tooltipEl: HTMLDivElement | null = null;
   private containerEl: HTMLElement | null = null;
+
+  // NPC overlay
+  npcOverlayEnabled = false;
+  private npcOverlayData: Map<number, BuildingOverlayNpc[]> | null = null;
+  private npcOverlayIcons: Map<string, HTMLImageElement> = new Map();
 
   // Render loop
   private needsRedraw = true;
@@ -409,12 +418,28 @@ export class MapCanvas {
       return;
     }
 
-    // Overlay tooltip
-    if (this.tooltipEl && this.overlayEnabled && this.overlayData) {
-      const hit = this.getOverlayItemAt(world.x, world.y);
-      if (hit) {
-        const label = hit.item.obtain_method === 'loot' ? 'Loot from' : 'Crafted by';
-        this.tooltipEl.textContent = `${hit.item.item_name} — ${label} ${hit.item.source_name}`;
+    // Overlay tooltip (items + NPCs)
+    if (this.tooltipEl) {
+      let tooltipText: string | null = null;
+
+      if (this.overlayEnabled && this.overlayData) {
+        const hit = this.getOverlayItemAt(world.x, world.y);
+        if (hit) {
+          const label = hit.item.obtain_method === 'loot' ? 'Loot from' : 'Crafted by';
+          tooltipText = `${hit.item.item_name} — ${label} ${hit.item.source_name}`;
+        }
+      }
+
+      if (!tooltipText && this.npcOverlayEnabled && this.npcOverlayData) {
+        const hit = this.getNpcOverlayAt(world.x, world.y);
+        if (hit) {
+          const roles = hit.npc.roles.length > 0 ? ` (${hit.npc.roles.join(', ')})` : '';
+          tooltipText = `${hit.npc.npc_name}${roles}`;
+        }
+      }
+
+      if (tooltipText) {
+        this.tooltipEl.textContent = tooltipText;
         this.tooltipEl.style.left = `${sx + 12}px`;
         this.tooltipEl.style.top = `${sy + 12}px`;
         this.tooltipEl.style.display = 'block';
@@ -609,6 +634,11 @@ export class MapCanvas {
     // 7. Item overlay (if enabled)
     if (this.overlayEnabled && this.overlayData) {
       this.renderItemOverlay(ctx);
+    }
+
+    // 8. NPC overlay (if enabled)
+    if (this.npcOverlayEnabled && this.npcOverlayData) {
+      this.renderNpcOverlay(ctx);
     }
 
     ctx.restore();
@@ -1019,6 +1049,137 @@ export class MapCanvas {
         if (worldX >= x && worldX <= x + totalSize && worldY >= y && worldY <= y + totalSize) {
           const screen = this.worldToScreen(x, y);
           return { item: items[i]!, screenX: screen.x, screenY: screen.y };
+        }
+      }
+    }
+    return null;
+  }
+
+  // -------------------------------------------------------------------------
+  // Public API — NPC Overlay
+  // -------------------------------------------------------------------------
+
+  setNpcOverlayData(data: BuildingNpcsResponse): void {
+    this.npcOverlayData = new Map();
+    const filenames = new Set<string>();
+
+    for (const b of data.buildings) {
+      if (b.npcs.length > 0) {
+        this.npcOverlayData.set(b.building_id, b.npcs);
+        for (const npc of b.npcs) {
+          if (npc.icon_filename) {
+            filenames.add(npc.icon_filename);
+          }
+        }
+      }
+    }
+
+    for (const filename of filenames) {
+      if (!this.npcOverlayIcons.has(filename)) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          this.needsRedraw = true;
+        };
+        img.src = `/npc-icons/${filename}`;
+        this.npcOverlayIcons.set(filename, img);
+      }
+    }
+
+    this.needsRedraw = true;
+  }
+
+  clearNpcOverlay(): void {
+    this.npcOverlayData = null;
+    this.npcOverlayEnabled = false;
+    if (this.tooltipEl) {
+      this.tooltipEl.style.display = 'none';
+    }
+    this.needsRedraw = true;
+  }
+
+  // -------------------------------------------------------------------------
+  // NPC Overlay — Rendering
+  // -------------------------------------------------------------------------
+
+  private renderNpcOverlay(ctx: CanvasRenderingContext2D): void {
+    if (!this.npcOverlayData) return;
+
+    for (const [buildingId, npcs] of this.npcOverlayData) {
+      const building = this.buildings.find((b) => b.id === buildingId);
+      if (!building) continue;
+      const node = this.nodes.find((n) => n.id === building.node_id);
+      if (!node) continue;
+
+      const cellSize = OVERLAY_ICON_SIZE + OVERLAY_BORDER_WIDTH * 2 + OVERLAY_ICON_GAP;
+      const cols = Math.min(npcs.length, OVERLAY_ICONS_PER_ROW);
+      const gridWidth = cols * cellSize - OVERLAY_ICON_GAP;
+      const rows = Math.ceil(npcs.length / OVERLAY_ICONS_PER_ROW);
+      const gridHeight = rows * cellSize - OVERLAY_ICON_GAP;
+      const startX = node.x - gridWidth / 2;
+      const startY = node.y + NPC_OVERLAY_OFFSET_Y - gridHeight;
+
+      for (let i = 0; i < npcs.length; i++) {
+        const npc = npcs[i]!;
+        const col = i % OVERLAY_ICONS_PER_ROW;
+        const row = Math.floor(i / OVERLAY_ICONS_PER_ROW);
+        const x = startX + col * cellSize;
+        const y = startY + row * cellSize;
+
+        // Background
+        ctx.fillStyle = '#111520';
+        ctx.fillRect(x, y, OVERLAY_ICON_SIZE + OVERLAY_BORDER_WIDTH * 2, OVERLAY_ICON_SIZE + OVERLAY_BORDER_WIDTH * 2);
+
+        // Border
+        ctx.strokeStyle = NPC_OVERLAY_BORDER_COLOR;
+        ctx.lineWidth = OVERLAY_BORDER_WIDTH;
+        ctx.strokeRect(
+          x + OVERLAY_BORDER_WIDTH / 2,
+          y + OVERLAY_BORDER_WIDTH / 2,
+          OVERLAY_ICON_SIZE + OVERLAY_BORDER_WIDTH,
+          OVERLAY_ICON_SIZE + OVERLAY_BORDER_WIDTH,
+        );
+
+        // Icon image
+        if (npc.icon_filename) {
+          const img = this.npcOverlayIcons.get(npc.icon_filename);
+          if (img && img.complete && img.naturalWidth > 0) {
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, x + OVERLAY_BORDER_WIDTH, y + OVERLAY_BORDER_WIDTH, OVERLAY_ICON_SIZE, OVERLAY_ICON_SIZE);
+          }
+        }
+      }
+    }
+  }
+
+  /** Get NPC overlay item at world coordinates (for tooltip hit-testing). */
+  getNpcOverlayAt(worldX: number, worldY: number): { npc: BuildingOverlayNpc; screenX: number; screenY: number } | null {
+    if (!this.npcOverlayEnabled || !this.npcOverlayData) return null;
+
+    for (const [buildingId, npcs] of this.npcOverlayData) {
+      const building = this.buildings.find((b) => b.id === buildingId);
+      if (!building) continue;
+      const node = this.nodes.find((n) => n.id === building.node_id);
+      if (!node) continue;
+
+      const cellSize = OVERLAY_ICON_SIZE + OVERLAY_BORDER_WIDTH * 2 + OVERLAY_ICON_GAP;
+      const cols = Math.min(npcs.length, OVERLAY_ICONS_PER_ROW);
+      const gridWidth = cols * cellSize - OVERLAY_ICON_GAP;
+      const rows = Math.ceil(npcs.length / OVERLAY_ICONS_PER_ROW);
+      const gridHeight = rows * cellSize - OVERLAY_ICON_GAP;
+      const startX = node.x - gridWidth / 2;
+      const startY = node.y + NPC_OVERLAY_OFFSET_Y - gridHeight;
+
+      for (let i = 0; i < npcs.length; i++) {
+        const col = i % OVERLAY_ICONS_PER_ROW;
+        const row = Math.floor(i / OVERLAY_ICONS_PER_ROW);
+        const x = startX + col * cellSize;
+        const y = startY + row * cellSize;
+        const totalSize = OVERLAY_ICON_SIZE + OVERLAY_BORDER_WIDTH * 2;
+
+        if (worldX >= x && worldX <= x + totalSize && worldY >= y && worldY <= y + totalSize) {
+          const screen = this.worldToScreen(x, y);
+          return { npc: npcs[i]!, screenX: screen.x, screenY: screen.y };
         }
       }
     }

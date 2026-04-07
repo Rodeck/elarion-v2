@@ -12,10 +12,10 @@ const fs = require('fs');
 const VALID_CATEGORIES = [
   'resource', 'food', 'heal', 'weapon', 'boots', 'shield',
   'greaves', 'bracer', 'tool', 'helmet', 'chestplate',
-  'ring', 'amulet', 'skill_book',
+  'ring', 'amulet', 'skill_book', 'spell_book_spell',
 ];
 const VALID_WEAPON_SUBTYPES = ['one_handed', 'two_handed', 'dagger', 'wand', 'staff', 'bow'];
-const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book']);
+const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book', 'spell_book_spell']);
 const DEFENCE_CATEGORIES = new Set(['boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate', 'ring', 'amulet']);
 const VALID_EFFECT_TYPES = ['damage', 'heal', 'buff', 'debuff', 'dot', 'reflect', 'drain'];
 const VALID_SLOT_TYPES = ['auto', 'active', 'both'];

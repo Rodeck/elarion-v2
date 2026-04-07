@@ -41,9 +41,9 @@ function isValidPng(buffer: Buffer): boolean {
   return buffer.subarray(0, 8).equals(PNG_MAGIC_BYTES);
 }
 
-const VALID_CATEGORIES = ['resource', 'food', 'heal', 'weapon', 'boots', 'shield', 'greaves', 'bracer', 'tool', 'helmet', 'chestplate', 'ring', 'amulet', 'skill_book'] as const;
+const VALID_CATEGORIES = ['resource', 'food', 'heal', 'weapon', 'boots', 'shield', 'greaves', 'bracer', 'tool', 'helmet', 'chestplate', 'ring', 'amulet', 'skill_book', 'spell_book_spell'] as const;
 const VALID_WEAPON_SUBTYPES = ['one_handed', 'two_handed', 'dagger', 'wand', 'staff', 'bow'] as const;
-const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book']);
+const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book', 'spell_book_spell']);
 const DEFENCE_CATEGORIES = new Set(['boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate', 'ring', 'amulet']);
 const EQUIPPABLE_CATEGORIES = new Set(['weapon', 'boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate', 'ring', 'amulet']);
 
@@ -72,6 +72,7 @@ function formatItem(item: ItemDefinition) {
     power: item.power ?? null,
     disassembly_cost: item.disassembly_cost ?? 0,
     ability_id: item.ability_id ?? null,
+    spell_id: item.spell_id ?? null,
     armor_penetration: item.armor_penetration ?? 0,
     additional_attacks: item.additional_attacks ?? 0,
     crit_chance: item.crit_chance ?? 0,
@@ -431,6 +432,7 @@ itemsRouter.post('/', upload.single('icon'), resizeUpload(), async (req: Request
       power: body['power'] != null ? Number(body['power']) : null,
       disassembly_cost: body['disassembly_cost'] != null ? Number(body['disassembly_cost']) : 0,
       ability_id: body['ability_id'] != null ? Number(body['ability_id']) : null,
+      spell_id: body['spell_id'] != null ? Number(body['spell_id']) : null,
       armor_penetration: body['armor_penetration'] != null && body['armor_penetration'] !== '' ? Number(body['armor_penetration']) : 0,
       additional_attacks: body['additional_attacks'] != null && body['additional_attacks'] !== '' ? Number(body['additional_attacks']) : 0,
       crit_chance: body['crit_chance'] != null && body['crit_chance'] !== '' ? Number(body['crit_chance']) : 0,
@@ -522,6 +524,7 @@ itemsRouter.put('/:id', upload.single('icon'), resizeUpload(), async (req: Reque
   if (body['power'] !== undefined)         updateData['power']          = body['power'] != null ? Number(body['power']) : null;
   if (body['disassembly_cost'] !== undefined) updateData['disassembly_cost'] = body['disassembly_cost'] != null ? Number(body['disassembly_cost']) : 0;
   if (body['ability_id'] !== undefined) updateData['ability_id'] = body['ability_id'] != null ? Number(body['ability_id']) : null;
+  if (body['spell_id'] !== undefined) updateData['spell_id'] = body['spell_id'] != null ? Number(body['spell_id']) : null;
   if (body['armor_penetration'] !== undefined) updateData['armor_penetration'] = body['armor_penetration'] != null && body['armor_penetration'] !== '' ? Number(body['armor_penetration']) : 0;
   if (body['additional_attacks'] !== undefined) updateData['additional_attacks'] = body['additional_attacks'] != null && body['additional_attacks'] !== '' ? Number(body['additional_attacks']) : 0;
   if (body['crit_chance'] !== undefined) updateData['crit_chance'] = body['crit_chance'] != null && body['crit_chance'] !== '' ? Number(body['crit_chance']) : 0;

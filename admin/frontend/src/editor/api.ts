@@ -444,6 +444,31 @@ export async function fetchBuildingItems(mapId: number): Promise<BuildingItemsRe
 }
 
 // ---------------------------------------------------------------------------
+// Building NPCs Overlay
+// ---------------------------------------------------------------------------
+
+export interface BuildingOverlayNpc {
+  npc_id: number;
+  npc_name: string;
+  icon_filename: string;
+  roles: string[];
+}
+
+export interface BuildingNpcOverlayEntry {
+  building_id: number;
+  building_name: string;
+  npcs: BuildingOverlayNpc[];
+}
+
+export interface BuildingNpcsResponse {
+  buildings: BuildingNpcOverlayEntry[];
+}
+
+export async function fetchBuildingNpcs(mapId: number): Promise<BuildingNpcsResponse> {
+  return request<BuildingNpcsResponse>(`${BASE}/${mapId}/building-npcs`);
+}
+
+// ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
@@ -939,6 +964,78 @@ export async function updateAbilityLevels(abilityId: number, levels: AbilityLeve
   return request<AbilityLevelRow[]>(`${ABILITIES_BASE}/${abilityId}/levels`, {
     method: 'PUT',
     body: JSON.stringify({ levels }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Spells
+// ---------------------------------------------------------------------------
+
+const SPELLS_BASE = '/api/spells';
+
+export interface SpellResponse {
+  id: number;
+  name: string;
+  description: string;
+  effect_type: string;
+  effect_value: number;
+  duration_seconds: number;
+  icon_url: string | null;
+  created_at: string;
+}
+
+export interface SpellLevelRow {
+  spell_id?: number;
+  level: number;
+  effect_value: number;
+  duration_seconds: number;
+  gold_cost: number;
+}
+
+export interface SpellCostRow {
+  spell_id?: number;
+  level: number;
+  item_def_id: number;
+  quantity: number;
+  item_name?: string;
+  item_icon_filename?: string | null;
+}
+
+export async function listSpells(): Promise<SpellResponse[]> {
+  return request<SpellResponse[]>(SPELLS_BASE);
+}
+
+export async function getSpell(id: number): Promise<SpellResponse> {
+  return request<SpellResponse>(`${SPELLS_BASE}/${id}`);
+}
+
+export async function createSpell(formData: FormData): Promise<SpellResponse> {
+  return request<SpellResponse>(SPELLS_BASE, { method: 'POST', body: formData });
+}
+
+export async function updateSpell(id: number, formData: FormData): Promise<SpellResponse> {
+  return request<SpellResponse>(`${SPELLS_BASE}/${id}`, { method: 'PUT', body: formData });
+}
+
+export async function deleteSpellApi(id: number): Promise<void> {
+  return request<void>(`${SPELLS_BASE}/${id}`, { method: 'DELETE' });
+}
+
+export async function getSpellLevels(spellId: number): Promise<{ levels: SpellLevelRow[]; costs: SpellCostRow[] }> {
+  return request<{ levels: SpellLevelRow[]; costs: SpellCostRow[] }>(`${SPELLS_BASE}/${spellId}/levels`);
+}
+
+export async function updateSpellLevels(spellId: number, levels: SpellLevelRow[]): Promise<SpellLevelRow[]> {
+  return request<SpellLevelRow[]>(`${SPELLS_BASE}/${spellId}/levels`, {
+    method: 'PUT',
+    body: JSON.stringify({ levels }),
+  });
+}
+
+export async function updateSpellCosts(spellId: number, level: number, costs: Array<{ item_def_id: number; quantity: number }>): Promise<SpellCostRow[]> {
+  return request<SpellCostRow[]>(`${SPELLS_BASE}/${spellId}/costs`, {
+    method: 'PUT',
+    body: JSON.stringify({ level, costs }),
   });
 }
 

@@ -65,6 +65,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - TypeScript 5.x (frontend only) + Phaser 3.60.0 (game framework), Vite 5 (dev server) (037-player-interaction)
 - N/A — no persistence changes; all state is in-memory on frontend (037-player-interaction)
 - PostgreSQL 16 — migration `042_energy_system.sql` (ALTER `characters`, ALTER `building_actions` config) (038-energy-system)
+- TypeScript 5.x (frontend + backend + shared + admin) + Phaser 3.60 (frontend), Node.js 20 LTS + `ws` (backend), Express 4 + `multer` (admin backend), Vite 5 (frontends) (039-spell-system)
+- PostgreSQL 16 — migration 043 (5 new tables, 2 ALTER statements) (039-spell-system)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -90,9 +92,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 039-spell-system: Added TypeScript 5.x (frontend + backend + shared + admin) + Phaser 3.60 (frontend), Node.js 20 LTS + `ws` (backend), Express 4 + `multer` (admin backend), Vite 5 (frontends)
 - 038-energy-system: Added TypeScript 5.x (frontend + backend + shared + admin) + Phaser 3.60 (frontend), Node.js 20 LTS + `ws` (backend), Express 4 (admin backend), Vite 5 (frontends)
 - 037-player-interaction: Added TypeScript 5.x (frontend only) + Phaser 3.60.0 (game framework), Vite 5 (dev server)
-- 036-warehouse-system: Added TypeScript 5.x (frontend, backend, shared, admin) + Phaser 3.60 (frontend), Node.js 20 LTS + `ws` (backend), Express 4 (admin backend), Vite 5 (frontends)
 
 
 
@@ -159,6 +161,27 @@ When adding a new equipment slot (e.g., `'ring'`, `'amulet'`), update these loca
 7. **Admin frontend** — `admin/frontend/src/editor/api.ts`: Update `VALID_CATEGORIES` if the script validates categories
 
 Combat stats (`computeCombatStats` in `combat-stats-service.ts`) and effective stats queries aggregate ALL equipped items generically — no changes needed there.
+
+## Adding a New Spell
+
+When adding a new spell definition:
+
+1. **Admin panel** — Spell Manager → Create: Set name, description, effect_type, base effect_value, base duration_seconds, icon
+2. **Spell levels** — Admin panel → Edit spell → Levels tab: Set per-level effect_value, duration_seconds, gold_cost (levels 1–5)
+3. **Spell costs** — Admin panel → Edit spell → Costs tab: Set per-level item costs (item_def_id + quantity, multiple items per level)
+4. **Spell book item** — Create item with category `spell_book_spell`, link to spell via `spell_id`
+
+Key files for the spell system:
+- **DB tables** — `spells`, `spell_levels`, `spell_costs`, `character_spells`, `active_spell_buffs` (migration 043)
+- **DB queries** — `backend/src/db/queries/spells.ts`, `backend/src/db/queries/spell-progress.ts`, `backend/src/db/queries/spell-buffs.ts`
+- **Backend handlers** — `backend/src/game/spell/spell-cast-handler.ts` (WS: `spell.cast`, `spell.cast_on_player`), `backend/src/game/spell/spell-book-handler.ts` (WS: `spell-book-spell.use`), `backend/src/game/spell/spell-state-handler.ts` (WS: `spell.request_state`)
+- **Buff service** — `backend/src/game/spell/spell-buff-service.ts` (stat modifiers for `computeCombatStats`)
+- **Shared protocol** — `shared/protocol/index.ts`: Spell DTOs, payloads, message types
+- **Frontend** — `frontend/src/ui/SpellPanel.ts`, `frontend/src/ui/SpellDetailModal.ts`, `frontend/src/ui/BuffBar.ts`
+- **Admin routes** — `admin/backend/src/routes/spells.ts` (CRUD)
+- **Admin UI** — `admin/frontend/src/ui/spell-manager.ts`
+- **Admin commands** — `/spells.all <player>` (grant all spells), `/abilities.all <player>` (renamed from `/skill_all`)
+- **Scripts** — `scripts/game-data.js spells`, `scripts/game-data.js spell-buffs`
 
 ## Adding a New Skill Book
 

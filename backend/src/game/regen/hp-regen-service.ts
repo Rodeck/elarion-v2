@@ -26,7 +26,7 @@ async function tickRegen(): Promise<void> {
 
     const result = await query<RegenRow>(
       `UPDATE characters
-         SET current_hp = LEAST(max_hp, current_hp + CEIL(max_hp * $1)::smallint)::smallint,
+         SET current_hp = LEAST(max_hp, current_hp + CEIL(max_hp * $1::numeric)::int)::smallint,
              updated_at = now()
        WHERE current_hp < max_hp
          AND in_combat = false

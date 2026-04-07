@@ -12,14 +12,14 @@ import { openItemPicker, resolveItemName } from './item-picker';
 const VALID_CATEGORIES = [
   'resource', 'food', 'heal', 'weapon',
   'helmet', 'chestplate', 'boots', 'shield', 'greaves', 'bracer', 'tool',
-  'ring', 'amulet', 'skill_book',
+  'ring', 'amulet', 'skill_book', 'spell_book_spell',
 ] as const;
 
 const VALID_WEAPON_SUBTYPES = [
   'one_handed', 'two_handed', 'dagger', 'wand', 'staff', 'bow',
 ] as const;
 
-const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book']);
+const STACKABLE_CATEGORIES = new Set(['resource', 'heal', 'food', 'skill_book', 'spell_book_spell']);
 const DEFENCE_CATEGORIES = new Set(['helmet', 'chestplate', 'boots', 'shield', 'greaves', 'bracer', 'ring', 'amulet']);
 const EQUIPPABLE_CATEGORIES = new Set(['weapon', 'helmet', 'chestplate', 'boots', 'shield', 'greaves', 'bracer', 'ring', 'amulet']);
 
@@ -211,6 +211,11 @@ export class ItemModal {
         <input id="modal-ability-id" type="number" min="1" style="width:120px" placeholder="Ability ID" value="${item?.ability_id ?? ''}" />
       </div>
 
+      <div id="modal-field-spell_id" style="display:none">
+        <label for="modal-spell-id">Spell ID *</label>
+        <input id="modal-spell-id" type="number" min="1" style="width:120px" placeholder="Spell ID" value="${(item as any)?.spell_id ?? ''}" />
+      </div>
+
       <div id="modal-field-tool_type" style="display:none">
         <label for="modal-tool-type">Tool Type *</label>
         <select id="modal-tool-type">
@@ -330,6 +335,7 @@ export class ItemModal {
     show('food_power', category === 'food');
     show('stack_size', category !== '' && STACKABLE_CATEGORIES.has(category));
     show('ability_id', category === 'skill_book');
+    show('spell_id', category === 'spell_book_spell');
     show('tool_type', category === 'tool');
     show('max_durability', category === 'tool');
     show('power', category === 'tool');
@@ -551,6 +557,10 @@ export class ItemModal {
       appendNum('#modal-ability-id', 'ability_id');
     }
 
+    if (category === 'spell_book_spell') {
+      appendNum('#modal-spell-id', 'spell_id');
+    }
+
     const disassemblyCost = overlay.querySelector<HTMLInputElement>('#modal-disassembly-cost')?.value;
     formData.append('disassembly_cost', disassemblyCost || '0');
 
@@ -597,7 +607,7 @@ export class ItemModal {
       resource: 'Resource', food: 'Food', heal: 'Heal', weapon: 'Weapon',
       helmet: 'Helmet', chestplate: 'Chestplate', boots: 'Boots', shield: 'Shield',
       greaves: 'Greaves', bracer: 'Bracer', tool: 'Tool', ring: 'Ring', amulet: 'Amulet',
-      skill_book: 'Skill Book',
+      skill_book: 'Skill Book', spell_book_spell: 'Spell Tome',
     };
     return labels[category] ?? category;
   }

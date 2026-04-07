@@ -21,7 +21,7 @@ export class ChatBox {
   private historyDraft = '';
   private static readonly ADMIN_COMMANDS = [
     '/level_up', '/item', '/clear_inventory', '/day', '/night',
-    '/crown', '/skill_all', '/crafting_finish', '/heal',
+    '/crown', '/abilities.all', '/spells.all', '/crafting_finish', '/heal',
     '/squire', '/expedition_finish', '/reset_player',
   ];
 

@@ -1,3 +1,5 @@
+import type { OwnedSpellDto } from '../../../shared/protocol/index';
+
 export interface PlayerDetailData {
   id: string;
   name: string;
@@ -13,6 +15,8 @@ export class PlayerDetailModal {
   private noticeEl: HTMLDivElement | null = null;
   private detailsEl: HTMLDivElement | null = null;
   private escHandler: ((e: KeyboardEvent) => void) | null = null;
+  private spells: OwnedSpellDto[] = [];
+  private onSpellCastOnPlayer: ((spellId: number, targetId: string) => void) | null = null;
 
   constructor(parent: HTMLElement = document.body) {
     this.parent = parent;
@@ -118,9 +122,44 @@ export class PlayerDetailModal {
     this.noticeEl.textContent = `${player.name} has left this location`;
     dialog.appendChild(this.noticeEl);
 
-    // Actions container (empty for now, extensible for future features)
+    // Spell casting section
     const actionsContainer = document.createElement('div');
     actionsContainer.className = 'player-modal-actions';
+    if (this.spells.length > 0) {
+      const spellHeader = document.createElement('div');
+      spellHeader.style.cssText = 'font-family:var(--font-display);font-size:0.8em;color:var(--color-gold-primary);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;text-align:left;';
+      spellHeader.textContent = 'Cast Spell';
+      actionsContainer.appendChild(spellHeader);
+
+      for (const spell of this.spells) {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:4px;margin-bottom:2px;';
+        row.addEventListener('mouseenter', () => { row.style.background = 'rgba(212,168,75,0.1)'; });
+        row.addEventListener('mouseleave', () => { row.style.background = ''; });
+
+        const icon = document.createElement('div');
+        icon.style.cssText = `width:24px;height:24px;border-radius:3px;background:rgba(0,0,0,0.3);flex-shrink:0;${spell.icon_url ? `background-image:url('${spell.icon_url}');background-size:contain;background-repeat:no-repeat;background-position:center;` : ''}`;
+        row.appendChild(icon);
+
+        const nameSpan = document.createElement('span');
+        nameSpan.style.cssText = 'flex:1;font-size:0.85em;color:#c9a55c;text-align:left;';
+        nameSpan.textContent = `${spell.name} Lv.${spell.level}`;
+        row.appendChild(nameSpan);
+
+        const castBtn = document.createElement('button');
+        castBtn.style.cssText = 'padding:3px 10px;border:1px solid var(--color-gold-primary);background:transparent;color:var(--color-gold-primary);border-radius:3px;cursor:pointer;font-size:0.75em;font-family:var(--font-display);';
+        castBtn.textContent = 'Cast';
+        castBtn.addEventListener('click', () => {
+          if (this.targetId) {
+            this.onSpellCastOnPlayer?.(spell.id, this.targetId);
+            this.close();
+          }
+        });
+        row.appendChild(castBtn);
+
+        actionsContainer.appendChild(row);
+      }
+    }
     dialog.appendChild(actionsContainer);
 
     this.overlay.appendChild(dialog);
@@ -151,6 +190,14 @@ export class PlayerDetailModal {
 
   getTargetId(): string | null {
     return this.targetId;
+  }
+
+  setSpells(spells: OwnedSpellDto[]): void {
+    this.spells = spells;
+  }
+
+  setOnSpellCastOnPlayer(cb: (spellId: number, targetId: string) => void): void {
+    this.onSpellCastOnPlayer = cb;
   }
 
   setPresence(present: boolean): void {

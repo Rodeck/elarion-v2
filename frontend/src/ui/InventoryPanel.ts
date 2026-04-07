@@ -5,7 +5,7 @@ import type { InventorySlotDto } from '../../../shared/protocol/index';
 const CATEGORY_GROUPS: Record<string, string[]> = {
   weapon:      ['weapon'],
   armor:       ['armor', 'boots', 'shield', 'greaves', 'bracer', 'helmet', 'chestplate'],
-  consumable:  ['consumable', 'food', 'heal', 'potion', 'skill_book'],
+  consumable:  ['consumable', 'food', 'heal', 'potion', 'skill_book', 'spell_book_spell'],
   resource:    ['resource'],
   tool:        ['tool'],
 };
@@ -14,6 +14,7 @@ export class InventoryPanel {
   private container: HTMLElement;
   private onDeleteItem: (slotId: number) => void;
   private onUseSkillBook: ((slotId: number) => void) | null = null;
+  private onUseSpellBook: ((slotId: number) => void) | null = null;
   private onUseItem: ((slotId: number) => void) | null = null;
   private slots: InventorySlotDto[] = [];
   private capacity: number = 20;
@@ -410,6 +411,30 @@ export class InventoryPanel {
       this.detailEl.appendChild(useBtn);
     }
 
+    // "Read" button for spell book tomes
+    if (def.category === 'spell_book_spell' && this.onUseSpellBook) {
+      const useBtn = document.createElement('button');
+      useBtn.textContent = 'Read';
+      useBtn.style.cssText =
+        'width:100%;padding:6px 0;margin-top:6px;font-family:Cinzel,serif;font-size:13px;' +
+        'background:#2a2210;border:1px solid #d4a84b;color:#d4a84b;cursor:pointer;border-radius:2px;' +
+        'letter-spacing:0.04em;transition:background 0.15s,color 0.15s;';
+      useBtn.addEventListener('mouseenter', () => {
+        useBtn.style.background = '#3a3218';
+        useBtn.style.color = '#f0c060';
+      });
+      useBtn.addEventListener('mouseleave', () => {
+        useBtn.style.background = '#2a2210';
+        useBtn.style.color = '#d4a84b';
+      });
+      useBtn.addEventListener('click', () => {
+        useBtn.disabled = true;
+        useBtn.style.opacity = '0.5';
+        this.onUseSpellBook!(slot.slot_id);
+      });
+      this.detailEl.appendChild(useBtn);
+    }
+
     this.detailEl.style.display = '';
   }
 
@@ -440,7 +465,7 @@ export class InventoryPanel {
 
   private resolveDisplayCategory(dbCategory: string): string {
     // Specific display labels for categories that have underscores or need custom names
-    const customLabels: Record<string, string> = { skill_book: 'Skill Book' };
+    const customLabels: Record<string, string> = { skill_book: 'Skill Book', spell_book_spell: 'Spell Tome' };
     if (customLabels[dbCategory]) return customLabels[dbCategory];
     for (const [display, values] of Object.entries(CATEGORY_GROUPS)) {
       if (values.includes(dbCategory)) {
@@ -465,6 +490,10 @@ export class InventoryPanel {
 
   setOnUseSkillBook(cb: (slotId: number) => void): void {
     this.onUseSkillBook = cb;
+  }
+
+  setOnUseSpellBook(cb: (slotId: number) => void): void {
+    this.onUseSpellBook = cb;
   }
 
   setOnUseItem(cb: (slotId: number) => void): void {

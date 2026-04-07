@@ -244,6 +244,9 @@ export class GameScene extends Phaser.Scene {
     this.chatBox   = new ChatBox(this.client, bottomBar);
     this.nearbyPlayersPanel = new NearbyPlayersPanel(bottomBar);
     this.playerDetailModal = new PlayerDetailModal(document.body);
+    this.playerDetailModal.setOnSpellCastOnPlayer((spellId, targetId) => {
+      this.client.send('spell.cast_on_player', { spell_id: spellId, target_character_id: targetId });
+    });
     this.nearbyPlayersPanel.setOnPlayerClick((playerId) => {
       const data = this.remotePlayerData.get(playerId);
       if (data) {
@@ -270,6 +273,9 @@ export class GameScene extends Phaser.Scene {
     );
     this.leftPanel.setOnUseSkillBook((slotId) => {
       this.client.send('skill-book.use', { slot_id: slotId });
+    });
+    this.leftPanel.setOnUseSpellBook((slotId) => {
+      this.client.send('spell-book-spell.use', { slot_id: slotId });
     });
     this.leftPanel.setOnUseItem((slotId) => {
       this.client.send('inventory.use_item', { inventory_item_id: String(slotId) });
@@ -489,6 +495,7 @@ export class GameScene extends Phaser.Scene {
       this.registerHandlers();
       // Request loadout state on init (server also pushes it on login, this is a fallback)
       this.client.send('loadout:request', {});
+      this.client.send('spell.request_state', {});
     });
 
     // Camera and world bounds set after world.state arrives
@@ -1228,6 +1235,65 @@ export class GameScene extends Phaser.Scene {
     });
     this.client.on<{ message: string }>('skill-book.error', (payload) => {
       this.chatBox.addSystemMessage(payload.message);
+    });
+
+    // Spell system handlers
+    this.client.on<import('../../../shared/protocol/index').SpellStatePayload>('spell:state', (payload) => {
+      this.leftPanel.updateSpells(payload);
+      this.statsBar.updateBuffs(payload.active_buffs);
+      this.playerDetailModal.setSpells(payload.spells);
+    });
+    this.client.on<{
+      attack_power: number; defence: number; movement_speed: number;
+      gear_crit_chance: number; armor_penetration: number; additional_attacks: number;
+      current_hp: number; max_hp: number; current_energy: number; max_energy: number; crowns: number;
+    }>('character.stats_refresh', (payload) => {
+      if (this.myCharacter) {
+        this.myCharacter.attack_power = payload.attack_power;
+        this.myCharacter.defence = payload.defence;
+        this.myCharacter.movement_speed = payload.movement_speed;
+        this.myCharacter.gear_crit_chance = payload.gear_crit_chance;
+        this.myCharacter.armor_penetration = payload.armor_penetration;
+        this.myCharacter.additional_attacks = payload.additional_attacks;
+        this.myCharacter.current_hp = payload.current_hp;
+        this.myCharacter.max_hp = payload.max_hp;
+        this.myCharacter.current_energy = payload.current_energy;
+        this.myCharacter.max_energy = payload.max_energy;
+        this.myCharacter.crowns = payload.crowns;
+        this.statsBar.setCharacterData(this.myCharacter, XP_THRESHOLDS[this.myCharacter.level - 1] ?? 9999);
+        this.statsBar.updateStats(payload.attack_power, payload.defence);
+        this.statsBar.setEffectiveStats(payload.attack_power, payload.defence);
+        this.statsBar.setHp(payload.current_hp, payload.max_hp);
+        this.statsBar.setEnergy(payload.current_energy, payload.max_energy);
+        this.statsBar.setCrowns(payload.crowns);
+      }
+    });
+    this.client.on<import('../../../shared/protocol/index').SpellCastResultPayload>('spell.cast_result', (payload) => {
+      this.chatBox.addSystemMessage(`Cast ${payload.spell_name} (Lv.${payload.level})`);
+    });
+    this.client.on<import('../../../shared/protocol/index').SpellCastRejectedPayload>('spell.cast_rejected', (payload) => {
+      this.chatBox.addSystemMessage(payload.message);
+    });
+    this.client.on<import('../../../shared/protocol/index').SpellBuffReceivedPayload>('spell.buff_received', (payload) => {
+      this.chatBox.addSystemMessage(`${payload.caster_name} cast ${payload.spell_name} on you`);
+    });
+    this.client.on<import('../../../shared/protocol/index').SpellBuffExpiredPayload>('spell.buff_expired', (payload) => {
+      this.chatBox.addSystemMessage(`${payload.spell_name} buff expired`);
+    });
+    this.client.on<{ spell_name: string; points_gained: number; leveled_up: boolean; new_level: number }>('spell-book-spell.result', (payload) => {
+      let msg = `${payload.spell_name}: +${payload.points_gained} points`;
+      if (payload.leveled_up) {
+        msg += ` — LEVEL UP! ${payload.spell_name} is now level ${payload.new_level}`;
+      }
+      this.chatBox.addSystemMessage(msg);
+    });
+    this.client.on<{ message: string }>('spell-book-spell.error', (payload) => {
+      this.chatBox.addSystemMessage(payload.message);
+    });
+
+    // Wire spell casting from LeftPanel
+    this.leftPanel.setOnSpellCast((spellId: number) => {
+      this.client.send('spell.cast', { spell_id: spellId });
     });
 
     // Rankings handler

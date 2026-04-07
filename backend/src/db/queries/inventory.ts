@@ -28,6 +28,7 @@ export interface ItemDefinition {
   power: number | null;
   disassembly_cost: number;
   ability_id: number | null;
+  spell_id: number | null;
   armor_penetration: number;
   additional_attacks: number;
   created_at: Date;
@@ -73,6 +74,7 @@ export interface InventoryItemWithDefinition extends Omit<InventoryItem, never> 
   def_max_durability: number | null;
   def_power: number | null;
   def_ability_id: number | null;
+  def_spell_id: number | null;
   def_armor_penetration: number;
   def_additional_attacks: number;
   current_durability: number | null;
@@ -94,6 +96,7 @@ export interface CreateItemDefinitionData {
   power?: number | null;
   disassembly_cost?: number;
   ability_id?: number | null;
+  spell_id?: number | null;
   armor_penetration?: number;
   additional_attacks?: number;
   crit_chance?: number;
@@ -120,6 +123,7 @@ export interface UpdateItemDefinitionData {
   power?: number | null;
   disassembly_cost?: number;
   ability_id?: number | null;
+  spell_id?: number | null;
   armor_penetration?: number;
   additional_attacks?: number;
   crit_chance?: number;
@@ -171,8 +175,8 @@ export async function getItemDefinitionById(id: number): Promise<ItemDefinition 
 export async function createItemDefinition(data: CreateItemDefinitionData): Promise<ItemDefinition> {
   const result = await query<ItemDefinition>(
     `INSERT INTO item_definitions
-       (name, description, category, weapon_subtype, attack, defence, heal_power, food_power, stack_size, icon_filename, tool_type, max_durability, power, disassembly_cost, ability_id, armor_penetration, additional_attacks, crit_chance, max_mana, mana_on_hit, mana_on_damage_taken, mana_regen, dodge_chance)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+       (name, description, category, weapon_subtype, attack, defence, heal_power, food_power, stack_size, icon_filename, tool_type, max_durability, power, disassembly_cost, ability_id, spell_id, armor_penetration, additional_attacks, crit_chance, max_mana, mana_on_hit, mana_on_damage_taken, mana_regen, dodge_chance)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
      RETURNING *`,
     [
       data.name,
@@ -190,6 +194,7 @@ export async function createItemDefinition(data: CreateItemDefinitionData): Prom
       data.power ?? null,
       data.disassembly_cost ?? 0,
       data.ability_id ?? null,
+      data.spell_id ?? null,
       data.armor_penetration ?? 0,
       data.additional_attacks ?? 0,
       data.crit_chance ?? 0,
@@ -295,6 +300,7 @@ export async function getInventoryWithDefinitions(characterId: string): Promise<
        d.max_durability        AS def_max_durability,
        d.power                 AS def_power,
        d.ability_id            AS def_ability_id,
+       d.spell_id              AS def_spell_id,
        d.armor_penetration     AS def_armor_penetration,
        d.additional_attacks    AS def_additional_attacks
      FROM inventory_items ii
@@ -521,6 +527,7 @@ export async function getInventorySlotById(
        d.max_durability        AS def_max_durability,
        d.power                 AS def_power,
        d.ability_id            AS def_ability_id,
+       d.spell_id              AS def_spell_id,
        d.armor_penetration     AS def_armor_penetration,
        d.additional_attacks    AS def_additional_attacks
      FROM inventory_items ii
@@ -529,4 +536,18 @@ export async function getInventorySlotById(
     [slotId, characterId],
   );
   return result.rows[0] ?? null;
+}
+
+/** Get all inventory items of a specific item definition for a character. */
+export async function getInventoryItemsByDefId(
+  characterId: string,
+  itemDefId: number,
+): Promise<Array<{ id: number; quantity: number }>> {
+  const result = await query<{ id: number; quantity: number }>(
+    `SELECT id, quantity FROM inventory_items
+     WHERE character_id = $1 AND item_def_id = $2
+     ORDER BY id`,
+    [characterId, itemDefId],
+  );
+  return result.rows;
 }

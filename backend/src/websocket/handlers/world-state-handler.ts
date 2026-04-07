@@ -8,6 +8,8 @@ import { onClientReconnect } from '../disconnect-handler';
 import { log } from '../../logger';
 import { config } from '../../config';
 import { sendToSession } from '../server';
+import { getActiveSpellBuffModifiers } from '../../game/spell/spell-buff-service';
+import { sendSpellState } from '../../game/spell/spell-state-handler';
 import type { AuthenticatedSession } from '../server';
 import { getCityMapCache } from '../../game/world/city-map-loader';
 import { getExpeditionStatesForBuilding } from '../../game/world/city-movement-handler';
@@ -227,6 +229,7 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
   // Compute full combat stats for weapon attributes display
   const { computeCombatStats } = await import('../../game/combat/combat-stats-service');
   const combatStats = await computeCombatStats(character.id);
+  const spellMods = await getActiveSpellBuffModifiers(character.id);
 
   log('info', 'world-state', 'sent', {
     characterId: character.id,
@@ -271,7 +274,7 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
       gear_crit_chance: Math.round(combatStats.critChance - character.attr_dexterity * 0.1),
       max_energy: character.max_energy,
       current_energy: character.current_energy,
-      movement_speed: character.movement_speed,
+      movement_speed: character.movement_speed + spellMods.movementSpeed,
     },
     players,
   };
@@ -342,6 +345,9 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
   // Send squire roster on connect
   const squireRoster = await buildSquireRosterDto(character.id);
   sendToSession(session, 'squire.roster_update', squireRoster);
+
+  // Send spell state on connect (learned spells + active buffs)
+  await sendSpellState(session, character.id);
 
   // Notify player of any expeditions that completed while they were offline
   if (character.id) {
