@@ -13,6 +13,8 @@ export class StatsBar {
   private attackEl: HTMLSpanElement | null = null;
   private defenceEl: HTMLSpanElement | null = null;
   private crownsEl: HTMLSpanElement | null = null;
+  private energyFillEl!: HTMLDivElement;
+  private energyTextEl!: HTMLSpanElement;
   private maxHp = 1;
 
   // Expand/collapse state
@@ -184,6 +186,15 @@ export class StatsBar {
     this.xpFillEl = xpFill;
     this.xpTextEl = xpText;
 
+    // ── Energy Bar ────────────────────────────────────────────────
+    const { el: energyEl, fill: energyFill, valueText: energyText } = this.createBarSection(
+      'Energy',
+      '#4a9bc7',
+      'rgba(30,50,70,0.4)',
+    );
+    this.energyFillEl = energyFill;
+    this.energyTextEl = energyText;
+
     // ── Combat Stats Row ──────────────────────────────────────────
     const statsRow = document.createElement('div');
     statsRow.style.cssText = 'display:flex;gap:12px;';
@@ -239,6 +250,7 @@ export class StatsBar {
     // ── Assemble collapsed content ───────────────────────────────
     this.collapsedEl.appendChild(headerRow);
     this.collapsedEl.appendChild(hpEl);
+    this.collapsedEl.appendChild(energyEl);
     this.collapsedEl.appendChild(xpEl);
     this.collapsedEl.appendChild(statsRow);
     this.container.appendChild(this.collapsedEl);
@@ -331,6 +343,17 @@ export class StatsBar {
     this.hpTextEl.textContent = `${current} / ${max}`;
   }
 
+  setEnergy(current: number, max: number): void {
+    const ratio = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
+    this.energyFillEl.style.width = `${Math.round(ratio * 100)}%`;
+    this.energyTextEl.textContent = `${current} / ${max}`;
+    if (current <= 0) {
+      this.energyFillEl.style.background = '#8a4444';
+    } else {
+      this.energyFillEl.style.background = '#4a9bc7';
+    }
+  }
+
   setXp(current: number, threshold: number): void {
     this.xpThreshold = threshold;
     const ratio = threshold > 0 ? Math.max(0, Math.min(1, current / threshold)) : 0;
@@ -369,6 +392,7 @@ export class StatsBar {
   setCharacterData(data: CharacterData, xpThreshold: number): void {
     this.characterData = data;
     this.xpThreshold = xpThreshold;
+    this.setEnergy(data.current_energy, data.max_energy);
     if (this.expanded && this.expandedPanel) {
       this.renderExpandedContent();
     }
@@ -553,6 +577,7 @@ export class StatsBar {
       </div>
 
       ${this.renderBar('HP', c.current_hp, c.max_hp, hpColor, `${c.current_hp} / ${c.max_hp}`)}
+      ${this.renderBar('Energy', c.current_energy, c.max_energy, c.current_energy > 0 ? '#4a9bc7' : '#8a4444', `${c.current_energy} / ${c.max_energy}`)}
       ${this.renderBar('XP', c.experience, this.xpThreshold, 'var(--color-xp-fill)', `${c.experience} / ${this.xpThreshold}`)}
       <div style="font-family:var(--font-body);font-size:11px;color:var(--color-text-muted);text-align:center;margin-top:-8px;">
         ${xpNeeded > 0 ? `${xpNeeded} XP to next level` : 'Max level reached'}
@@ -594,6 +619,7 @@ export class StatsBar {
         ${this.renderDerived('Crit Dmg', parseFloat((150 + c.attr_strength * 0.3).toFixed(1)), '#e87878')}
         ${this.renderDerived('Armor Pen', (c.armor_penetration ?? 0), '#70d4d8')}
         ${(c.additional_attacks ?? 0) > 0 ? this.renderDerived('1st Strikes', c.additional_attacks ?? 0, '#d870d8') : ''}
+        ${this.renderDerived('Move Spd', c.current_energy > 0 ? c.movement_speed : Math.floor(c.movement_speed * 0.5), c.current_energy > 0 ? '#4a9bc7' : '#8a4444')}
       </div>
     `;
     this.expandedPanel.appendChild(statsContent);

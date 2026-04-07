@@ -2,7 +2,7 @@ import { getCityMapCache } from './city-map-loader';
 import { removePlayer } from './zone-registry';
 import { broadcastPlayerLeft } from './zone-broadcasts';
 import { sendWorldState } from '../../websocket/handlers/world-state-handler';
-import { findByAccountId } from '../../db/queries/characters';
+import { findByAccountId, updateCharacter } from '../../db/queries/characters';
 import { getBuildingActions, getBuildingById, getMapById } from '../../db/queries/city-maps';
 import type { TravelActionConfig, ExploreActionConfig } from '../../db/queries/city-maps';
 import { query } from '../../db/connection';
@@ -135,6 +135,20 @@ export async function handleBuildingAction(
 
   if (action.action_type === 'explore') {
     const exploreConfig = action.config as ExploreActionConfig;
+
+    // Gate: energy check
+    if (character.current_energy < 10) {
+      sendToSession(session, 'city.building_action_rejected', {
+        reason: 'insufficient_energy',
+        message: 'Not enough energy.',
+      });
+      return;
+    }
+    await updateCharacter(characterId, { current_energy: (character.current_energy - 10) as number });
+    sendToSession(session, 'character.energy_changed', {
+      current_energy: character.current_energy - 10,
+      max_energy: character.max_energy,
+    });
 
     try {
       const result = await resolveExplore(session, character, action_id, exploreConfig);

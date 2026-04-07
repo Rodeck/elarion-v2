@@ -271,6 +271,9 @@ export class GameScene extends Phaser.Scene {
     this.leftPanel.setOnUseSkillBook((slotId) => {
       this.client.send('skill-book.use', { slot_id: slotId });
     });
+    this.leftPanel.setOnUseItem((slotId) => {
+      this.client.send('inventory.use_item', { inventory_item_id: String(slotId) });
+    });
 
     const buildingSlot = document.getElementById('building-panel-slot')!;
     this.buildingPanel = new BuildingPanel(buildingSlot, (payload) => {
@@ -653,6 +656,19 @@ export class GameScene extends Phaser.Scene {
         this.statsBar?.setHp(payload.current_hp, payload.max_hp);
         this.syncExpandedStats();
       }
+    });
+
+    this.client.on<{ current_energy: number; max_energy: number }>('character.energy_changed', (payload) => {
+      if (this.myCharacter) {
+        this.myCharacter.current_energy = payload.current_energy;
+        this.myCharacter.max_energy = payload.max_energy;
+        this.statsBar?.setEnergy(payload.current_energy, payload.max_energy);
+        this.syncExpandedStats();
+      }
+    });
+
+    this.client.on<{ reason: string; message: string }>('inventory.use_rejected', (payload) => {
+      this.chatBox?.addSystemMessage(payload.message);
     });
 
     this.client.on<CharacterLevelledUpPayload>('character.levelled_up', (payload) => {

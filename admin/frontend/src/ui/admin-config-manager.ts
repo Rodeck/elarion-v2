@@ -29,6 +29,15 @@ export class AdminConfigManager {
       if (config['rod_upgrade_points_icon_filename']) {
         this.showIconPreview('rod_upgrade_points', `/ui-icons/${config['rod_upgrade_points_icon_filename']}`);
       }
+      // Load regen config
+      const energyPerTick = this.container.querySelector<HTMLInputElement>('#config-energy-regen-per-tick');
+      const energyInterval = this.container.querySelector<HTMLInputElement>('#config-energy-tick-interval');
+      const hpPercent = this.container.querySelector<HTMLInputElement>('#config-hp-regen-percent');
+      const hpInterval = this.container.querySelector<HTMLInputElement>('#config-hp-tick-interval');
+      if (energyPerTick && config['energy_regen_per_tick']) energyPerTick.value = config['energy_regen_per_tick'];
+      if (energyInterval && config['energy_tick_interval_seconds']) energyInterval.value = config['energy_tick_interval_seconds'];
+      if (hpPercent && config['hp_regen_percent']) hpPercent.value = config['hp_regen_percent'];
+      if (hpInterval && config['hp_tick_interval_seconds']) hpInterval.value = config['hp_tick_interval_seconds'];
     } catch (err) {
       this.showStatus(`Failed to load config: ${(err as Error).message}`, true);
     }
@@ -55,6 +64,38 @@ export class AdminConfigManager {
             </p>
             <div class="form-actions" style="margin-top:1.25rem;">
               <button type="submit" class="btn btn--primary">Save Settings</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="item-form-card" style="margin-top:1.5rem;">
+          <h3>Regeneration Settings</h3>
+          <p style="font-size:0.75rem;color:#5a6280;margin-bottom:1rem;">Configure server-wide HP and Energy regeneration tick rates. Changes take effect on the next tick cycle.</p>
+          <form id="regen-config-form" autocomplete="off">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+              <div>
+                <label for="config-energy-regen-per-tick">Energy per Tick</label>
+                <input type="number" id="config-energy-regen-per-tick" min="1" value="50" style="width:100%;" />
+                <p style="font-size:0.65rem;color:#5a6280;margin-top:0.15rem;">Amount of energy restored each tick</p>
+              </div>
+              <div>
+                <label for="config-energy-tick-interval">Energy Tick Interval (seconds)</label>
+                <input type="number" id="config-energy-tick-interval" min="10" value="300" style="width:100%;" />
+                <p style="font-size:0.65rem;color:#5a6280;margin-top:0.15rem;">Seconds between energy regen ticks</p>
+              </div>
+              <div>
+                <label for="config-hp-regen-percent">HP Regen Percent</label>
+                <input type="number" id="config-hp-regen-percent" min="1" max="100" value="10" style="width:100%;" />
+                <p style="font-size:0.65rem;color:#5a6280;margin-top:0.15rem;">% of max HP restored each tick</p>
+              </div>
+              <div>
+                <label for="config-hp-tick-interval">HP Tick Interval (seconds)</label>
+                <input type="number" id="config-hp-tick-interval" min="10" value="600" style="width:100%;" />
+                <p style="font-size:0.65rem;color:#5a6280;margin-top:0.15rem;">Seconds between HP regen ticks</p>
+              </div>
+            </div>
+            <div class="form-actions" style="margin-top:1.25rem;">
+              <button type="submit" class="btn btn--primary">Save Regen Settings</button>
             </div>
           </form>
         </div>
@@ -124,6 +165,27 @@ export class AdminConfigManager {
     this.container.querySelector('#rod_upgrade_points-icon-input')!.addEventListener('change', () => {
       void this.handleIconUpload('rod_upgrade_points');
     });
+
+    // Regen config form
+    this.container.querySelector<HTMLFormElement>('#regen-config-form')!
+      .addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const energyPerTick = this.container.querySelector<HTMLInputElement>('#config-energy-regen-per-tick')!.value;
+        const energyInterval = this.container.querySelector<HTMLInputElement>('#config-energy-tick-interval')!.value;
+        const hpPercent = this.container.querySelector<HTMLInputElement>('#config-hp-regen-percent')!.value;
+        const hpInterval = this.container.querySelector<HTMLInputElement>('#config-hp-tick-interval')!.value;
+        try {
+          await updateAdminConfig({
+            energy_regen_per_tick: energyPerTick,
+            energy_tick_interval_seconds: energyInterval,
+            hp_regen_percent: hpPercent,
+            hp_tick_interval_seconds: hpInterval,
+          });
+          this.showStatus('Regen settings saved successfully.', false);
+        } catch (err) {
+          this.showStatus(`Failed to save regen settings: ${(err as Error).message}`, true);
+        }
+      });
   }
 
   private async handleIconUpload(type: 'xp' | 'crowns' | 'rod_upgrade_points'): Promise<void> {

@@ -9,7 +9,7 @@ import { log } from '../../logger';
 import { sendToSession } from '../../websocket/server';
 import { registerHandler } from '../../websocket/dispatcher';
 import type { AuthenticatedSession } from '../../websocket/server';
-import { findByAccountId } from '../../db/queries/characters';
+import { findByAccountId, updateCharacter } from '../../db/queries/characters';
 import { getBuildingActions, getBuildingById } from '../../db/queries/city-maps';
 import { getCityMapCache } from '../world/city-map-loader';
 import { getRodTierByItemDefId } from '../../db/queries/fishing';
@@ -163,6 +163,17 @@ async function handleFishingCast(
       `This spot requires a rod of tier ${spotConfig.min_rod_tier} or higher.`);
     return;
   }
+
+  // Gate: energy check
+  if (character.current_energy < 10) {
+    rejectFishing(session, 'cast', 'INSUFFICIENT_ENERGY', 'Not enough energy.');
+    return;
+  }
+  await updateCharacter(characterId, { current_energy: (character.current_energy - 10) as number });
+  sendToSession(session, 'character.energy_changed', {
+    current_energy: character.current_energy - 10,
+    max_energy: character.max_energy,
+  });
 
   // Start fishing session
   try {

@@ -8,8 +8,8 @@
 import crypto from 'crypto';
 import { log } from '../../logger';
 import { config } from '../../config';
-import { sendToSession } from '../../websocket/server';
-import { findByAccountId } from '../../db/queries/characters';
+import { sendToSession, getSessionByCharacterId } from '../../websocket/server';
+import { findByAccountId, updateCharacter } from '../../db/queries/characters';
 import { getInventoryWithDefinitions, updateInventoryQuantity, deleteInventoryItem, getRandomItemByCategory } from '../../db/queries/inventory';
 import { computeCombatStats } from '../combat/combat-stats-service';
 import { getFatigueConfig } from '../../db/queries/fatigue-config';
@@ -127,6 +127,12 @@ export async function handleBossChallenge(
     return;
   }
 
+  // Gate: energy check
+  if (character.current_energy < 20) {
+    sendToSession(session, 'boss:challenge_rejected', { reason: 'insufficient_energy', message: 'Not enough energy.' });
+    return;
+  }
+
   // Gate: has Boss Challenge Token
   const inventory = await getInventoryWithDefinitions(characterId);
   const tokenSlot = inventory.find((s) => s.def_name === BOSS_CHALLENGE_TOKEN_NAME && s.quantity >= 1);
@@ -158,6 +164,13 @@ export async function handleBossChallenge(
   } else {
     await updateInventoryQuantity(tokenSlot.id, tokenSlot.quantity - 1);
   }
+
+  // Deduct energy for boss challenge
+  await updateCharacter(characterId, { current_energy: (character.current_energy - 20) as number });
+  sendToSession(session, 'character.energy_changed', {
+    current_energy: character.current_energy - 20,
+    max_energy: character.max_energy,
+  });
 
   // Push updated inventory to client (token consumed)
   await sendInventoryState(session);
@@ -556,6 +569,26 @@ async function endCombat(cs: BossCombatSession, outcome: 'win' | 'loss'): Promis
     Math.max(0, cs.engineState.playerHp),
     cs.characterId,
   ]);
+
+  // Halve energy on death
+  if (outcome === 'loss') {
+    const energyResult = await dbQuery<{ current_energy: number; max_energy: number }>(
+      `UPDATE characters SET current_energy = FLOOR(current_energy / 2)::smallint, updated_at = now() WHERE id = $1 RETURNING current_energy, max_energy`,
+      [cs.characterId],
+    ).catch((err) => {
+      log('error', 'boss-combat', 'energy_halve_failed', { characterId: cs.characterId, err });
+      return null;
+    });
+    if (energyResult?.rows[0]) {
+      const ws = getSessionByCharacterId(cs.characterId);
+      if (ws) {
+        sendToSession(ws, 'character.energy_changed', {
+          current_energy: energyResult.rows[0].current_energy,
+          max_energy: energyResult.rows[0].max_energy,
+        });
+      }
+    }
+  }
 
   let xpGained = 0;
   let crownsGained = 0;

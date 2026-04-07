@@ -16,6 +16,10 @@ export const CONFIG_DEFAULTS: Record<string, string> = {
   xp_icon_filename: '',
   crowns_icon_filename: '',
   rod_upgrade_points_icon_filename: '',
+  energy_regen_per_tick: '50',
+  energy_tick_interval_seconds: '300',
+  hp_regen_percent: '10',
+  hp_tick_interval_seconds: '600',
 };
 
 const KNOWN_KEYS = new Set(Object.keys(CONFIG_DEFAULTS));

@@ -77,7 +77,15 @@ function checkCityMoveRateLimit(characterId: string): { allowed: boolean; retryA
 // Step delay between nodes (ms)
 // ---------------------------------------------------------------------------
 
-const STEP_DELAY_MS = 300;
+// At movement_speed 100 (default), step delay = 600ms (50% of original 300ms speed).
+// At movement_speed 200, step delay = 300ms (original speed).
+// At 0 energy, movement_speed is halved → 50 → step delay = 1200ms.
+const BASE_STEP_DELAY_MS = 600;
+
+function computeStepDelay(movementSpeed: number, currentEnergy: number): number {
+  const effectiveSpeed = currentEnergy > 0 ? movementSpeed : Math.floor(movementSpeed * 0.5);
+  return Math.round(BASE_STEP_DELAY_MS * (100 / Math.max(1, effectiveSpeed)));
+}
 
 // ---------------------------------------------------------------------------
 // Expedition state lookup for building_arrived
@@ -269,9 +277,13 @@ export async function handleCityMove(session: AuthenticatedSession, payload: unk
   const movement: ActiveMovement = { timers: [], cancelled: false };
   activeMovements.set(characterId, movement);
 
+  let cumulativeDelay = 0;
   for (let i = 1; i < path.length; i++) {
     const stepNodeId = path[i]!;
-    const delay = STEP_DELAY_MS * i;
+    const predictedEnergy = Math.max(0, (character.current_energy ?? 1000) - (i - 1) * 2);
+    const stepDelay = computeStepDelay(character.movement_speed ?? 100, predictedEnergy);
+    cumulativeDelay += stepDelay;
+    const delay = cumulativeDelay;
 
     const timer = setTimeout(() => {
       // If movement was cancelled, do nothing
@@ -279,6 +291,25 @@ export async function handleCityMove(session: AuthenticatedSession, payload: unk
 
       const node = nodeMap.get(stepNodeId);
       if (!node) return;
+
+      // Deduct 2 energy per step (fire-and-forget)
+      query(
+        `UPDATE characters SET current_energy = GREATEST(0, current_energy - 2), updated_at = now() WHERE id = $1 RETURNING current_energy, max_energy`,
+        [characterId],
+      ).then((res) => {
+        const row = res.rows[0] as { current_energy: number; max_energy: number } | undefined;
+        if (row) {
+          sendToSession(session, 'character.energy_changed', {
+            current_energy: row.current_energy,
+            max_energy: row.max_energy,
+          });
+        }
+      }).catch((err: unknown) => {
+        log('error', 'city-movement', 'energy_deduct_failed', {
+          characterId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
 
       // Update character position in DB (fire-and-forget with error logging)
       updateCharacter(characterId, {

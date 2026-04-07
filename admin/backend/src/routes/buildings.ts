@@ -324,6 +324,7 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
         durability_per_second?: unknown;
         min_seconds?: unknown;
         max_seconds?: unknown;
+        energy_per_second?: unknown;
         events?: unknown[];
       };
       const toolType = String(cfg.required_tool_type ?? '');
@@ -375,11 +376,16 @@ buildingsRouter.post('/:id/buildings/:buildingId/actions', async (req: Request, 
           if (!Number.isInteger(sqLevel) || sqLevel < 1 || sqLevel > 20) return res.status(400).json({ error: 'squire event squire_level must be 1–20' });
         }
       }
+      const energyPerSec = Number(cfg.energy_per_second ?? 0);
+      if (!Number.isInteger(energyPerSec) || energyPerSec < 0) {
+        return res.status(400).json({ error: 'energy_per_second must be a non-negative integer' });
+      }
       const gatherConfig = {
         required_tool_type: toolType,
         durability_per_second: durPerSec,
         min_seconds: minSec,
         max_seconds: maxSec,
+        energy_per_second: energyPerSec,
         events: events as Array<Record<string, unknown>>,
       };
       const action = await createBuildingAction(buildingId, 'gather' as 'travel', gatherConfig as unknown as TravelActionConfig, sort_order ?? 0);

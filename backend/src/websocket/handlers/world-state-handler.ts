@@ -269,6 +269,9 @@ export async function sendWorldState(session: AuthenticatedSession): Promise<voi
       armor_penetration: combatStats.armorPenetration,
       additional_attacks: combatStats.additionalAttacks,
       gear_crit_chance: Math.round(combatStats.critChance - character.attr_dexterity * 0.1),
+      max_energy: character.max_energy,
+      current_energy: character.current_energy,
+      movement_speed: character.movement_speed,
     },
     players,
   };

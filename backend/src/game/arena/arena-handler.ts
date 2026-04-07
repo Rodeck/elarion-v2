@@ -11,7 +11,7 @@ import { log } from '../../logger';
 import { sendToSession } from '../../websocket/server';
 import { registerHandler } from '../../websocket/dispatcher';
 import type { AuthenticatedSession } from '../../websocket/server';
-import { findByAccountId } from '../../db/queries/characters';
+import { findByAccountId, updateCharacter } from '../../db/queries/characters';
 import { getBuildingActions } from '../../db/queries/city-maps';
 import {
   getArenaById,
@@ -159,6 +159,20 @@ async function handleArenaEnter(
     } satisfies ArenaEnterRejectedPayload);
     return;
   }
+
+  // Gate: energy check
+  if (character.current_energy < 20) {
+    sendToSession(session, 'arena:enter_rejected', {
+      reason: 'insufficient_energy',
+      message: 'Not enough energy.',
+    } satisfies ArenaEnterRejectedPayload);
+    return;
+  }
+  await updateCharacter(characterId, { current_energy: (character.current_energy - 20) as number });
+  sendToSession(session, 'character.energy_changed', {
+    current_energy: character.current_energy - 20,
+    max_energy: character.max_energy,
+  });
 
   // Calculate can_leave_at
   const canLeaveAt = new Date(Date.now() + arena.min_stay_seconds * 1000);

@@ -53,6 +53,7 @@ interface GatherActionConfig {
   durability_per_second: number;
   min_seconds: number;
   max_seconds: number;
+  energy_per_second: number;
   events: GatherEventConfig[];
 }
 
@@ -227,6 +228,22 @@ class GatheringSessionManagerImpl {
     if (!character) {
       await this.endSession(characterId, 'death');
       return;
+    }
+
+    // Deduct energy per tick (energy_per_second * 2 since tick is 2 seconds)
+    const energyCost = (session.config.energy_per_second ?? 0) * 2;
+    if (energyCost > 0) {
+      const newEnergy = Math.max(0, character.current_energy - energyCost);
+      await updateCharacter(characterId, { current_energy: newEnergy as number });
+      sendToSession(session.wsSession, 'character.energy_changed', {
+        current_energy: newEnergy,
+        max_energy: character.max_energy,
+      });
+      if (newEnergy <= 0) {
+        log('info', 'gathering', 'energy_depleted', { characterId });
+        await this.endSession(characterId, 'completed');
+        return;
+      }
     }
 
     const tickEvent: GatheringTickEvent = { type: eventConfig.type };
@@ -498,6 +515,24 @@ class GatheringSessionManagerImpl {
 
     // Clear in_gathering flag
     await updateCharacter(characterId, { in_gathering: false });
+
+    // Halve energy on death
+    if (reason === 'death') {
+      const { query: dbQuery } = await import('../../db/connection');
+      const energyResult = await dbQuery<{ current_energy: number; max_energy: number }>(
+        `UPDATE characters SET current_energy = FLOOR(current_energy / 2)::smallint, updated_at = now() WHERE id = $1 RETURNING current_energy, max_energy`,
+        [characterId],
+      ).catch((err) => {
+        log('error', 'gathering', 'energy_halve_on_death_failed', { characterId, err });
+        return null;
+      });
+      if (energyResult?.rows[0]) {
+        sendToSession(session.wsSession, 'character.energy_changed', {
+          current_energy: energyResult.rows[0].current_energy,
+          max_energy: energyResult.rows[0].max_energy,
+        });
+      }
+    }
 
     // Grant pending resources and crowns only on successful completion
     if (reason === 'completed') {

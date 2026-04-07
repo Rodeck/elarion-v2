@@ -580,6 +580,28 @@ export class CombatSession {
       }
     }
 
+    // Halve energy on death
+    if (outcome === 'loss') {
+      const { query: dbQuery } = await import('../../db/connection');
+      const energyResult = await dbQuery<{ current_energy: number; max_energy: number }>(
+        `UPDATE characters SET current_energy = FLOOR(current_energy / 2)::smallint, updated_at = now() WHERE id = $1 RETURNING current_energy, max_energy`,
+        [this.characterId],
+      ).catch((err) => {
+        log('error', 'combat', 'energy_halve_failed', { characterId: this.characterId, err });
+        return null;
+      });
+      if (energyResult?.rows[0]) {
+        const { getSessionByCharacterId } = await import('../../websocket/server');
+        const ws = getSessionByCharacterId(this.characterId);
+        if (ws) {
+          sendToSession(ws, 'character.energy_changed', {
+            current_energy: energyResult.rows[0].current_energy,
+            max_energy: energyResult.rows[0].max_energy,
+          });
+        }
+      }
+    }
+
     // Persist HP to database
     const { updateCharacter } = await import('../../db/queries/characters');
     await updateCharacter(this.characterId, { current_hp: this.engineState.playerHp }).catch((err) => {

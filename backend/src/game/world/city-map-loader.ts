@@ -88,6 +88,7 @@ function toProtocolBuilding(
             durability_per_second: Number(cfg['durability_per_second'] ?? 0),
             min_seconds: Number(cfg['min_seconds'] ?? 0),
             max_seconds: Number(cfg['max_seconds'] ?? 0),
+            energy_per_second: Number(cfg['energy_per_second'] ?? 0),
           },
         };
         return dto;

@@ -14,6 +14,7 @@ export class InventoryPanel {
   private container: HTMLElement;
   private onDeleteItem: (slotId: number) => void;
   private onUseSkillBook: ((slotId: number) => void) | null = null;
+  private onUseItem: ((slotId: number) => void) | null = null;
   private slots: InventorySlotDto[] = [];
   private capacity: number = 20;
   private currentCategory: string = 'all';
@@ -361,6 +362,30 @@ export class InventoryPanel {
       this.onDeleteItem(slot.slot_id);
     });
 
+    // "Use" button for food/heal items
+    if ((def.category === 'food' || def.category === 'heal') && this.onUseItem) {
+      const useBtn = document.createElement('button');
+      useBtn.textContent = def.category === 'food' ? 'Eat' : 'Use';
+      useBtn.style.cssText =
+        'width:100%;padding:6px 0;margin-top:6px;font-family:Cinzel,serif;font-size:13px;' +
+        'background:#2a2210;border:1px solid #d4a84b;color:#d4a84b;cursor:pointer;border-radius:2px;' +
+        'letter-spacing:0.04em;transition:background 0.15s,color 0.15s;';
+      useBtn.addEventListener('mouseenter', () => {
+        useBtn.style.background = '#3a3218';
+        useBtn.style.color = '#f0c060';
+      });
+      useBtn.addEventListener('mouseleave', () => {
+        useBtn.style.background = '#2a2210';
+        useBtn.style.color = '#d4a84b';
+      });
+      useBtn.addEventListener('click', () => {
+        useBtn.disabled = true;
+        useBtn.style.opacity = '0.5';
+        this.onUseItem!(slot.slot_id);
+      });
+      this.detailEl.appendChild(useBtn);
+    }
+
     // "Use" button for skill books
     if (def.category === 'skill_book' && this.onUseSkillBook) {
       const useBtn = document.createElement('button');
@@ -440,6 +465,10 @@ export class InventoryPanel {
 
   setOnUseSkillBook(cb: (slotId: number) => void): void {
     this.onUseSkillBook = cb;
+  }
+
+  setOnUseItem(cb: (slotId: number) => void): void {
+    this.onUseItem = cb;
   }
 
   getSlots(): InventorySlotDto[] {

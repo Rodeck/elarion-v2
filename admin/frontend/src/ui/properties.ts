@@ -1029,6 +1029,14 @@ export class PropertiesPanel {
 
     gatherFields.appendChild(durRow);
 
+    gatherFields.appendChild(this.label('Energy per Second', 'gather-energy-per-sec'));
+    const energyPerSecInput = document.createElement('input');
+    energyPerSecInput.id = 'gather-energy-per-sec';
+    energyPerSecInput.type = 'number';
+    energyPerSecInput.min = '0';
+    energyPerSecInput.value = '0';
+    gatherFields.appendChild(energyPerSecInput);
+
     gatherFields.appendChild(this.label('Events', 'gather-events-list'));
 
     const gatherEventsEl = document.createElement('div');
@@ -1447,6 +1455,7 @@ export class PropertiesPanel {
               durability_per_second: durPerSec,
               min_seconds: minSec,
               max_seconds: maxSec,
+              energy_per_second: parseInt((document.getElementById('gather-energy-per-sec') as HTMLInputElement)?.value ?? '0', 10) || 0,
               events: gatherEvents,
             },
           });

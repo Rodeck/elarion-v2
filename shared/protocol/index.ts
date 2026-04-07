@@ -41,6 +41,9 @@ export interface CharacterData {
   armor_penetration: number;
   additional_attacks: number;
   gear_crit_chance: number;
+  max_energy: number;
+  current_energy: number;
+  movement_speed: number;
 }
 
 export interface PlayerSummary {
@@ -103,6 +106,7 @@ export interface GatherBuildingActionDto {
     durability_per_second: number;
     min_seconds: number;
     max_seconds: number;
+    energy_per_second: number;
   };
 }
 
@@ -1962,7 +1966,8 @@ export type FishingRejectionReason =
   | 'ALREADY_GATHERING'
   | 'INVALID_SESSION'
   | 'SESSION_EXPIRED'
-  | 'INVENTORY_FULL';
+  | 'INVENTORY_FULL'
+  | 'INSUFFICIENT_ENERGY';
 
 export interface FishingRejectedPayload {
   action: 'cast' | 'complete' | 'cancel';
@@ -2306,7 +2311,7 @@ export interface ArenaEnteredPayload {
 }
 
 export interface ArenaEnterRejectedPayload {
-  reason: 'cooldown' | 'in_combat' | 'in_gathering' | 'already_in_arena' | 'inactive' | 'not_found';
+  reason: 'cooldown' | 'in_combat' | 'in_gathering' | 'already_in_arena' | 'inactive' | 'not_found' | 'insufficient_energy';
   message: string;
   cooldown_until?: string;
 }
@@ -2675,4 +2680,32 @@ export interface WarehouseBulkResultPayload {
   transferred_count: number;
   skipped_count: number;
   partial: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Energy System
+// ---------------------------------------------------------------------------
+
+export interface EnergyChangedPayload {
+  current_energy: number;
+  max_energy: number;
+}
+
+export interface InventoryUseItemPayload {
+  inventory_item_id: string;
+}
+
+export interface InventoryUseResultPayload {
+  inventory_item_id: string;
+  item_def_id: number;
+  remaining_quantity: number;
+  effect: 'energy' | 'hp';
+  amount_restored: number;
+  new_value: number;
+  max_value: number;
+}
+
+export interface InventoryUseRejectedPayload {
+  reason: 'not_found' | 'not_consumable' | 'energy_full' | 'hp_full' | 'in_combat';
+  message: string;
 }

@@ -31,6 +31,7 @@ interface GatherActionConfig {
   durability_per_second: number;
   min_seconds: number;
   max_seconds: number;
+  energy_per_second: number;
   events: GatherEventConfig[];
 }
 
@@ -75,7 +76,15 @@ export async function handleGatheringStart(
     return;
   }
 
-  const gatherConfig = action.config as unknown as GatherActionConfig;
+  const rawConfig = action.config as unknown as Record<string, unknown>;
+  const gatherConfig: GatherActionConfig = {
+    required_tool_type: String(rawConfig.required_tool_type ?? ''),
+    durability_per_second: Number(rawConfig.durability_per_second ?? 0),
+    min_seconds: Number(rawConfig.min_seconds ?? 0),
+    max_seconds: Number(rawConfig.max_seconds ?? 0),
+    energy_per_second: Number(rawConfig.energy_per_second ?? 0),
+    events: (rawConfig.events ?? []) as GatherActionConfig['events'],
+  };
 
   // Find all matching tools sorted by durability ascending (lowest first)
   const allSlots = await getInventoryWithDefinitions(characterId);
@@ -87,6 +96,15 @@ export async function handleGatheringStart(
     sendToSession(session, 'gathering.rejected', {
       reason: 'NO_TOOL',
       message: `No ${gatherConfig.required_tool_type} in your inventory.`,
+    });
+    return;
+  }
+
+  // Gate: energy check
+  if (character.current_energy <= 0) {
+    sendToSession(session, 'gathering.rejected', {
+      reason: 'insufficient_energy',
+      message: 'Not enough energy.',
     });
     return;
   }

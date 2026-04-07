@@ -15,6 +15,7 @@ import { handleChatSend } from './game/chat/chat-handler';
 import { handleCityMove } from './game/world/city-movement-handler';
 import { handleBuildingAction } from './game/world/building-action-handler';
 import { handleInventoryDeleteItem } from './game/inventory/inventory-delete-handler';
+import { handleInventoryUseItem } from './game/inventory/inventory-use-handler';
 import { handleExpeditionDispatch, handleExpeditionCollect } from './game/expedition/expedition-handler';
 import { handleEquipmentEquip, handleEquipmentUnequip } from './game/equipment/equipment-handler';
 import { handleCombatTriggerActive, handleLoadoutRequest, handleLoadoutUpdate } from './game/combat/combat-handlers';
@@ -29,6 +30,7 @@ import { registerDisassemblyHandlers } from './game/disassembly/disassembly-hand
 import { handleRankingsGet } from './game/rankings/rankings-handler';
 import { startRankingsService } from './game/rankings/rankings-service';
 import { startHpRegenService } from './game/regen/hp-regen-service';
+import { startEnergyRegenService } from './game/regen/energy-regen-service';
 import { sendWorldState, setZonePlayersGetter } from './websocket/handlers/world-state-handler';
 import { getZonePlayers } from './game/world/zone-registry';
 import { loadCityMaps } from './game/world/city-map-loader';
@@ -86,6 +88,9 @@ async function bootstrap(): Promise<void> {
   // Start passive HP regeneration (10% every 10 minutes)
   startHpRegenService();
 
+  // Start passive energy regeneration (configurable via admin config)
+  startEnergyRegenService();
+
   // Register all message handlers
   registerHandler('auth.register', handleAuthRegister);
   registerHandler('auth.login', handleAuthLogin);
@@ -95,6 +100,7 @@ async function bootstrap(): Promise<void> {
   registerHandler('city.move', handleCityMove);
   registerHandler('city.building_action', handleBuildingAction);
   registerHandler('inventory.delete_item', handleInventoryDeleteItem);
+  registerHandler('inventory.use_item', handleInventoryUseItem);
   registerHandler('expedition.dispatch', handleExpeditionDispatch);
   registerHandler('expedition.collect', handleExpeditionCollect);
   registerHandler('equipment.equip', handleEquipmentEquip);
