@@ -62,6 +62,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-02
 - TypeScript 5.x (frontend, backend, shared, admin) + Phaser 3.60 (frontend), Node.js 20 LTS + `ws` (backend), Express 4 (admin backend), Vite 5 (frontends) (035-combat-fatigue)
 - PostgreSQL 16 — new `fatigue_config` table (migration 039); in-memory `FatigueState` on combat session objects (035-combat-fatigue)
 - PostgreSQL 16 — two new tables (`warehouse_slots`, `warehouse_items`); `building_actions` CHECK constraint extended (036-warehouse-system)
+- TypeScript 5.x (frontend only) + Phaser 3.60.0 (game framework), Vite 5 (dev server) (037-player-interaction)
+- N/A — no persistence changes; all state is in-memory on frontend (037-player-interaction)
 
 - TypeScript 5.x — used on both frontend and backend. (001-game-design)
 
@@ -87,9 +89,9 @@ npm test && npm run lint
 TypeScript 5.x — used on both frontend and backend.: Follow standard conventions
 
 ## Recent Changes
+- 037-player-interaction: Added TypeScript 5.x (frontend only) + Phaser 3.60.0 (game framework), Vite 5 (dev server)
 - 036-warehouse-system: Added TypeScript 5.x (frontend, backend, shared, admin) + Phaser 3.60 (frontend), Node.js 20 LTS + `ws` (backend), Express 4 (admin backend), Vite 5 (frontends)
 - 035-combat-fatigue: Added TypeScript 5.x (frontend, backend, shared, admin) + Phaser 3.60 (frontend), Node.js 20 LTS + `ws` (backend), Express 4 (admin backend), Vite 5 (frontends)
-- 034-item-variation: Added TypeScript 5.x (frontend + backend + shared) + Phaser 3.60 (frontend), Node.js 20 LTS + `ws` (backend), Express 4 (admin backend), Vite 5 (frontends)
 
 
 

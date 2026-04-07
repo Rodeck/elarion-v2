@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { WSClient } from '../network/WSClient';
 import { StatsBar } from '../ui/StatsBar';
 import { ChatBox } from '../ui/ChatBox';
-import { CombatLog } from '../ui/CombatLog';
+import { NearbyPlayersPanel } from '../ui/NearbyPlayersPanel';
+import { PlayerDetailModal } from '../ui/PlayerDetailModal';
 import { BuildingPanel } from '../ui/BuildingPanel';
 import { LogoutButton } from '../ui/LogoutButton';
 import { DayNightBar } from '../ui/DayNightBar';
@@ -159,7 +160,8 @@ export class GameScene extends Phaser.Scene {
   private statsBar!: StatsBar;
   private logoutButton!: LogoutButton;
   private chatBox!: ChatBox;
-  private combatLog!: CombatLog;
+  private nearbyPlayersPanel!: NearbyPlayersPanel;
+  private playerDetailModal!: PlayerDetailModal;
   private buildingPanel!: BuildingPanel;
   private leftPanel!: LeftPanel;
   private dayNightBar: DayNightBar | null = null;
@@ -172,6 +174,8 @@ export class GameScene extends Phaser.Scene {
 
   // Remote players: characterId → sprite
   private remotePlayers = new Map<string, Phaser.GameObjects.Container>();
+  // Remote player data: characterId → info for nearby-players panel
+  private remotePlayerData = new Map<string, { id: string; name: string; level: number; classId: number; nodeId: number | null }>();
 
   // Movement throttle
   private lastMoveSent = 0;
@@ -238,7 +242,14 @@ export class GameScene extends Phaser.Scene {
 
     const bottomBar = document.getElementById('bottom-bar')!;
     this.chatBox   = new ChatBox(this.client, bottomBar);
-    this.combatLog = new CombatLog(bottomBar);
+    this.nearbyPlayersPanel = new NearbyPlayersPanel(bottomBar);
+    this.playerDetailModal = new PlayerDetailModal(document.body);
+    this.nearbyPlayersPanel.setOnPlayerClick((playerId) => {
+      const data = this.remotePlayerData.get(playerId);
+      if (data) {
+        this.playerDetailModal.open({ id: data.id, name: data.name, level: data.level });
+      }
+    });
 
     const inventoryEl = document.getElementById('inventory-panel')!;
     inventoryEl.style.display = 'flex';
@@ -511,6 +522,7 @@ export class GameScene extends Phaser.Scene {
         this.pathPreviewGraphics = null;
         this.remotePlayers.forEach((c) => c.destroy());
         this.remotePlayers.clear();
+        this.remotePlayerData.clear();
         this.clearBossSprites();
         this.bossInfoPanel.hide();
         this.buildingPanel.hide();
@@ -543,12 +555,21 @@ export class GameScene extends Phaser.Scene {
       }
 
       // Place other players
+      this.remotePlayerData.clear();
       for (const p of payload.players) {
+        this.remotePlayerData.set(p.id, { id: p.id, name: p.name, level: p.level, classId: p.class_id, nodeId: p.current_node_id ?? null });
         this.spawnRemotePlayer(p);
       }
 
       // Flush any player.entered_zone events that arrived before this world.state
-      this.pendingEnteredZone.splice(0).forEach((ev) => this.spawnRemotePlayer(ev.character));
+      this.pendingEnteredZone.splice(0).forEach((ev) => {
+        this.remotePlayerData.set(ev.character.id, { id: ev.character.id, name: ev.character.name, level: ev.character.level, classId: ev.character.class_id, nodeId: ev.character.current_node_id ?? null });
+        this.spawnRemotePlayer(ev.character);
+      });
+
+      // Close modal if open (zone changed) and refresh nearby players
+      this.playerDetailModal.close();
+      this.refreshNearbyPlayers();
 
       // Spawn boss sprites on city maps
       this.clearBossSprites();
@@ -609,15 +630,20 @@ export class GameScene extends Phaser.Scene {
         this.pendingEnteredZone.push(payload);
         return;
       }
-      this.spawnRemotePlayer(payload.character);
+      const c = payload.character;
+      this.remotePlayerData.set(c.id, { id: c.id, name: c.name, level: c.level, classId: c.class_id, nodeId: c.current_node_id ?? null });
+      this.spawnRemotePlayer(c);
+      this.refreshNearbyPlayers();
     });
 
     this.client.on<PlayerLeftZonePayload>('player.left_zone', (payload) => {
+      this.remotePlayerData.delete(payload.character_id);
       this.removeRemotePlayer(payload.character_id);
+      this.refreshNearbyPlayers();
     });
 
     this.client.on<{ code: string; message: string }>('server.error', (payload) => {
-      this.combatLog.appendError(payload.message);
+      this.chatBox.addSystemMessage(`\u26a0 ${payload.message}`);
     });
 
     this.client.on<{ current_hp: number; max_hp: number }>('character.hp_changed', (payload) => {
@@ -703,7 +729,11 @@ export class GameScene extends Phaser.Scene {
             }
           },
         });
+        this.refreshNearbyPlayers();
       } else {
+        const rpData = this.remotePlayerData.get(payload.character_id);
+        if (rpData) rpData.nodeId = payload.node_id;
+
         const container = this.remotePlayers.get(payload.character_id);
         if (container) {
           this.tweens.add({
@@ -714,6 +744,7 @@ export class GameScene extends Phaser.Scene {
             ease: 'Sine.easeInOut',
           });
         }
+        this.refreshNearbyPlayers();
       }
     });
 
@@ -1927,7 +1958,8 @@ export class GameScene extends Phaser.Scene {
     this.statsBar.destroy();
     this.logoutButton.destroy();
     this.chatBox.destroy();
-    this.combatLog.destroy();
+    this.nearbyPlayersPanel.destroy();
+    this.playerDetailModal.close();
     this.buildingPanel.destroy();
     this.dayNightBar?.destroy();
     this.dayNightBar = null;
@@ -2014,6 +2046,34 @@ export class GameScene extends Phaser.Scene {
   private removeRemotePlayer(id: string): void {
     this.remotePlayers.get(id)?.destroy();
     this.remotePlayers.delete(id);
+  }
+
+  // ── Nearby players ────────────────────────────────────────────
+
+  private getNearbyPlayers(): { id: string; name: string; level: number }[] {
+    const myNodeId = this.myCharacter?.current_node_id;
+    if (myNodeId == null) return [];
+    const result: { id: string; name: string; level: number }[] = [];
+    for (const data of this.remotePlayerData.values()) {
+      if (data.nodeId === myNodeId) {
+        result.push({ id: data.id, name: data.name, level: data.level });
+      }
+    }
+    return result;
+  }
+
+  private refreshNearbyPlayers(): void {
+    const nearby = this.getNearbyPlayers();
+    this.nearbyPlayersPanel.update(nearby);
+
+    // Update modal presence if open
+    if (this.playerDetailModal.isOpen()) {
+      const targetId = this.playerDetailModal.getTargetId();
+      if (targetId) {
+        const isNearby = nearby.some(p => p.id === targetId);
+        this.playerDetailModal.setPresence(isNearby);
+      }
+    }
   }
 
   // ── Boss system ─────────────────────────────────────────────────
