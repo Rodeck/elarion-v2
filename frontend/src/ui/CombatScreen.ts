@@ -17,6 +17,8 @@ import type {
   BossCombatTurnResultPayload,
   BossCombatEndPayload,
   BossHpBracket,
+  FatigueConfigDto,
+  FatigueStateDto,
 } from '../../../shared/protocol/index';
 import { getXpIconUrl, getCrownsIconUrl } from './ui-icons';
 
@@ -77,6 +79,13 @@ export class CombatScreen {
   private enemyBuffsEl: HTMLElement | null = null;
   private effectTooltipEl: HTMLElement | null = null;
 
+  // Fatigue system
+  private fatigueConfig: FatigueConfigDto | null = null;
+  private fatigueState: FatigueStateDto | null = null;
+  private fatigueTimerEl: HTMLElement | null = null;
+  private fatigueSegments: HTMLElement[] = [];
+  private fatigueIconUrl: string | null = null;
+
   // Settle queue — buffers messages arriving before the player has focused on the UI
   private readyTime = 0;
   private pendingQueue: Array<{ type: 'turn'; payload: CombatTurnResultPayload } | { type: 'active'; payload: CombatActiveWindowPayload }> = [];
@@ -108,9 +117,12 @@ export class CombatScreen {
     this.playerMaxHp   = payload.player.max_hp;
     this.playerMaxMana = payload.player.max_mana;
     this.enemyMaxHp    = payload.monster.max_hp;
+    this.fatigueConfig = payload.fatigue_config ?? null;
+    this.fatigueIconUrl = payload.fatigue_config?.icon_url ?? null;
 
     this.ensureFlashStyles();
     this.buildOverlay(payload);
+    this.buildFatigueTimer();
     this.readyTime = Date.now() + COMBAT_OPEN_SETTLE_MS;
   }
 
@@ -125,6 +137,8 @@ export class CombatScreen {
     this.playerMaxMana = payload.player.max_mana;
     this.enemyMaxHp    = 0; // Boss HP is hidden
     this.currentBossHpBracket = payload.boss.hp_bracket;
+    this.fatigueConfig = payload.fatigue_config ?? null;
+    this.fatigueIconUrl = payload.fatigue_config?.icon_url ?? null;
 
     // Convert BossCombatStartPayload to CombatStartPayload shape for buildOverlay
     const asStartPayload: CombatStartPayload = {
@@ -147,6 +161,7 @@ export class CombatScreen {
 
     this.ensureFlashStyles();
     this.buildOverlay(asStartPayload);
+    this.buildFatigueTimer();
 
     // Replace enemy HP bar with boss bracket indicator
     this.replaceBossHpBar(payload.boss.hp_bracket);
@@ -177,6 +192,7 @@ export class CombatScreen {
         enemy_hp: -1, // sentinel — boss HP is handled via bracket
         ability_states: payload.ability_states,
         active_effects: payload.active_effects ?? [],
+        fatigue_state: payload.fatigue_state,
       };
       this.pendingQueue.push({ type: 'turn', payload: wrapped });
       this.currentBossHpBracket = payload.enemy_hp_bracket;
@@ -187,6 +203,7 @@ export class CombatScreen {
     this.currentBossHpBracket = payload.enemy_hp_bracket;
     this.updateAbilityStates(payload.ability_states);
     this.updateActiveEffects(payload.active_effects ?? []);
+    if (payload.fatigue_state) this.updateFatigueTimer(payload.fatigue_state);
 
     for (const evt of payload.events) {
       this.appendLogLine(this.formatEvent(evt));
@@ -420,9 +437,12 @@ export class CombatScreen {
     this.playerMaxHp   = payload.player.max_hp;
     this.playerMaxMana = payload.player.max_mana;
     this.enemyMaxHp    = payload.monster.max_hp;
+    this.fatigueConfig = payload.fatigue_config ?? null;
+    this.fatigueIconUrl = payload.fatigue_config?.icon_url ?? null;
 
     this.ensureFlashStyles();
     this.buildOverlay(payload, container);
+    this.buildFatigueTimer();
     this.readyTime = Date.now() + COMBAT_OPEN_SETTLE_MS;
   }
 
@@ -438,6 +458,7 @@ export class CombatScreen {
 
     this.updateAbilityStates(payload.ability_states);
     this.updateActiveEffects(payload.active_effects ?? []);
+    if (payload.fatigue_state) this.updateFatigueTimer(payload.fatigue_state);
 
     for (const evt of payload.events) {
       this.appendLogLine(this.formatEvent(evt));
@@ -571,6 +592,11 @@ export class CombatScreen {
     this.playerBuffsEl = null;
     this.enemyDebuffsEl = null;
     this.enemyBuffsEl = null;
+    this.fatigueConfig = null;
+    this.fatigueState = null;
+    this.fatigueTimerEl = null;
+    this.fatigueSegments = [];
+    this.fatigueIconUrl = null;
     this.removeEffectTooltip();
   }
 
@@ -1768,6 +1794,18 @@ export class CombatScreen {
         75%  { transform: translate(-2px, 1px); }
         100% { transform: translate(0, 0); }
       }
+      /* Fatigue debuff chip shake */
+      .cs-fatigue-shake {
+        animation: cs-fatigue-chip-shake 0.5s ease-out;
+      }
+      @keyframes cs-fatigue-chip-shake {
+        0%   { transform: translate(0, 0); box-shadow: 0 0 6px rgba(201,123,255,0.8); }
+        20%  { transform: translate(-3px, 1px); }
+        40%  { transform: translate(3px, -1px); }
+        60%  { transform: translate(-2px, 1px); }
+        80%  { transform: translate(1px, -1px); }
+        100% { transform: translate(0, 0); box-shadow: none; }
+      }
       /* Red flash overlay on damaged icon */
       .cs-icon-hit-flash {
         animation: cs-hit-flash 0.5s ease-out forwards;
@@ -1876,8 +1914,30 @@ export class CombatScreen {
         const targetEl = evt.target === 'player' ? this.playerIconEl : this.enemyIconEl;
         const stagger = evt.target === 'player' ? (playerStagger += 150) - 150 : (enemyStagger += 150) - 150;
         this.showFloating(targetEl, `-${evt.value}`, '#e67e22', stagger + numberDelay, false);
+      } else if (evt.kind === 'fatigue_damage') {
+        const targetEl = evt.target === 'player' ? this.playerIconEl : this.enemyIconEl;
+        const stagger = evt.target === 'player' ? (playerStagger += 150) - 150 : (enemyStagger += 150) - 150;
+        // Distinct purple-orange color for fatigue damage
+        this.showFloating(targetEl, `-${evt.value}`, '#c97bff', stagger + numberDelay, false);
+        // Shake all fatigue debuff chips
+        this.shakeFatigueChips(stagger + numberDelay);
       }
     }
+  }
+
+  /** Trigger a shake animation on all fatigue debuff chips. */
+  private shakeFatigueChips(delay: number): void {
+    if (!this.overlay) return;
+    setTimeout(() => {
+      const chips = this.overlay?.querySelectorAll<HTMLElement>('[data-fatigue="1"]');
+      if (!chips) return;
+      for (const chip of chips) {
+        chip.classList.remove('cs-fatigue-shake');
+        void chip.offsetWidth; // reflow to restart animation
+        chip.classList.add('cs-fatigue-shake');
+        chip.addEventListener('animationend', () => chip.classList.remove('cs-fatigue-shake'), { once: true });
+      }
+    }, delay);
   }
 
   private showFloating(
@@ -1991,6 +2051,119 @@ export class CombatScreen {
   }
 
   // ---------------------------------------------------------------------------
+  // Fatigue timer bar
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Build the fatigue timer bar and insert it between the battle row and
+   * the combat log. Hidden when fatigue is disabled (start_round === 0).
+   */
+  private buildFatigueTimer(): void {
+    if (!this.fatigueConfig || this.fatigueConfig.start_round === 0) return;
+
+    const modal = this.overlay?.querySelector('.cs-modal') as HTMLElement | null;
+    if (!modal) return;
+
+    // Inject fatigue pulse animation if not present
+    if (!document.getElementById('cs-fatigue-style')) {
+      const style = document.createElement('style');
+      style.id = 'cs-fatigue-style';
+      style.textContent = `
+        @keyframes cs-fatigue-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.55; }
+        }
+        .cs-fatigue-active { animation: cs-fatigue-pulse 1.2s ease-in-out infinite; }
+      `;
+      document.head.appendChild(style);
+    }
+
+    const container = document.createElement('div');
+    container.style.cssText = [
+      'display:flex', 'align-items:center', 'gap:6px',
+      'padding:4px 10px',
+      'background:#0d0b08',
+      'border-top:1px solid #1e1a10',
+      'border-bottom:1px solid #1e1a10',
+      'width:100%', 'box-sizing:border-box',
+    ].join(';');
+
+    if (this.fatigueIconUrl) {
+      const icon = document.createElement('img');
+      icon.src = this.fatigueIconUrl;
+      icon.alt = 'Fatigue';
+      icon.style.cssText = 'width:18px;height:18px;object-fit:contain;image-rendering:pixelated;flex-shrink:0;';
+      icon.onerror = () => {
+        icon.remove();
+        const fallback = document.createElement('span');
+        fallback.style.cssText = 'font-size:0.55rem;color:#5a4a2a;letter-spacing:0.06em;text-transform:uppercase;flex-shrink:0;';
+        fallback.textContent = 'FATIGUE';
+        container.insertBefore(fallback, container.firstChild);
+      };
+      container.appendChild(icon);
+    } else {
+      const label = document.createElement('span');
+      label.style.cssText = 'font-size:0.55rem;color:#5a4a2a;letter-spacing:0.06em;text-transform:uppercase;flex-shrink:0;';
+      label.textContent = 'FATIGUE';
+      container.appendChild(label);
+    }
+
+    const segmentRow = document.createElement('div');
+    segmentRow.style.cssText = 'display:flex;gap:2px;align-items:center;flex:1;';
+
+    this.fatigueSegments = [];
+    const totalSegments = this.fatigueConfig.start_round;
+    for (let i = 0; i < totalSegments; i++) {
+      const seg = document.createElement('div');
+      seg.style.cssText = [
+        'flex:1', 'height:8px', 'border-radius:2px',
+        'background:#d4a84b',
+        'transition:background 0.3s',
+      ].join(';');
+      segmentRow.appendChild(seg);
+      this.fatigueSegments.push(seg);
+    }
+
+    container.appendChild(segmentRow);
+    this.fatigueTimerEl = container;
+
+    // Insert between the battle row (first child) and the combat log (last child)
+    const battleRow = modal.firstElementChild;
+    if (battleRow && battleRow.nextElementSibling) {
+      modal.insertBefore(container, battleRow.nextElementSibling);
+    } else {
+      modal.appendChild(container);
+    }
+  }
+
+  /** Update segment fill states and active styling based on the latest fatigue state. */
+  private updateFatigueTimer(state: FatigueStateDto): void {
+    this.fatigueState = state;
+
+    if (!this.fatigueTimerEl || this.fatigueSegments.length === 0) return;
+
+    const totalSegments = this.fatigueSegments.length;
+
+    if (state.fatigue_active) {
+      // All segments turn red with pulse
+      for (const seg of this.fatigueSegments) {
+        seg.style.background = '#c0392b';
+      }
+      if (!this.fatigueTimerEl.classList.contains('cs-fatigue-active')) {
+        this.fatigueTimerEl.classList.add('cs-fatigue-active');
+      }
+    } else {
+      this.fatigueTimerEl.classList.remove('cs-fatigue-active');
+      // Fill remaining segments (gold) and elapsed segments (dark)
+      const elapsed = state.current_round;
+      for (let i = 0; i < totalSegments; i++) {
+        const seg = this.fatigueSegments[i];
+        if (seg) seg.style.background = i < elapsed ? '#1a1510' : '#d4a84b';
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Combat log
   // ---------------------------------------------------------------------------
 
@@ -2004,7 +2177,7 @@ export class CombatScreen {
 
   private formatEvent(evt: CombatEventDto): string {
     const enemyLabel = this.bossName ?? 'Enemy';
-    const src = evt.source === 'player' ? 'You' : enemyLabel;
+    const src = evt.source === 'player' ? 'You' : evt.source === 'environment' ? 'Fatigue' : enemyLabel;
     const tgt = evt.target === 'player' ? 'you' : enemyLabel.toLowerCase();
 
     // Flash boss ability slot when boss fires an ability
@@ -2033,6 +2206,8 @@ export class CombatScreen {
         return `🔥 ${evt.effect_name ?? 'DoT'} deals ${evt.value ?? 0} to ${tgt}`;
       case 'effect_expired':
         return `✅ ${evt.effect_name ?? 'Effect'} on ${tgt} expired`;
+      case 'fatigue_damage':
+        return `🔥 Fatigue deals ${evt.value ?? 0} true damage to ${tgt}`;
       default:
         return `• ${evt.kind}`;
     }
@@ -2052,6 +2227,7 @@ export class CombatScreen {
 
   /** Human-readable label for effect type. */
   private static effectLabel(e: ActiveEffectDto): string {
+    if (e.ability_name === 'Fatigue') return 'Fatigue';
     switch (e.effect_type) {
       case 'buff': return e.stat === 'defence' ? 'DEF Up' : 'ATK Up';
       case 'debuff': return e.stat === 'defence' ? 'DEF Down' : 'Weakened';
@@ -2064,6 +2240,7 @@ export class CombatScreen {
 
   /** Short abbreviation for effect chip when no icon available. */
   private static effectAbbrev(e: ActiveEffectDto): string {
+    if (e.ability_name === 'Fatigue') return 'FTG';
     switch (e.effect_type) {
       case 'buff': return e.stat === 'defence' ? 'DEF' : 'ATK';
       case 'debuff': return e.stat === 'defence' ? 'DEF' : 'WKN';
@@ -2076,6 +2253,20 @@ export class CombatScreen {
 
   /** Update all four effect containers based on the latest active_effects array. */
   private updateActiveEffects(effects: ActiveEffectDto[]): void {
+    // Build synthetic fatigue debuff if fatigue is active
+    const fatigueDebuff: ActiveEffectDto | null = this.fatigueState?.fatigue_active
+      ? {
+          id: '__fatigue__',
+          source: 'enemy',
+          target: 'player',
+          effect_type: 'debuff',
+          value: this.fatigueState.current_damage,
+          turns_remaining: -1,
+          ability_name: 'Fatigue',
+          icon_url: this.fatigueIconUrl ?? undefined,
+        }
+      : null;
+
     // Separate effects by target
     const playerEffects = effects.filter((e) => e.target === 'player');
     const enemyEffects = effects.filter((e) => e.target === 'enemy');
@@ -2083,12 +2274,16 @@ export class CombatScreen {
     // Player side
     const playerBuffs = playerEffects.filter((e) => CombatScreen.classifyEffect(e) === 'buff');
     const playerDebuffs = playerEffects.filter((e) => CombatScreen.classifyEffect(e) === 'debuff');
+    if (fatigueDebuff) playerDebuffs.push(fatigueDebuff);
     this.renderEffectColumn(this.playerBuffsEl, playerBuffs, 'buff');
     this.renderEffectColumn(this.playerDebuffsEl, playerDebuffs, 'debuff');
 
-    // Enemy side
+    // Enemy side — fatigue also affects enemy
     const enemyBuffs = enemyEffects.filter((e) => CombatScreen.classifyEffect(e) === 'buff');
     const enemyDebuffs = enemyEffects.filter((e) => CombatScreen.classifyEffect(e) === 'debuff');
+    if (fatigueDebuff) {
+      enemyDebuffs.push({ ...fatigueDebuff, target: 'enemy' });
+    }
     this.renderEffectColumn(this.enemyBuffsEl, enemyBuffs, 'buff');
     this.renderEffectColumn(this.enemyDebuffsEl, enemyDebuffs, 'debuff');
   }
@@ -2099,8 +2294,10 @@ export class CombatScreen {
 
     for (const effect of effects) {
       const chip = document.createElement('div');
+      const isFatigue = effect.ability_name === 'Fatigue';
       const borderColor = kind === 'buff' ? '#3a8a3a' : '#8a3a3a';
       const bgColor = kind === 'buff' ? '#1a2a1a' : '#2a1a1a';
+      if (isFatigue) chip.dataset['fatigue'] = '1';
       chip.style.cssText = [
         'width:26px', 'height:26px', 'border-radius:3px',
         `border:2px solid ${borderColor}`,
@@ -2131,7 +2328,7 @@ export class CombatScreen {
         chip.appendChild(abbr);
       }
 
-      // Turn counter badge
+      // Turn counter badge (or damage value for fatigue)
       const badge = document.createElement('span');
       badge.style.cssText = [
         'position:absolute', 'bottom:-3px', 'right:-3px',
@@ -2142,7 +2339,7 @@ export class CombatScreen {
         `background:${kind === 'buff' ? '#2d7a2d' : '#7a2d2d'}`,
         'border:1px solid #0a0a0a',
       ].join(';');
-      badge.textContent = `${effect.turns_remaining}`;
+      badge.textContent = effect.turns_remaining < 0 ? `${effect.value}` : `${effect.turns_remaining}`;
       chip.appendChild(badge);
 
       // Hover tooltip
@@ -2187,16 +2384,20 @@ export class CombatScreen {
     typeEl.style.cssText = 'font-size:0.62rem;color:#b0a070;margin-bottom:3px;';
     typeEl.textContent = CombatScreen.effectLabel(effect);
     if (effect.value) {
-      typeEl.textContent += ` (${effect.value}%)`;
+      typeEl.textContent += effect.ability_name === 'Fatigue' ? ` (${effect.value} dmg)` : ` (${effect.value}%)`;
     }
     tip.appendChild(typeEl);
 
     // Turns remaining
     const turnsEl = document.createElement('div');
     turnsEl.style.cssText = 'font-size:0.6rem;color:#8a7a50;';
-    turnsEl.textContent = effect.turns_remaining === 1
-      ? '1 turn remaining'
-      : `${effect.turns_remaining} turns remaining`;
+    if (effect.turns_remaining < 0) {
+      turnsEl.textContent = `${effect.value} dmg/turn — ongoing`;
+    } else if (effect.turns_remaining === 1) {
+      turnsEl.textContent = '1 turn remaining';
+    } else {
+      turnsEl.textContent = `${effect.turns_remaining} turns remaining`;
+    }
     tip.appendChild(turnsEl);
 
     document.body.appendChild(tip);

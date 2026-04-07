@@ -1651,3 +1651,47 @@ export async function listArenaParticipants(arenaId: number): Promise<ArenaParti
 export async function kickArenaParticipant(arenaId: number, characterId: string): Promise<{ success: boolean; message: string }> {
   return request<{ success: boolean; message: string }>(`${ARENAS_BASE}/${arenaId}/kick/${characterId}`, { method: 'POST' });
 }
+
+// ---------------------------------------------------------------------------
+// Fatigue Config
+// ---------------------------------------------------------------------------
+
+const FATIGUE_CONFIG_BASE = '/api/fatigue-config';
+
+export interface FatigueConfigResponse {
+  combat_type: 'monster' | 'boss' | 'pvp';
+  start_round: number;
+  base_damage: number;
+  damage_increment: number;
+  icon_url: string | null;
+}
+
+export async function getFatigueConfigs(): Promise<FatigueConfigResponse[]> {
+  return request<FatigueConfigResponse[]>(FATIGUE_CONFIG_BASE);
+}
+
+export async function updateFatigueConfig(
+  combatType: string,
+  data: { start_round: number; base_damage: number; damage_increment: number },
+): Promise<FatigueConfigResponse> {
+  return request<FatigueConfigResponse>(`${FATIGUE_CONFIG_BASE}/${combatType}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function uploadFatigueIcon(combatType: string, file: File): Promise<FatigueConfigResponse> {
+  const token = localStorage.getItem('admin_token');
+  const form = new FormData();
+  form.append('icon', file);
+  const res = await fetch(`${FATIGUE_CONFIG_BASE}/${combatType}/icon`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}

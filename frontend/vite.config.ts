@@ -32,6 +32,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p: string) => p.replace('/assets/bosses/sprites', '/boss-sprites'),
       },
+      '/fatigue-icons': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
     },
   },
   build: {

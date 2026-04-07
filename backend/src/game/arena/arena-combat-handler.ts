@@ -37,6 +37,7 @@ import {
   broadcastToArena,
 } from './arena-state-manager';
 import { kickFromArena } from './arena-handler';
+import { getFatigueConfig } from '../../db/queries/fatigue-config';
 import {
   computePlayerAttack,
   computeAutoAbilities,
@@ -64,6 +65,7 @@ import type {
   ArenaChallengeRejectedPayload,
   ArenaParticipantUpdatedPayload,
   LoadoutSlotDto,
+  FatigueStateDto,
 } from '../../../../shared/protocol/index';
 
 // ---------------------------------------------------------------------------
@@ -106,6 +108,15 @@ interface PvpCombatSession {
   activeWindowTimer: ReturnType<typeof setTimeout> | null;
   challengerActedThisTurn: boolean;
   defenderActedThisTurn: boolean;
+  // Fatigue system state
+  fatigueStartRound: number;
+  fatigueBaseDamage: number;
+  fatigueDamageIncrement: number;
+  fatigueActive: boolean;
+  fatigueTurnCount: number;
+  fatigueOnsetDelayModifier: number;
+  fatigueImmunityRoundsLeft: number;
+  fatigueDamageReduction: number;
 }
 
 // keyed by combatId
@@ -138,6 +149,15 @@ interface ArenaNpcCombatSession {
   phase: 'player_turn' | 'active_window' | 'enemy_turn' | 'ended';
   activeWindowTimer: ReturnType<typeof setTimeout> | null;
   enemyTurnDelayRef: ReturnType<typeof setTimeout> | null;
+  // Fatigue system state
+  fatigueStartRound: number;
+  fatigueBaseDamage: number;
+  fatigueDamageIncrement: number;
+  fatigueActive: boolean;
+  fatigueTurnCount: number;
+  fatigueOnsetDelayModifier: number;
+  fatigueImmunityRoundsLeft: number;
+  fatigueDamageReduction: number;
 }
 
 // keyed by characterId
@@ -282,6 +302,9 @@ async function handleChallengePlayer(
 
   const combatId = crypto.randomUUID();
 
+  // Load fatigue configuration for PvP combat
+  const fatigueRow = await getFatigueConfig('pvp');
+
   const cs: PvpCombatSession = {
     combatId,
     arenaId,
@@ -300,6 +323,14 @@ async function handleChallengePlayer(
     activeWindowTimer: null,
     challengerActedThisTurn: false,
     defenderActedThisTurn: false,
+    fatigueStartRound: fatigueRow?.start_round ?? 0,
+    fatigueBaseDamage: fatigueRow?.base_damage ?? 0,
+    fatigueDamageIncrement: fatigueRow?.damage_increment ?? 0,
+    fatigueActive: false,
+    fatigueTurnCount: 0,
+    fatigueOnsetDelayModifier: 0,
+    fatigueImmunityRoundsLeft: 0,
+    fatigueDamageReduction: 0,
   };
 
   pvpSessions.set(combatId, cs);
@@ -331,6 +362,12 @@ async function handleChallengePlayer(
     loadout: { slots: buildAbilityStates(challengerLoadout, challengerState) },
     is_pvp: true,
     turn_timer_ms: TURN_TIMER_MS,
+    fatigue_config: fatigueRow && fatigueRow.start_round > 0 ? {
+      start_round: fatigueRow.start_round,
+      base_damage: fatigueRow.base_damage,
+      damage_increment: fatigueRow.damage_increment,
+      icon_url: fatigueRow.icon_filename ? `/fatigue-icons/${fatigueRow.icon_filename}` : undefined,
+    } : undefined,
   };
   sendToSession(session, 'arena:combat_start', challengerStartPayload);
 
@@ -359,6 +396,12 @@ async function handleChallengePlayer(
     loadout: { slots: buildAbilityStates(defenderLoadout, defenderState) },
     is_pvp: true,
     turn_timer_ms: TURN_TIMER_MS,
+    fatigue_config: fatigueRow && fatigueRow.start_round > 0 ? {
+      start_round: fatigueRow.start_round,
+      base_damage: fatigueRow.base_damage,
+      damage_increment: fatigueRow.damage_increment,
+      icon_url: fatigueRow.icon_filename ? `/fatigue-icons/${fatigueRow.icon_filename}` : undefined,
+    } : undefined,
   };
   sendToSession(defenderSession, 'arena:combat_start', defenderStartPayload);
 
@@ -639,6 +682,78 @@ function resolveAndAdvance(cs: PvpCombatSession): void {
   // SYNC HP after effects
   syncHp(cs);
 
+  // Fatigue damage (true damage bypassing defense)
+  if (cs.fatigueStartRound > 0) {
+    const effectiveStartRound = cs.fatigueStartRound + cs.fatigueOnsetDelayModifier;
+    if (cs.turn >= effectiveStartRound) {
+      if (cs.fatigueImmunityRoundsLeft > 0) {
+        cs.fatigueImmunityRoundsLeft -= 1;
+        // Push to challenger perspective only; remapEventsForOpponent produces defender's view
+        challengerEvents.push(
+          { kind: 'fatigue_damage', source: 'environment', target: 'player', value: 0 },
+          { kind: 'fatigue_damage', source: 'environment', target: 'enemy', value: 0 },
+        );
+      } else {
+        const rawDamage = cs.fatigueBaseDamage + cs.fatigueTurnCount * cs.fatigueDamageIncrement;
+        const reductionMultiplier = Math.max(0, 1 - cs.fatigueDamageReduction / 100);
+        const fatigueDamage = Math.round(rawDamage * reductionMultiplier);
+
+        // Apply true damage to both players
+        cs.challengerState.playerHp = Math.max(0, cs.challengerState.playerHp - fatigueDamage);
+        cs.defenderState.playerHp = Math.max(0, cs.defenderState.playerHp - fatigueDamage);
+        // Keep enemy HP views in sync
+        cs.challengerState.enemyHp = cs.defenderState.playerHp;
+        cs.defenderState.enemyHp = cs.challengerState.playerHp;
+
+        // Push to challenger perspective only; remapEventsForOpponent produces defender's view
+        challengerEvents.push(
+          { kind: 'fatigue_damage', source: 'environment', target: 'player', value: fatigueDamage },
+          { kind: 'fatigue_damage', source: 'environment', target: 'enemy', value: fatigueDamage },
+        );
+
+        cs.fatigueTurnCount += 1;
+      }
+
+      cs.fatigueActive = true;
+
+      log('info', 'arena', 'fatigue_damage_applied', {
+        combat_id: cs.combatId,
+        arena_id: cs.arenaId,
+        challenger_id: cs.challengerId,
+        defender_id: cs.defenderId,
+        round: cs.turn,
+        damage: cs.fatigueImmunityRoundsLeft >= 0 && cs.fatigueTurnCount === 0
+          ? 0
+          : cs.fatigueBaseDamage + (cs.fatigueTurnCount - 1) * cs.fatigueDamageIncrement,
+        challenger_hp: cs.challengerState.playerHp,
+        defender_hp: cs.defenderState.playerHp,
+      });
+
+      // Simultaneous KO from fatigue: DEFENDER wins
+      if (cs.challengerState.playerHp <= 0 && cs.defenderState.playerHp <= 0) {
+        cs.challengerState.playerHp = 0;
+        cs.defenderState.playerHp = 1;
+        cs.challengerState.enemyHp = 1;
+        cs.defenderState.enemyHp = 0;
+        sendPvpTurnResult(cs, 'enemy', challengerEvents, defenderEvents);
+        void endPvpCombat(cs, cs.defenderId, cs.challengerId);
+        return;
+      }
+
+      if (cs.challengerState.playerHp <= 0) {
+        sendPvpTurnResult(cs, 'enemy', challengerEvents, defenderEvents);
+        void endPvpCombat(cs, cs.defenderId, cs.challengerId);
+        return;
+      }
+
+      if (cs.defenderState.playerHp <= 0) {
+        sendPvpTurnResult(cs, 'enemy', challengerEvents, defenderEvents);
+        void endPvpCombat(cs, cs.challengerId, cs.defenderId);
+        return;
+      }
+    }
+  }
+
   // Tick cooldowns for both
   cs.challengerState = tickAbilityCooldowns(cs.challengerState);
   cs.defenderState = tickAbilityCooldowns(cs.defenderState);
@@ -904,6 +1019,8 @@ function sendPvpTurnResult(
     ...remapEventsForOpponent(challengerEvents),
   ];
 
+  const fatigueState = buildFatigueState(cs);
+
   const challengerPayload: ArenaCombatTurnResultPayload = {
     combat_id: cs.combatId,
     turn: cs.turn,
@@ -914,6 +1031,7 @@ function sendPvpTurnResult(
     opponent_hp: cs.challengerState.enemyHp,
     ability_states: buildAbilityStates(cs.challengerLoadout, cs.challengerState),
     active_effects: serializeActiveEffects(cs.challengerLoadout, cs.challengerState),
+    fatigue_state: fatigueState,
   };
   sendToSession(cs.challengerSession, 'arena:combat_turn_result', challengerPayload);
 
@@ -927,6 +1045,7 @@ function sendPvpTurnResult(
     opponent_hp: cs.defenderState.enemyHp,
     ability_states: buildAbilityStates(cs.defenderLoadout, cs.defenderState),
     active_effects: serializeActiveEffects(cs.defenderLoadout, cs.defenderState),
+    fatigue_state: fatigueState,
   };
   sendToSession(cs.defenderSession, 'arena:combat_turn_result', defenderPayload);
 }
@@ -938,13 +1057,35 @@ function sendPvpTurnResult(
 function remapEventsForOpponent(events: CombatEventDto[]): CombatEventDto[] {
   return events.map((e) => ({
     ...e,
-    source: flipSide(e.source),
-    target: flipSide(e.target),
+    source: flipSource(e.source),
+    target: flipTarget(e.target),
   }));
 }
 
-function flipSide(side: 'player' | 'enemy'): 'player' | 'enemy' {
+function flipSource(side: 'player' | 'enemy' | 'environment'): 'player' | 'enemy' | 'environment' {
+  if (side === 'environment') return 'environment';
   return side === 'player' ? 'enemy' : 'player';
+}
+
+function flipTarget(side: 'player' | 'enemy'): 'player' | 'enemy' {
+  return side === 'player' ? 'enemy' : 'player';
+}
+
+// ---------------------------------------------------------------------------
+// Fatigue state builder (shared by PvP and NPC sessions)
+// ---------------------------------------------------------------------------
+
+function buildFatigueState(cs: PvpCombatSession | ArenaNpcCombatSession): FatigueStateDto | undefined {
+  if (cs.fatigueStartRound <= 0) return undefined;
+  return {
+    current_round: cs.turn,
+    fatigue_active: cs.fatigueActive,
+    current_damage: cs.fatigueActive
+      ? (cs.fatigueBaseDamage + Math.max(0, cs.fatigueTurnCount - 1) * cs.fatigueDamageIncrement)
+      : 0,
+    immunity_rounds_left: cs.fatigueImmunityRoundsLeft,
+    effective_start_round: cs.fatigueStartRound + cs.fatigueOnsetDelayModifier,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1196,6 +1337,9 @@ async function handleChallengeNpc(
 
   const combatId = crypto.randomUUID();
 
+  // Load fatigue configuration for arena NPC combat (uses 'pvp' config)
+  const npcFatigueRow = await getFatigueConfig('pvp');
+
   const cs: ArenaNpcCombatSession = {
     combatId,
     arenaId,
@@ -1215,6 +1359,14 @@ async function handleChallengeNpc(
     phase: 'player_turn',
     activeWindowTimer: null,
     enemyTurnDelayRef: null,
+    fatigueStartRound: npcFatigueRow?.start_round ?? 0,
+    fatigueBaseDamage: npcFatigueRow?.base_damage ?? 0,
+    fatigueDamageIncrement: npcFatigueRow?.damage_increment ?? 0,
+    fatigueActive: false,
+    fatigueTurnCount: 0,
+    fatigueOnsetDelayModifier: 0,
+    fatigueImmunityRoundsLeft: 0,
+    fatigueDamageReduction: 0,
   };
 
   npcSessions.set(characterId, cs);
@@ -1248,6 +1400,12 @@ async function handleChallengeNpc(
     loadout: { slots: buildAbilityStates(loadout, engineState) },
     is_pvp: false,
     turn_timer_ms: TURN_TIMER_MS,
+    fatigue_config: npcFatigueRow && npcFatigueRow.start_round > 0 ? {
+      start_round: npcFatigueRow.start_round,
+      base_damage: npcFatigueRow.base_damage,
+      damage_increment: npcFatigueRow.damage_increment,
+      icon_url: npcFatigueRow.icon_filename ? `/fatigue-icons/${npcFatigueRow.icon_filename}` : undefined,
+    } : undefined,
   };
   sendToSession(session, 'arena:combat_start', startPayload);
 
@@ -1397,6 +1555,70 @@ async function runNpcEnemyTurn(cs: ArenaNpcCombatSession): Promise<void> {
   // Tick cooldowns
   cs.engineState = tickAbilityCooldowns(cs.engineState);
 
+  // Fatigue damage (true damage bypassing defense)
+  if (cs.fatigueStartRound > 0) {
+    const effectiveStartRound = cs.fatigueStartRound + cs.fatigueOnsetDelayModifier;
+    if (cs.turn >= effectiveStartRound) {
+      if (cs.fatigueImmunityRoundsLeft > 0) {
+        cs.fatigueImmunityRoundsLeft -= 1;
+        enemyEvents.push(
+          { kind: 'fatigue_damage', source: 'environment', target: 'player', value: 0 },
+          { kind: 'fatigue_damage', source: 'environment', target: 'enemy', value: 0 },
+        );
+      } else {
+        const rawDamage = cs.fatigueBaseDamage + cs.fatigueTurnCount * cs.fatigueDamageIncrement;
+        const reductionMultiplier = Math.max(0, 1 - cs.fatigueDamageReduction / 100);
+        const fatigueDamage = Math.round(rawDamage * reductionMultiplier);
+
+        cs.engineState.playerHp = Math.max(0, cs.engineState.playerHp - fatigueDamage);
+        cs.engineState.enemyHp = Math.max(0, cs.engineState.enemyHp - fatigueDamage);
+
+        enemyEvents.push(
+          { kind: 'fatigue_damage', source: 'environment', target: 'player', value: fatigueDamage },
+          { kind: 'fatigue_damage', source: 'environment', target: 'enemy', value: fatigueDamage },
+        );
+
+        cs.fatigueTurnCount += 1;
+      }
+
+      cs.fatigueActive = true;
+
+      log('info', 'arena', 'fatigue_damage_applied', {
+        combat_id: cs.combatId,
+        arena_id: cs.arenaId,
+        character_id: cs.characterId,
+        monster_id: cs.monsterId,
+        round: cs.turn,
+        damage: cs.fatigueImmunityRoundsLeft >= 0 && cs.fatigueTurnCount === 0
+          ? 0
+          : cs.fatigueBaseDamage + (cs.fatigueTurnCount - 1) * cs.fatigueDamageIncrement,
+        player_hp: cs.engineState.playerHp,
+        enemy_hp: cs.engineState.enemyHp,
+      });
+
+      // Simultaneous KO from fatigue: player wins (same as monster combat)
+      if (cs.engineState.playerHp <= 0 && cs.engineState.enemyHp <= 0) {
+        cs.engineState.enemyHp = 0;
+        cs.engineState.playerHp = 1;
+        sendNpcTurnResult(cs, 'enemy', enemyEvents);
+        await endNpcCombat(cs, 'win');
+        return;
+      }
+
+      if (cs.engineState.enemyHp <= 0) {
+        sendNpcTurnResult(cs, 'enemy', enemyEvents);
+        await endNpcCombat(cs, 'win');
+        return;
+      }
+
+      if (cs.engineState.playerHp <= 0) {
+        sendNpcTurnResult(cs, 'enemy', enemyEvents);
+        await endNpcCombat(cs, 'loss');
+        return;
+      }
+    }
+  }
+
   if (cs.engineState.enemyHp <= 0) {
     sendNpcTurnResult(cs, 'enemy', enemyEvents);
     await endNpcCombat(cs, 'win');
@@ -1539,6 +1761,7 @@ function sendNpcTurnResult(cs: ArenaNpcCombatSession, phase: 'player' | 'enemy',
     opponent_hp: cs.engineState.enemyHp,
     ability_states: buildAbilityStates(cs.loadout, cs.engineState),
     active_effects: serializeActiveEffects(cs.loadout, cs.engineState),
+    fatigue_state: buildFatigueState(cs),
   };
   sendToSession(cs.session, 'arena:combat_turn_result', payload);
 }

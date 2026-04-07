@@ -50,6 +50,10 @@ export default defineConfig({
         target: 'http://localhost:4001',
         changeOrigin: true,
       },
+      '/fatigue-icons': {
+        target: 'http://localhost:4001',
+        changeOrigin: true,
+      },
     },
   },
 });

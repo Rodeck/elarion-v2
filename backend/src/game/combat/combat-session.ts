@@ -14,6 +14,7 @@ import { sendToSession } from '../../websocket/server';
 import { awardXp } from '../progression/xp-service';
 import { grantItemToCharacter } from '../inventory/inventory-grant-service';
 import { awardCrowns, rollCrownDrop } from '../currency/crown-service';
+import { getFatigueConfig } from '../../db/queries/fatigue-config';
 import { getLootByMonsterId } from '../../db/queries/monster-loot';
 import { getRandomItemByCategory } from '../../db/queries/inventory';
 import { getAbilityLootByMonsterId } from '../../db/queries/abilities';
@@ -89,6 +90,17 @@ export class CombatSession {
   private activeWindowTimerRef: ReturnType<typeof setTimeout> | null = null;
   private enemyTurnDelayRef: ReturnType<typeof setTimeout> | null = null;
 
+  // Fatigue system state
+  private fatigueStartRound = 0;
+  private fatigueBaseDamage = 0;
+  private fatigueDamageIncrement = 0;
+  private fatigueActive = false;
+  private fatigueTurnCount = 0;
+  // Future modifier hooks (default 0 — no modifiers ship with this feature)
+  private fatigueOnsetDelayModifier = 0;
+  private fatigueImmunityRoundsLeft = 0;
+  private fatigueDamageReduction = 0;
+
   private readonly wsSession: AuthenticatedSession;
 
   constructor(
@@ -128,7 +140,15 @@ export class CombatSession {
   getPhase(): string       { return this.phase; }
 
   /** Called by CombatSessionManager after construction. Sends combat:start and begins the first turn. */
-  start(): void {
+  async start(): Promise<void> {
+    // Load fatigue configuration for monster combat
+    const fatigueRow = await getFatigueConfig('monster');
+    if (fatigueRow && fatigueRow.start_round > 0) {
+      this.fatigueStartRound = fatigueRow.start_round;
+      this.fatigueBaseDamage = fatigueRow.base_damage;
+      this.fatigueDamageIncrement = fatigueRow.damage_increment;
+    }
+
     log('info', 'combat', 'combat_session_started', {
       combatId:    this.combatId,
       characterId: this.characterId,
@@ -159,6 +179,12 @@ export class CombatSession {
       },
       turn_timer_ms: TURN_TIMER_MS,
       active_effects: [],
+      fatigue_config: fatigueRow && fatigueRow.start_round > 0 ? {
+        start_round: fatigueRow.start_round,
+        base_damage: fatigueRow.base_damage,
+        damage_increment: fatigueRow.damage_increment,
+        icon_url: fatigueRow.icon_filename ? `/fatigue-icons/${fatigueRow.icon_filename}` : undefined,
+      } : undefined,
     };
 
     sendToSession(this.wsSession, 'combat:start', startPayload);
@@ -327,6 +353,68 @@ export class CombatSession {
       this.sendTurnResult('enemy', allEvents);
       void this.endCombat('win');
       return;
+    }
+
+    // 6b. Fatigue damage (true damage bypassing defense)
+    if (this.fatigueStartRound > 0) {
+      const effectiveStartRound = this.fatigueStartRound + this.fatigueOnsetDelayModifier;
+      if (this.turn >= effectiveStartRound) {
+        if (this.fatigueImmunityRoundsLeft > 0) {
+          this.fatigueImmunityRoundsLeft -= 1;
+          allEvents.push(
+            { kind: 'fatigue_damage', source: 'environment', target: 'player', value: 0 },
+            { kind: 'fatigue_damage', source: 'environment', target: 'enemy', value: 0 },
+          );
+        } else {
+          const rawDamage = this.fatigueBaseDamage + this.fatigueTurnCount * this.fatigueDamageIncrement;
+          const reductionMultiplier = Math.max(0, 1 - this.fatigueDamageReduction / 100);
+          const fatigueDamage = Math.round(rawDamage * reductionMultiplier);
+
+          this.engineState.playerHp = Math.max(0, this.engineState.playerHp - fatigueDamage);
+          this.engineState.enemyHp = Math.max(0, this.engineState.enemyHp - fatigueDamage);
+
+          allEvents.push(
+            { kind: 'fatigue_damage', source: 'environment', target: 'player', value: fatigueDamage },
+            { kind: 'fatigue_damage', source: 'environment', target: 'enemy', value: fatigueDamage },
+          );
+
+          this.fatigueTurnCount += 1;
+        }
+
+        this.fatigueActive = true;
+
+        log('info', 'combat', 'fatigue_damage_applied', {
+          combatId:    this.combatId,
+          characterId: this.characterId,
+          round:       this.turn,
+          damage:      this.fatigueTurnCount > 0
+            ? this.fatigueBaseDamage + (this.fatigueTurnCount - 1) * this.fatigueDamageIncrement
+            : 0,
+          playerHp:    this.engineState.playerHp,
+          enemyHp:     this.engineState.enemyHp,
+        });
+
+        // Simultaneous KO: player (initiator) wins
+        if (this.engineState.playerHp <= 0 && this.engineState.enemyHp <= 0) {
+          this.engineState.enemyHp = 0;
+          this.engineState.playerHp = 1;
+          this.sendTurnResult('enemy', allEvents);
+          void this.endCombat('win');
+          return;
+        }
+
+        if (this.engineState.enemyHp <= 0) {
+          this.sendTurnResult('enemy', allEvents);
+          void this.endCombat('win');
+          return;
+        }
+
+        if (this.engineState.playerHp <= 0) {
+          this.sendTurnResult('enemy', allEvents);
+          void this.endCombat('loss');
+          return;
+        }
+      }
     }
 
     // 7. Enemy turn
@@ -575,6 +663,15 @@ export class CombatSession {
       enemy_hp:       this.engineState.enemyHp,
       ability_states: this.buildAbilityStates(),
       active_effects: this.serializeActiveEffects(),
+      fatigue_state: this.fatigueStartRound > 0 ? {
+        current_round:         this.turn,
+        fatigue_active:        this.fatigueActive,
+        current_damage:        this.fatigueActive
+          ? (this.fatigueBaseDamage + Math.max(0, this.fatigueTurnCount - 1) * this.fatigueDamageIncrement)
+          : 0,
+        immunity_rounds_left:  this.fatigueImmunityRoundsLeft,
+        effective_start_round: this.fatigueStartRound + this.fatigueOnsetDelayModifier,
+      } : undefined,
     };
     sendToSession(this.wsSession, 'combat:turn_result', payload);
   }

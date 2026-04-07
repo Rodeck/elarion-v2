@@ -14,6 +14,7 @@ import { monstersRouter } from './routes/monsters';
 import { adminToolsRouter } from './routes/admin-tools';
 import { imagePromptsRouter } from './routes/image-prompts';
 import { adminConfigRouter } from './routes/admin-config';
+import { fatigueConfigRouter } from './routes/fatigue-config';
 import { aiGenerateRouter } from './routes/ai-generate';
 import { encounterTablesRouter } from './routes/encounter-tables';
 import { npcsRouter } from './routes/npcs';
@@ -70,6 +71,10 @@ app.use('/boss-sprites', express.static(bossSpritesDir));
 const uiIconsDir = path.resolve(__dirname, '../../../backend/assets/ui-icons');
 app.use('/ui-icons', express.static(uiIconsDir));
 
+// Serve fatigue icons statically
+const fatigueIconsDir = path.resolve(__dirname, '../../../backend/assets/fatigue-icons');
+app.use('/fatigue-icons', express.static(fatigueIconsDir));
+
 // Public auth routes (must be before requireAdmin middleware)
 app.use(authRouter);
 
@@ -88,6 +93,7 @@ app.use('/api/monsters', monstersRouter);
 app.use('/api/admin-tools', adminToolsRouter);
 app.use('/api/image-prompts', imagePromptsRouter);
 app.use('/api/admin-config', adminConfigRouter);
+app.use('/api/fatigue-config', fatigueConfigRouter);
 app.use('/api/ai', aiGenerateRouter);
 app.use('/api/encounter-tables', encounterTablesRouter);
 app.use('/api/npcs', npcsRouter);

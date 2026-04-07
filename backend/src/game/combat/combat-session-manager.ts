@@ -30,7 +30,7 @@ class CombatSessionManagerImpl {
 
       const session = new CombatSession(wsSession, character, monster, stats, loadoutSlots);
       this.sessions.set(character.id, session);
-      session.start();
+      await session.start();
     } catch (err) {
       log('error', 'combat', 'session_start_failed', { characterId: character.id, err });
       await setCharacterInCombat(character.id, false).catch(() => undefined);

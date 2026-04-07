@@ -4,6 +4,7 @@ import { MonsterManager } from './ui/monster-manager';
 import { AdminTools } from './ui/admin-tools';
 import { ImagePromptManager } from './ui/image-prompt-manager';
 import { AdminConfigManager } from './ui/admin-config-manager';
+import { FatigueConfigManager } from './ui/fatigue-config-manager';
 import { EncounterTableManager } from './ui/encounter-table-manager';
 import { NpcManager } from './ui/npc-manager';
 import { AbilityManager } from './ui/ability-manager';
@@ -53,6 +54,7 @@ let squireDefManager: SquireDefinitionManager | null = null;
 let fishingManager: FishingManager | null = null;
 let bossManager: BossManager | null = null;
 let arenaManager: ArenaManager | null = null;
+let fatigueConfigManager: FatigueConfigManager | null = null;
 let toolbar: Toolbar | null = null;
 let canvas: MapCanvas | null = null;
 let modeManager: EditorModeManager | null = null;
@@ -124,11 +126,12 @@ function destroyAll(): void {
   recipeManager = null;
   bossManager = null;
   arenaManager = null;
+  fatigueConfigManager = null;
   destroyEditor();
   app.innerHTML = '';
 }
 
-async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' | 'quests' | 'squires' | 'fishing' | 'bosses' | 'arenas' = 'maps'): Promise<void> {
+async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' | 'quests' | 'squires' | 'fishing' | 'bosses' | 'arenas' | 'fatigue' = 'maps'): Promise<void> {
   destroyAll();
 
   // Tab bar — hidden until authenticated
@@ -151,6 +154,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     <button class="btn ${activeTab === 'fishing' ? 'btn--active' : ''}" id="tab-fishing">Fishing</button>
     <button class="btn ${activeTab === 'bosses' ? 'btn--active' : ''}" id="tab-bosses">Bosses</button>
     <button class="btn ${activeTab === 'arenas' ? 'btn--active' : ''}" id="tab-arenas">Arenas</button>
+    <button class="btn ${activeTab === 'fatigue' ? 'btn--active' : ''}" id="tab-fatigue">Fatigue</button>
     <div style="flex:1"></div>
     <span style="font-size:0.75rem;color:#2d3347;align-self:center;padding-right:0.5rem;letter-spacing:0.05em;font-weight:600;">ELARION ADMIN</span>
   `;
@@ -227,7 +231,12 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
   arenaManagerPanel.style.display = activeTab === 'arenas' ? '' : 'none';
   app.appendChild(arenaManagerPanel);
 
-  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' | 'quests' | 'squires' | 'fishing' | 'bosses' | 'arenas'): void {
+  const fatigueConfigPanel = document.createElement('div');
+  fatigueConfigPanel.id = 'fatigue-config';
+  fatigueConfigPanel.style.display = activeTab === 'fatigue' ? '' : 'none';
+  app.appendChild(fatigueConfigPanel);
+
+  function setActiveTab(tab: 'maps' | 'items' | 'monsters' | 'admin-tools' | 'image-prompts' | 'config' | 'npcs' | 'abilities' | 'recipes' | 'quests' | 'squires' | 'fishing' | 'bosses' | 'arenas' | 'fatigue'): void {
     mapEditorPanel.style.display = tab === 'maps' ? '' : 'none';
     itemManagerPanel.style.display = tab === 'items' ? '' : 'none';
     monsterManagerPanel.style.display = tab === 'monsters' ? '' : 'none';
@@ -242,6 +251,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     fishingManagerPanel.style.display = tab === 'fishing' ? '' : 'none';
     bossManagerPanel.style.display = tab === 'bosses' ? '' : 'none';
     arenaManagerPanel.style.display = tab === 'arenas' ? '' : 'none';
+    fatigueConfigPanel.style.display = tab === 'fatigue' ? '' : 'none';
     tabBar.querySelector('#tab-maps')!.classList.toggle('btn--active', tab === 'maps');
     tabBar.querySelector('#tab-items')!.classList.toggle('btn--active', tab === 'items');
     tabBar.querySelector('#tab-monsters')!.classList.toggle('btn--active', tab === 'monsters');
@@ -256,6 +266,7 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     tabBar.querySelector('#tab-fishing')!.classList.toggle('btn--active', tab === 'fishing');
     tabBar.querySelector('#tab-bosses')!.classList.toggle('btn--active', tab === 'bosses');
     tabBar.querySelector('#tab-arenas')!.classList.toggle('btn--active', tab === 'arenas');
+    tabBar.querySelector('#tab-fatigue')!.classList.toggle('btn--active', tab === 'fatigue');
   }
 
   tabBar.querySelector('#tab-maps')!.addEventListener('click', () => setActiveTab('maps'));
@@ -377,6 +388,15 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     }
   });
 
+  tabBar.querySelector('#tab-fatigue')!.addEventListener('click', async () => {
+    setActiveTab('fatigue');
+    if (!fatigueConfigManager) {
+      fatigueConfigManager = new FatigueConfigManager();
+      fatigueConfigManager.init(fatigueConfigPanel);
+      await fatigueConfigManager.load();
+    }
+  });
+
   // Initialize map list
   mapListView = new MapListView(mapEditorPanel);
   mapListView.setOnEditMap((mapId) => {
@@ -425,6 +445,10 @@ async function showMapList(activeTab: 'maps' | 'items' | 'monsters' | 'admin-too
     arenaManager = new ArenaManager();
     arenaManager.init(arenaManagerPanel);
     await arenaManager.load();
+  } else if (activeTab === 'fatigue') {
+    fatigueConfigManager = new FatigueConfigManager();
+    fatigueConfigManager.init(fatigueConfigPanel);
+    await fatigueConfigManager.load();
   }
 }
 

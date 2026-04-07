@@ -916,6 +916,16 @@ async function statTraining() {
   table(res.rows, ['id', 'item_name', 'stat_name', 'tier', 'base_chance', 'decay_per_level', 'npc_name']);
 }
 
+async function fatigueConfig() {
+  section('Fatigue Configuration');
+  const res = await pool.query(`
+    SELECT combat_type, start_round, base_damage, damage_increment, updated_at
+    FROM fatigue_config
+    ORDER BY combat_type
+  `);
+  table(res.rows, ['combat_type', 'start_round', 'base_damage', 'damage_increment', 'updated_at']);
+}
+
 async function characterStats(name) {
   if (!name) { console.error('Usage: character-stats <name>'); return; }
   const res = await pool.query(`
@@ -986,6 +996,7 @@ Commands:
   disassembly [item_id]    Disassembly recipes with chance entries and outputs
   economy                  Crown sources/sinks, equipment stats, expedition rewards
   stat-training            Stat training item mappings with tiers and success rates
+  fatigue-config           Fatigue settings per combat type (start round, base damage, increment)
   ability-levels [id]      Ability level scaling (optional: filter by ability ID)
   ability-progress [id]    Character ability progress (optional: filter by character ID)
   character-stats <name>   Character attributes, unspent points, derived stats
@@ -1025,6 +1036,7 @@ async function main() {
       case 'bosses':       await bosses(); break;
       case 'boss-instances': await bossInstances(); break;
       case 'stat-training':  await statTraining(); break;
+      case 'fatigue-config': await fatigueConfig(); break;
       case 'ability-levels':   await abilityLevels(args[0]); break;
       case 'ability-progress': await abilityProgress(args[0]); break;
       case 'sql':       await rawSql(args.join(' ')); break;

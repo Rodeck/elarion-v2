@@ -12,6 +12,7 @@ import { sendToSession } from '../../websocket/server';
 import { findByAccountId } from '../../db/queries/characters';
 import { getInventoryWithDefinitions, updateInventoryQuantity, deleteInventoryItem, getRandomItemByCategory } from '../../db/queries/inventory';
 import { computeCombatStats } from '../combat/combat-stats-service';
+import { getFatigueConfig } from '../../db/queries/fatigue-config';
 import { getCharacterLoadout, setCharacterInCombat } from '../../db/queries/loadouts';
 import { awardXp } from '../progression/xp-service';
 import { buildAbilityIconUrl } from '../../db/queries/abilities';
@@ -73,6 +74,15 @@ interface BossCombatSession {
   enemyMaxHp: number;
   effectiveAttack: number;
   effectiveDefense: number;
+  // Fatigue system state
+  fatigueStartRound: number;
+  fatigueBaseDamage: number;
+  fatigueDamageIncrement: number;
+  fatigueActive: boolean;
+  fatigueTurnCount: number;
+  fatigueOnsetDelayModifier: number;
+  fatigueImmunityRoundsLeft: number;
+  fatigueDamageReduction: number;
 }
 
 interface CombatLoadout {
@@ -175,6 +185,9 @@ export async function handleBossChallenge(
   // Get effective combat stats (randomized per instance)
   const instanceStats = bossManager.getInstanceCombatStats(boss_id);
 
+  // Load fatigue configuration for boss combat
+  const fatigueRow = await getFatigueConfig('boss');
+
   const combatSession: BossCombatSession = {
     combatId: crypto.randomUUID(),
     session,
@@ -193,6 +206,15 @@ export async function handleBossChallenge(
     enemyMaxHp: result.instance.current_hp, // instance HP (randomized on spawn)
     effectiveAttack: instanceStats.attack,
     effectiveDefense: instanceStats.defense,
+    // Fatigue state
+    fatigueStartRound: fatigueRow && fatigueRow.start_round > 0 ? fatigueRow.start_round : 0,
+    fatigueBaseDamage: fatigueRow?.base_damage ?? 0,
+    fatigueDamageIncrement: fatigueRow?.damage_increment ?? 0,
+    fatigueActive: false,
+    fatigueTurnCount: 0,
+    fatigueOnsetDelayModifier: 0,
+    fatigueImmunityRoundsLeft: 0,
+    fatigueDamageReduction: 0,
   };
 
   activeSessions.set(characterId, combatSession);
@@ -223,6 +245,12 @@ export async function handleBossChallenge(
     loadout: { slots: buildAbilityStates(combatSession) },
     turn_timer_ms: TURN_TIMER_MS,
     active_effects: [],
+    fatigue_config: fatigueRow && fatigueRow.start_round > 0 ? {
+      start_round: fatigueRow.start_round,
+      base_damage: fatigueRow.base_damage,
+      damage_increment: fatigueRow.damage_increment,
+      icon_url: fatigueRow.icon_filename ? `/fatigue-icons/${fatigueRow.icon_filename}` : undefined,
+    } : undefined,
   };
 
   sendToSession(session, 'boss:combat_start', startPayload);
@@ -389,6 +417,69 @@ async function runEnemyTurn(cs: BossCombatSession): Promise<void> {
     sendTurnResult(cs, 'enemy', enemyEvents);
     await endCombat(cs, 'win');
     return;
+  }
+
+  // Fatigue damage (true damage bypassing defense)
+  if (cs.fatigueStartRound > 0) {
+    const effectiveStartRound = cs.fatigueStartRound + cs.fatigueOnsetDelayModifier;
+    if (cs.turn >= effectiveStartRound) {
+      if (cs.fatigueImmunityRoundsLeft > 0) {
+        cs.fatigueImmunityRoundsLeft -= 1;
+        enemyEvents.push(
+          { kind: 'fatigue_damage', source: 'environment', target: 'player', value: 0 },
+          { kind: 'fatigue_damage', source: 'environment', target: 'enemy', value: 0 },
+        );
+      } else {
+        const rawDamage = cs.fatigueBaseDamage + cs.fatigueTurnCount * cs.fatigueDamageIncrement;
+        const reductionMultiplier = Math.max(0, 1 - cs.fatigueDamageReduction / 100);
+        const fatigueDamage = Math.round(rawDamage * reductionMultiplier);
+
+        cs.engineState.playerHp = Math.max(0, cs.engineState.playerHp - fatigueDamage);
+        cs.engineState.enemyHp = Math.max(0, cs.engineState.enemyHp - fatigueDamage);
+
+        enemyEvents.push(
+          { kind: 'fatigue_damage', source: 'environment', target: 'player', value: fatigueDamage },
+          { kind: 'fatigue_damage', source: 'environment', target: 'enemy', value: fatigueDamage },
+        );
+
+        cs.fatigueTurnCount += 1;
+      }
+
+      cs.fatigueActive = true;
+
+      log('info', 'boss', 'fatigue_damage_applied', {
+        combat_id:    cs.combatId,
+        character_id: cs.characterId,
+        boss_id:      cs.bossId,
+        round:        cs.turn,
+        damage:       cs.fatigueImmunityRoundsLeft >= 0 && cs.fatigueTurnCount === 0
+          ? 0
+          : cs.fatigueBaseDamage + (cs.fatigueTurnCount - 1) * cs.fatigueDamageIncrement,
+        playerHp:     cs.engineState.playerHp,
+        enemyHp:      cs.engineState.enemyHp,
+      });
+
+      // Simultaneous KO: player (challenger) wins
+      if (cs.engineState.playerHp <= 0 && cs.engineState.enemyHp <= 0) {
+        cs.engineState.enemyHp = 0;
+        cs.engineState.playerHp = 1;
+        sendTurnResult(cs, 'enemy', enemyEvents);
+        await endCombat(cs, 'win');
+        return;
+      }
+
+      if (cs.engineState.enemyHp <= 0) {
+        sendTurnResult(cs, 'enemy', enemyEvents);
+        await endCombat(cs, 'win');
+        return;
+      }
+
+      if (cs.engineState.playerHp <= 0) {
+        sendTurnResult(cs, 'enemy', enemyEvents);
+        await endCombat(cs, 'loss');
+        return;
+      }
+    }
   }
 
   // Boss abilities (fire by priority, unlimited mana, gated by cooldown)
@@ -577,6 +668,15 @@ function sendTurnResult(cs: BossCombatSession, phase: 'player' | 'enemy', events
     enemy_hp_bracket: bossManager.hpToBracket(cs.engineState.enemyHp, cs.enemyMaxHp),
     ability_states: buildAbilityStates(cs),
     active_effects: serializeActiveEffects(cs),
+    fatigue_state: cs.fatigueStartRound > 0 ? {
+      current_round:         cs.turn,
+      fatigue_active:        cs.fatigueActive,
+      current_damage:        cs.fatigueActive
+        ? (cs.fatigueBaseDamage + Math.max(0, cs.fatigueTurnCount - 1) * cs.fatigueDamageIncrement)
+        : 0,
+      immunity_rounds_left:  cs.fatigueImmunityRoundsLeft,
+      effective_start_round: cs.fatigueStartRound + cs.fatigueOnsetDelayModifier,
+    } : undefined,
   };
   sendToSession(cs.session, 'boss:combat_turn_result', payload);
 }

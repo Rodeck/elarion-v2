@@ -932,11 +932,27 @@ export type CombatEventKind =
   | 'crit'
   | 'effect_applied'
   | 'effect_tick'
-  | 'effect_expired';
+  | 'effect_expired'
+  | 'fatigue_damage';
+
+export interface FatigueConfigDto {
+  start_round: number;
+  base_damage: number;
+  damage_increment: number;
+  icon_url?: string;
+}
+
+export interface FatigueStateDto {
+  current_round: number;
+  fatigue_active: boolean;
+  current_damage: number;
+  immunity_rounds_left: number;
+  effective_start_round: number;
+}
 
 export interface CombatEventDto {
   kind: CombatEventKind;
-  source: 'player' | 'enemy';
+  source: 'player' | 'enemy' | 'environment';
   target: 'player' | 'enemy';
   value?: number;
   ability_name?: string;
@@ -1038,6 +1054,7 @@ export interface CombatStartPayload {
   turn_timer_ms: number;
   active_effects: ActiveEffectDto[];
   initial_enemy_hp?: number;
+  fatigue_config?: FatigueConfigDto;
 }
 
 export interface CombatTurnResultPayload {
@@ -1050,6 +1067,7 @@ export interface CombatTurnResultPayload {
   enemy_hp: number;
   ability_states: CombatAbilityStateDto[];
   active_effects: ActiveEffectDto[];
+  fatigue_state?: FatigueStateDto;
 }
 
 export interface CombatActiveWindowPayload {
@@ -2149,6 +2167,7 @@ export interface BossCombatStartPayload {
   };
   turn_timer_ms: number;
   active_effects: ActiveEffectDto[];
+  fatigue_config?: FatigueConfigDto;
 }
 
 export interface BossCombatTurnResultPayload {
@@ -2161,6 +2180,7 @@ export interface BossCombatTurnResultPayload {
   enemy_hp_bracket: BossHpBracket;
   ability_states: CombatAbilityStateDto[];
   active_effects: ActiveEffectDto[];
+  fatigue_state?: FatigueStateDto;
 }
 
 export interface BossCombatActiveWindowPayload {
@@ -2315,6 +2335,7 @@ export interface ArenaCombatStartPayload {
   loadout: { slots: CombatAbilityStateDto[] };
   is_pvp: boolean;
   turn_timer_ms: number;
+  fatigue_config?: FatigueConfigDto;
 }
 
 export interface ArenaCombatActiveWindowPayload {
@@ -2333,6 +2354,7 @@ export interface ArenaCombatTurnResultPayload {
   opponent_hp: number;
   ability_states: CombatAbilityStateDto[];
   active_effects: ActiveEffectDto[];
+  fatigue_state?: FatigueStateDto;
 }
 
 export interface ArenaCombatEndPayload {

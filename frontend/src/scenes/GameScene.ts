@@ -1286,6 +1286,7 @@ export class GameScene extends Phaser.Scene {
         turn_timer_ms: payload.turn_timer_ms,
         active_effects: [],
         initial_enemy_hp: payload.opponent.current_hp,
+        fatigue_config: payload.fatigue_config,
       });
     });
 
@@ -1301,6 +1302,7 @@ export class GameScene extends Phaser.Scene {
         enemy_hp: payload.opponent_hp,
         ability_states: payload.ability_states,
         active_effects: payload.active_effects,
+        fatigue_state: payload.fatigue_state,
       });
     });
 
